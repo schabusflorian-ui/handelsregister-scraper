@@ -1,0 +1,10 @@
+# Handelsregister Scraper POC - Dependencies
+
+# Official handelsregister.ai Python SDK
+handelsregister>=0.1.0
+
+# Optional: for enhanced CLI output
+rich>=13.0.0
+
+# Data handling
+python-dateutil>=2.8.0
