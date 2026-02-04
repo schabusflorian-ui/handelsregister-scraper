@@ -378,7 +378,9 @@ class InvestorMatcher:
         for inv in self.investors.values():
             # Check canonical name
             name_lower = inv.canonical_name.lower()
-            if len(name_lower) >= 4 and name_lower in text_lower:
+            # Allow 3-char names only if all uppercase (acronyms like TCV, EQT)
+            min_len = 3 if inv.canonical_name.isupper() else 4
+            if len(name_lower) >= min_len and name_lower in text_lower:
                 # Verify word boundary (avoid matching "Index" in "reindex")
                 if self._is_word_boundary_match(text_lower, name_lower):
                     all_matches.append(InvestorMatch(
@@ -393,7 +395,9 @@ class InvestorMatcher:
             # Check aliases
             for alias in inv.aliases:
                 alias_lower = alias.lower()
-                if len(alias_lower) >= 4 and alias_lower in text_lower:
+                # Allow 3-char aliases only if all uppercase (acronyms like TCV, GFC)
+                min_len = 3 if alias.isupper() else 4
+                if len(alias_lower) >= min_len and alias_lower in text_lower:
                     if self._is_word_boundary_match(text_lower, alias_lower):
                         all_matches.append(InvestorMatch(
                             investor_id=inv.id,

@@ -1360,6 +1360,76 @@ investors:
     legal_entities:
       - "QED Investors LP"
 
+  - name: "TCV"
+    type: pe
+    website: "https://tcv.com"
+    headquarters: Menlo Park
+    stage_focus: [series_b, series_c, growth]
+    sector_focus: [technology, fintech, enterprise]
+    aliases:
+      - "TCV"
+      - "Technology Crossover Ventures"
+    legal_entities:
+      - "TCV Management LLC"
+    partners:
+      - "John Doran"
+      - "David Yuan"
+
+  - name: "Thrive Capital"
+    type: vc
+    website: "https://thrivecap.com"
+    headquarters: New York
+    stage_focus: [seed, series_a, series_b, growth]
+    sector_focus: [technology, fintech, consumer]
+    aliases:
+      - "Thrive Capital"
+      - "Thrive"
+    legal_entities:
+      - "Thrive Capital Management LLC"
+    partners:
+      - "Josh Kushner"
+
+  - name: "Ribbit Capital"
+    type: vc
+    website: "https://ribbitcap.com"
+    headquarters: Palo Alto
+    stage_focus: [seed, series_a, series_b, growth]
+    sector_focus: [fintech]
+    aliases:
+      - "Ribbit Capital"
+      - "Ribbit"
+    legal_entities:
+      - "Ribbit Capital LP"
+    partners:
+      - "Micky Malka"
+
+  - name: "Greenoaks Capital"
+    type: pe
+    website: "https://greenoaks.com"
+    headquarters: San Francisco
+    stage_focus: [series_b, series_c, growth]
+    sector_focus: [technology, fintech]
+    aliases:
+      - "Greenoaks"
+      - "Greenoaks Capital"
+    legal_entities:
+      - "Greenoaks Capital Partners LLC"
+
+  - name: "Softbank Vision Fund"
+    type: pe
+    website: "https://visionfund.com"
+    headquarters: London
+    stage_focus: [series_c, growth]
+    sector_focus: [technology, ai, mobility]
+    aliases:
+      - "Softbank"
+      - "Softbank Vision Fund"
+      - "SVF"
+    legal_entities:
+      - "SB Investment Advisers (UK) Limited"
+    partners:
+      - "Masayoshi Son"
+
   # =============================================================================
   # TIER 4: Accelerators (15)
   # =============================================================================
