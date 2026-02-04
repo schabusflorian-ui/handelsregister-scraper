@@ -257,6 +257,74 @@ class Database:
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_announcements_date ON announcements(announcement_date)')
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_announcements_native ON announcements(native_company_number)')
 
+        # Investors table (VCs, Corporate VCs, Angels, etc.)
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS investors (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                canonical_name TEXT NOT NULL UNIQUE,
+                type TEXT NOT NULL,
+                website TEXT,
+                linkedin TEXT,
+                headquarters_city TEXT,
+                stage_focus TEXT,
+                sector_focus TEXT,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+
+        # Investor aliases for fuzzy matching
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS investor_aliases (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                investor_id INTEGER NOT NULL,
+                alias TEXT NOT NULL,
+                alias_type TEXT,
+                UNIQUE(investor_id, alias),
+                FOREIGN KEY (investor_id) REFERENCES investors(id) ON DELETE CASCADE
+            )
+        ''')
+
+        # Investor legal entities (GmbH, KG, etc.)
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS investor_legal_entities (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                investor_id INTEGER NOT NULL,
+                entity_name TEXT NOT NULL,
+                entity_type TEXT,
+                register_number TEXT,
+                UNIQUE(investor_id, entity_name),
+                FOREIGN KEY (investor_id) REFERENCES investors(id) ON DELETE CASCADE
+            )
+        ''')
+
+        # Investment records (company <-> investor link)
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS investments (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                company_id INTEGER NOT NULL,
+                investor_id INTEGER NOT NULL,
+                round_type TEXT,
+                amount REAL,
+                currency TEXT DEFAULT 'EUR',
+                investment_date TEXT,
+                detected_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                detection_source TEXT,
+                confidence REAL DEFAULT 0.5,
+                notes TEXT,
+                UNIQUE(company_id, investor_id, investment_date),
+                FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE,
+                FOREIGN KEY (investor_id) REFERENCES investors(id) ON DELETE CASCADE
+            )
+        ''')
+
+        # Investor indexes
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_investor_aliases_alias ON investor_aliases(alias)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_investor_aliases_investor ON investor_aliases(investor_id)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_investor_entities_investor ON investor_legal_entities(investor_id)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_investments_company ON investments(company_id)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_investments_investor ON investments(investor_id)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_investments_date ON investments(investment_date)')
+
         self.conn.commit()
 
     # =========================================================================
