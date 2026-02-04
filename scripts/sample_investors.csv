@@ -1,0 +1,4 @@
+name,type,website,headquarters,aliases,legal_entities,partners
+"Example VC",vc,"https://example.vc","Berlin","Example;Example Ventures","Example VC GmbH;Example Ventures GmbH & Co. KG","John Doe;Jane Smith"
+"Corporate Ventures",cvc,"https://corp.com","Munich","Corp Ventures","Corporate Ventures GmbH",""
+"Government Fund",government,"https://gov.de","Frankfurt","GovFund","Government Fund GmbH",""
