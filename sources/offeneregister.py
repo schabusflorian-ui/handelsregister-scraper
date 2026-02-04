@@ -139,10 +139,10 @@ class OffeneRegisterSource:
 
     def _parse_record(self, data: Dict) -> Optional[CompanyRecord]:
         """Parse raw JSON record into CompanyRecord."""
-        # Parse officers
+        # Parse officers - they are stored directly in the array (not wrapped)
         officers = []
-        for officer_wrapper in data.get('officers', []):
-            officer = officer_wrapper.get('officer', {})
+        for officer in data.get('officers', []):
+            # Officer data is directly in the array item
             officers.append({
                 'name': officer.get('name', ''),
                 'role': officer.get('position'),
@@ -429,3 +429,91 @@ class OffeneRegisterSource:
             'size_mb': stat.st_size / 1024 / 1024,
             'modified': datetime.fromtimestamp(stat.st_mtime).isoformat(),
         }
+
+    def enrich_officers(
+        self,
+        db: 'Database',
+        filter_func: Optional[Callable[[CompanyRecord], bool]] = None,
+        limit: Optional[int] = None,
+        progress_callback: Optional[Callable[[int, int], None]] = None,
+    ) -> Dict[str, int]:
+        """
+        Enrich existing companies with officer data from bulk file.
+
+        Re-processes the bulk data and adds officers for companies
+        that already exist in the database but have no officers.
+
+        Args:
+            db: Database instance
+            filter_func: Optional filter function (return True to include)
+            limit: Maximum records to process (for testing)
+            progress_callback: Callback(processed, enriched) for progress
+
+        Returns:
+            Dict with enrichment statistics
+        """
+        stats = {
+            'total_processed': 0,
+            'companies_matched': 0,
+            'officers_added': 0,
+            'companies_already_enriched': 0,
+            'no_officers_in_source': 0,
+        }
+
+        # Build lookup of existing companies by company_number
+        cursor = db.conn.execute('SELECT id, company_number FROM companies')
+        company_lookup = {row[1]: row[0] for row in cursor}
+        print(f"Built lookup for {len(company_lookup)} companies")
+
+        # Track which companies already have officers
+        cursor = db.conn.execute('SELECT DISTINCT company_id FROM officers')
+        companies_with_officers = {row[0] for row in cursor}
+        print(f"Found {len(companies_with_officers)} companies with existing officers")
+
+        for record in self.stream_records(limit=limit):
+            stats['total_processed'] += 1
+
+            # Apply filter if provided
+            if filter_func and not filter_func(record):
+                continue
+
+            # Check if company exists in our database
+            company_id = company_lookup.get(record.company_number)
+            if not company_id:
+                continue
+
+            stats['companies_matched'] += 1
+
+            # Skip if already has officers
+            if company_id in companies_with_officers:
+                stats['companies_already_enriched'] += 1
+                continue
+
+            # Check if source has officers
+            if not record.officers:
+                stats['no_officers_in_source'] += 1
+                continue
+
+            # Insert officers
+            for officer in record.officers:
+                if officer.get('name'):
+                    try:
+                        db.insert_officer(
+                            company_id=company_id,
+                            name=officer['name'],
+                            role=officer.get('role'),
+                            start_date=officer.get('start_date'),
+                            end_date=officer.get('end_date'),
+                            is_current=officer.get('is_current', True),
+                        )
+                        stats['officers_added'] += 1
+                    except Exception as e:
+                        print(f"Error inserting officer for company {company_id}: {e}")
+
+            # Mark as enriched
+            companies_with_officers.add(company_id)
+
+            if progress_callback and stats['total_processed'] % 100000 == 0:
+                progress_callback(stats['total_processed'], stats['companies_matched'])
+
+        return stats

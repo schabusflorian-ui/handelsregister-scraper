@@ -163,10 +163,10 @@ class InvestorDetectionJob:
 
         conn = self.db.conn
 
-        # Get officers (board members)
+        # Get officers (board members) with company startup classification
         rows = conn.execute("""
             SELECT o.id, o.company_id, o.name, o.role, o.start_date,
-                   c.name as company_name
+                   c.name as company_name, c.startup_classification, c.ai_robotics_score
             FROM officers o
             JOIN companies c ON o.company_id = c.id
             WHERE o.is_current = 1
@@ -182,6 +182,21 @@ class InvestorDetectionJob:
             partner_matches = [m for m in matches if m.match_type == 'partner']
 
             for match in partner_matches:
+                # Reduce false positives from common names:
+                # Only record if company has startup indicators
+                # Common German names like "Johannes Weber" match too often
+                is_startup = row['startup_classification'] in ('startup', 'tech_company')
+                has_ai_score = (row['ai_robotics_score'] or 0) >= 3
+
+                # Require startup/tech classification OR high AI score for partner matches
+                # This filters out traditional companies with coincidentally named officers
+                if not (is_startup or has_ai_score):
+                    logger.debug(
+                        "Skipping partner match: %s at %s (not a startup/tech company)",
+                        row['name'], row['company_name']
+                    )
+                    continue
+
                 stats['found'] += 1
                 new = self._record_investment(
                     company_id=row['company_id'],

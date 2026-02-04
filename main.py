@@ -373,6 +373,89 @@ def init(ctx):
     db.close()
 
 
+@cli.command('enrich-officers')
+@click.option('--limit', default=None, type=int, help='Limit records to process (for testing)')
+@click.pass_context
+def enrich_officers(ctx, limit):
+    """
+    Enrich existing companies with officer data from OffeneRegister bulk file.
+
+    Re-processes the bulk data to add officers for companies that already
+    exist in the database. This enables VC partner matching.
+    """
+    db_path = ctx.obj['db_path']
+
+    console.print("\n[bold blue]Officer Data Enrichment[/bold blue]")
+    console.print("=" * 50)
+
+    db = Database(db_path)
+    source = OffeneRegisterSource()
+
+    # Check current state
+    total_companies = db.conn.execute("SELECT COUNT(*) FROM companies").fetchone()[0]
+    current_officers = db.conn.execute("SELECT COUNT(*) FROM officers").fetchone()[0]
+
+    console.print(f"Companies in database: {total_companies:,}")
+    console.print(f"Current officers: {current_officers:,}")
+
+    if current_officers > 0:
+        if not click.confirm(f"\nDatabase already has {current_officers:,} officers. Continue anyway?"):
+            db.close()
+            return
+
+    # Check if bulk file exists
+    file_info = source.get_file_info()
+    if not file_info['exists']:
+        console.print("\n[yellow]Bulk data file not found. Downloading...[/yellow]")
+        source.download()
+    else:
+        console.print(f"\nUsing cached file: {file_info['path']}")
+        console.print(f"Size: {file_info['size_mb']:.1f} MB")
+
+    console.print("\n[bold]Processing bulk data to extract officers...[/bold]")
+    console.print("[dim]This will scan ~5M records to find matches...[/dim]\n")
+
+    with Progress(
+        SpinnerColumn(),
+        TextColumn("[progress.description]{task.description}"),
+        BarColumn(),
+        TextColumn("{task.fields[matched]:,} matched"),
+        console=console,
+    ) as progress:
+        task = progress.add_task("Processing...", total=None, matched=0)
+
+        def progress_callback(processed, matched):
+            progress.update(task, description=f"Processed {processed:,} records", matched=matched)
+
+        stats = source.enrich_officers(
+            db=db,
+            limit=limit,
+            progress_callback=progress_callback,
+        )
+
+    # Summary
+    console.print("\n[bold green]Officer Enrichment Complete![/bold green]")
+    console.print("-" * 50)
+
+    table = Table(show_header=False)
+    table.add_column("Metric", style="cyan")
+    table.add_column("Value", style="green")
+
+    table.add_row("Total records processed", f"{stats['total_processed']:,}")
+    table.add_row("Companies matched", f"{stats['companies_matched']:,}")
+    table.add_row("Officers added", f"{stats['officers_added']:,}")
+    table.add_row("Already had officers", f"{stats['companies_already_enriched']:,}")
+    table.add_row("No officers in source", f"{stats['no_officers_in_source']:,}")
+
+    console.print(table)
+
+    # Show new officer count
+    new_officer_count = db.conn.execute("SELECT COUNT(*) FROM officers").fetchone()[0]
+    console.print(f"\n[bold]Total officers now: {new_officer_count:,}[/bold]")
+
+    db.close()
+
+
 @cli.command()
 @click.option('--days', default=7, help='Number of days to look back')
 @click.pass_context
@@ -1475,6 +1558,131 @@ def announcements_stats(ctx):
         console.print(table)
 
     db.close()
+
+
+# ============================================================================
+# NEWS MONITORING COMMANDS
+# ============================================================================
+
+@cli.group()
+def news():
+    """News monitoring for startup funding announcements."""
+    pass
+
+
+@news.command('scan')
+@click.option('--funding-only', is_flag=True, help='Only show funding-related articles')
+@click.option('--ai-only', is_flag=True, help='Only show AI/robotics-related articles')
+@click.pass_context
+def news_scan(ctx, funding_only, ai_only):
+    """Scan RSS feeds for startup news."""
+    from sources.news_monitor import NewsMonitor
+
+    console.print("\n[bold blue]Scanning Startup News Feeds[/bold blue]")
+    console.print("=" * 50)
+
+    monitor = NewsMonitor()
+
+    with Progress(
+        SpinnerColumn(),
+        TextColumn("[progress.description]{task.description}"),
+        console=console,
+    ) as progress:
+        task = progress.add_task("Fetching feeds...", total=None)
+        articles = monitor.fetch_all_articles()
+        progress.update(task, description=f"Found {len(articles)} articles")
+
+    if funding_only:
+        articles = [a for a in articles if monitor.is_funding_related(a)]
+        console.print(f"\n[bold]Funding-related articles: {len(articles)}[/bold]\n")
+    elif ai_only:
+        articles = [a for a in articles if monitor.is_ai_robotics_related(a)]
+        console.print(f"\n[bold]AI/Robotics-related articles: {len(articles)}[/bold]\n")
+    else:
+        console.print(f"\n[bold]Total articles: {len(articles)}[/bold]\n")
+
+    # Show articles
+    table = Table(title="Recent Articles")
+    table.add_column("Source", style="cyan", width=15)
+    table.add_column("Title", style="white", width=60)
+    table.add_column("Funding?", style="green", width=8)
+    table.add_column("AI?", style="yellow", width=5)
+
+    for article in articles[:30]:
+        is_funding = "Yes" if monitor.is_funding_related(article) else ""
+        is_ai = "Yes" if monitor.is_ai_robotics_related(article) else ""
+
+        table.add_row(
+            article.source,
+            article.title[:58] + "..." if len(article.title) > 60 else article.title,
+            is_funding,
+            is_ai,
+        )
+
+    console.print(table)
+
+
+@news.command('funding')
+@click.pass_context
+def news_funding(ctx):
+    """Extract funding announcements from news."""
+    from sources.news_monitor import NewsMonitor
+
+    console.print("\n[bold blue]Extracting Funding Announcements[/bold blue]")
+    console.print("=" * 50)
+
+    monitor = NewsMonitor()
+
+    with Progress(
+        SpinnerColumn(),
+        TextColumn("[progress.description]{task.description}"),
+        console=console,
+    ) as progress:
+        task = progress.add_task("Scanning feeds...", total=None)
+        funding_mentions = monitor.scan_for_funding()
+
+    if not funding_mentions:
+        console.print("[yellow]No funding announcements found in recent news.[/yellow]")
+        return
+
+    console.print(f"\n[bold green]Found {len(funding_mentions)} funding mentions![/bold green]\n")
+
+    table = Table(title="Funding Announcements")
+    table.add_column("Company", style="green", width=25)
+    table.add_column("Amount", style="cyan", width=15)
+    table.add_column("Round", style="yellow", width=10)
+    table.add_column("Investors", style="white", width=30)
+    table.add_column("Source", style="dim", width=15)
+
+    for mention in funding_mentions:
+        amount_str = ""
+        if mention.amount:
+            if mention.amount >= 1_000_000_000:
+                amount_str = f"{mention.amount / 1_000_000_000:.1f}B {mention.currency or ''}"
+            elif mention.amount >= 1_000_000:
+                amount_str = f"{mention.amount / 1_000_000:.1f}M {mention.currency or ''}"
+            else:
+                amount_str = f"{mention.amount:,.0f} {mention.currency or ''}"
+
+        investors_str = ", ".join(mention.investors[:3])
+        if len(mention.investors) > 3:
+            investors_str += f" +{len(mention.investors) - 3}"
+
+        table.add_row(
+            mention.company_name[:23] if mention.company_name else "-",
+            amount_str or "-",
+            mention.round_type or "-",
+            investors_str or "-",
+            mention.source,
+        )
+
+    console.print(table)
+
+    # Show article titles
+    console.print("\n[bold]Article Sources:[/bold]")
+    for mention in funding_mentions[:10]:
+        console.print(f"  [dim]{mention.article_title[:70]}...[/dim]")
+        console.print(f"    {mention.article_url}")
 
 
 if __name__ == '__main__':
