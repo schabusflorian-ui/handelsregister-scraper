@@ -49,7 +49,7 @@ class HandelsregisterScheduler:
         db_path: str,
         discovery_interval_hours: int = 2,
         discovery_max_requests: int = 25,
-        backfill_max_requests: int = 30,
+        backfill_max_requests: int = 50,
     ):
         """
         Initialize scheduler.
@@ -258,10 +258,10 @@ class HandelsregisterScheduler:
             replace_existing=True,
         )
 
-        # Backfill job: daily at 3 AM UTC (low traffic time)
+        # Backfill job: twice daily at 3 AM and 3 PM UTC (use more of the budget)
         self.scheduler.add_job(
             self._run_backfill_job,
-            trigger=CronTrigger(hour=3, minute=0),
+            trigger=CronTrigger(hour='3,15', minute=0),
             id='backfill_job',
             name='Backfill Job',
             replace_existing=True,
@@ -295,7 +295,7 @@ class HandelsregisterScheduler:
         )
 
         logger.info(
-            "Jobs configured: discovery every %d hours, backfill 3 AM, enrichment 4 AM, announcements 5 AM, CSV export 6 AM",
+            "Jobs configured: discovery every %d hours, backfill 3AM+3PM (50 req each), enrichment 4 AM, announcements 5 AM, CSV export 6 AM",
             self.discovery_interval_hours
         )
 
