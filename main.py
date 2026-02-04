@@ -1031,6 +1031,71 @@ def investors_stats(ctx):
         db.close()
 
 
+@investors.command('search')
+@click.argument('investor_name')
+@click.option('--max-results', default=50, help='Maximum results to fetch')
+@click.pass_context
+def investors_search(ctx, investor_name, max_results):
+    """
+    Search Handelsregister for companies where an investor is a shareholder.
+
+    This searches the "Name des Beteiligten" field to find all companies
+    where the specified investor appears as a participant/shareholder.
+
+    Example:
+        python main.py investors search "Sequoia Capital"
+        python main.py investors search "Index Ventures"
+    """
+    from sources.bundesapi import BundesAPISource
+
+    console.print(f"\n[bold blue]Searching Handelsregister for: {investor_name}[/bold blue]")
+    console.print("=" * 50)
+    console.print(f"[dim]Searching by shareholder name (Name des Beteiligten)[/dim]\n")
+
+    source = BundesAPISource()
+    results = list(source.search(
+        keywords=[],  # No company name keywords
+        shareholder_name=investor_name,
+        max_results=max_results,
+    ))
+
+    if not results:
+        console.print(f"[yellow]No companies found with '{investor_name}' as shareholder[/yellow]")
+        console.print("\n[dim]Note: The investor may use different legal entity names in Germany.[/dim]")
+        console.print("[dim]Try searching for specific fund names like 'Sequoia Capital Global Growth Fund'[/dim]")
+        return
+
+    console.print(f"[green]Found {len(results)} companies![/green]\n")
+
+    table = Table(title=f"Companies with {investor_name} as Shareholder")
+    table.add_column("Company", style="cyan")
+    table.add_column("Registry", style="dim")
+    table.add_column("Court", style="dim")
+    table.add_column("Status", style="green")
+
+    db_path = ctx.obj['db_path']
+    db = Database(db_path)
+
+    try:
+        for result in results:
+            table.add_row(
+                result.name,
+                f"{result.registry_type} {result.native_company_number}",
+                result.registry_court or "",
+                result.status or "",
+            )
+
+            # Optionally add to database
+            existing = db.get_company_by_native_number(result.native_company_number)
+            if not existing:
+                console.print(f"  [dim]→ New company discovered: {result.name}[/dim]")
+
+        console.print(table)
+
+    finally:
+        db.close()
+
+
 # ============================================================================
 # GROUNDTRUTH COMMANDS
 # ============================================================================
