@@ -1,1552 +1,3258 @@
-# Investor/VC Seed Data for Handelsregister Scraper
-# 175+ investors compiled from public sources:
-# - Gilion VC Mapping (https://vc-mapping.gilion.com)
-# - Capvisory (https://capvisory.de)
-# - Seedtable (https://seedtable.com)
-#
-# Types: vc, cvc (corporate), government, pe, angel, accelerator
-# Stages: pre_seed, seed, series_a, series_b, series_c, growth
-
 investors:
-
-  # =============================================================================
-  # TIER 1: Major German VCs (70)
-  # =============================================================================
-
-  - name: "HV Capital"
-    type: vc
-    website: "https://hvcapital.com"
-    headquarters: Munich
-    stage_focus: [pre_seed, seed, series_a, series_b, series_c]
-    sector_focus: [software, fintech, consumer, marketplace]
-    aliases:
-      - "HV Capital"
-      - "Holtzbrinck Ventures"
-      - "HV Holtzbrinck Ventures"
-    legal_entities:
-      - "HV Capital Manager GmbH"
-      - "HV Holtzbrinck Ventures GmbH"
-    partners:
-      - "David Kuczek"
-      - "Christian Saller"
-
-  - name: "Earlybird Venture Capital"
-    type: vc
-    website: "https://earlybird.com"
-    headquarters: Berlin
-    stage_focus: [seed, series_a, series_b]
-    sector_focus: [digital, health, deeptech]
-    aliases:
-      - "Earlybird"
-      - "Earlybird VC"
-      - "Earlybird Venture Capital"
-    legal_entities:
-      - "Earlybird VC Management GmbH"
-      - "Earlybird Venture Capital GmbH & Co. KG"
-    partners:
-      - "Christian Nagel"
-      - "Hendrik Brandis"
-
-  - name: "Cherry Ventures"
-    type: vc
-    website: "https://cherry.vc"
-    headquarters: Berlin
-    stage_focus: [seed, series_a, series_b]
-    sector_focus: [consumer, saas, fintech, health]
-    aliases:
-      - "Cherry Ventures"
-      - "Cherry VC"
-    legal_entities:
-      - "Cherry Ventures Management GmbH"
-      - "Cherry Ventures Fund III GmbH & Co. KG"
-      - "Cherry Ventures Fund IV GmbH & Co. KG"
-    partners:
-      - "Filip Dames"
-      - "Christian Meermann"
-
-  - name: "Project A Ventures"
-    type: vc
-    website: "https://project-a.com"
-    headquarters: Berlin
-    stage_focus: [seed, series_a, series_b]
-    sector_focus: [digital, marketplace, software]
-    aliases:
-      - "Project A"
-      - "Project A Ventures"
-    legal_entities:
-      - "Project A Ventures GmbH & Co. KG"
-      - "Project A Services GmbH & Co. KG"
-    partners:
-      - "Florian Heinemann"
-      - "Uwe Horstmann"
-
-  - name: "Lakestar"
-    type: vc
-    website: "https://lakestar.com"
-    headquarters: Zurich
-    stage_focus: [seed, series_a, series_b, series_c]
-    sector_focus: [fintech, enterprise, consumer]
-    aliases:
-      - "Lakestar"
-      - "Lakestar Advisors"
-    legal_entities:
-      - "Lakestar Advisors GmbH"
-      - "Lakestar III GmbH & Co. KG"
-    partners:
-      - "Klaus Hommels"
-
-  - name: "Target Global"
-    type: vc
-    website: "https://targetglobal.vc"
-    headquarters: Berlin
-    stage_focus: [seed, series_a, series_b, series_c]
-    sector_focus: [fintech, mobility, health, enterprise]
-    aliases:
-      - "Target Global"
-      - "Target Global VC"
-    legal_entities:
-      - "Target Global Management GmbH"
-    partners:
-      - "Shmuel Chafets"
-      - "Mike Lobanov"
-
-  - name: "468 Capital"
-    type: vc
-    website: "https://four68.com"
-    headquarters: Berlin
-    stage_focus: [seed, series_a]
-    sector_focus: [consumer, enterprise, fintech]
-    aliases:
-      - "468 Capital"
-      - "Four68"
-    legal_entities:
-      - "468 Capital GmbH"
-    partners:
-      - "Alexander Kudlich"
-      - "Florian Leibert"
-      - "Ludwig Ensthaler"
-
-  - name: "Global Founders Capital"
-    type: vc
-    website: "https://globalfounders.vc"
-    headquarters: Berlin
-    stage_focus: [pre_seed, seed, series_a]
-    sector_focus: [internet, technology]
-    aliases:
-      - "Global Founders Capital"
-      - "GFC"
-    legal_entities:
-      - "Global Founders Capital GmbH"
-    partners:
-      - "Oliver Samwer"
-
-  - name: "Point Nine Capital"
-    type: vc
-    website: "https://pointnine.com"
-    headquarters: Berlin
-    stage_focus: [pre_seed, seed]
-    sector_focus: [saas, marketplace, fintech]
-    aliases:
-      - "Point Nine"
-      - "Point Nine Capital"
-      - "P9"
-    legal_entities:
-      - "Point Nine Capital GmbH"
-    partners:
-      - "Christoph Janz"
-      - "Pawel Chudzinski"
-
-  - name: "Fly Ventures"
-    type: vc
-    website: "https://fly.vc"
-    headquarters: Berlin
-    stage_focus: [pre_seed, seed]
-    sector_focus: [ai, automation, deeptech]
-    aliases:
-      - "Fly Ventures"
-      - "Fly VC"
-    legal_entities:
-      - "Fly Ventures Management GmbH"
-    partners:
-      - "Gabriel Matuschka"
-      - "Fredrik Bergenlid"
-
-  - name: "La Famiglia"
-    type: vc
-    website: "https://lafamiglia.vc"
-    headquarters: Berlin
-    stage_focus: [seed, series_a]
-    sector_focus: [b2b, infrastructure, industrial]
-    aliases:
-      - "La Famiglia"
-      - "La Famiglia VC"
-    legal_entities:
-      - "La Famiglia GmbH"
-    partners:
-      - "Jeannette zu Fürstenberg"
-
-  - name: "BlueYard Capital"
-    type: vc
-    website: "https://blueyard.com"
-    headquarters: Berlin
-    stage_focus: [seed, series_a]
-    sector_focus: [decentralization, privacy, ai]
-    aliases:
-      - "BlueYard"
-      - "BlueYard Capital"
-    legal_entities:
-      - "BlueYard Capital GmbH"
-    partners:
-      - "Ciarán O'Leary"
-      - "Jason Whitmire"
-
-  - name: "Capnamic"
-    type: vc
-    website: "https://capnamic.com"
-    headquarters: Cologne
-    stage_focus: [seed, series_a, series_b]
-    sector_focus: [enterprise, fintech, health]
-    aliases:
-      - "Capnamic"
-      - "Capnamic Ventures"
-    legal_entities:
-      - "Capnamic Ventures GmbH"
-    partners:
-      - "Christian Siegele"
-      - "Olaf Jacobi"
-
-  - name: "Headline"
-    type: vc
-    website: "https://headline.com"
-    headquarters: Berlin
-    stage_focus: [seed, series_a, series_b]
-    sector_focus: [enterprise, fintech, consumer]
-    aliases:
-      - "Headline"
-      - "e.ventures"
-    legal_entities:
-      - "Headline GmbH"
-    partners:
-      - "Mathias Schilling"
-
-  - name: "Picus Capital"
-    type: vc
-    website: "https://picuscap.com"
-    headquarters: Munich
-    stage_focus: [seed, series_a]
-    sector_focus: [saas, fintech, health]
-    aliases:
-      - "Picus Capital"
-      - "Picus"
-    legal_entities:
-      - "Picus Capital GmbH"
-    partners:
-      - "Alexander Giesecke"
-      - "Florian Reichert"
-
-  - name: "Speedinvest"
-    type: vc
-    website: "https://speedinvest.com"
-    headquarters: Vienna
-    stage_focus: [pre_seed, seed, series_a]
-    sector_focus: [fintech, industrial, health, marketplace]
-    aliases:
-      - "Speedinvest"
-    legal_entities:
-      - "Speedinvest GmbH"
-    partners:
-      - "Oliver Holle"
-      - "Daniel Keiper-Knorr"
-
-  - name: "Visionaries Club"
-    type: vc
-    website: "https://visionaries.club"
-    headquarters: Berlin
-    stage_focus: [seed, series_a]
-    sector_focus: [b2b, digital transformation]
-    aliases:
-      - "Visionaries Club"
-      - "Visionaries"
-    legal_entities:
-      - "Visionaries Club GmbH"
-    partners:
-      - "Robert Lacher"
-
-  - name: "btov Partners"
-    type: vc
-    website: "https://btov.vc"
-    headquarters: Munich
-    stage_focus: [seed, series_a, series_b]
-    sector_focus: [industrial, deeptech, digital]
-    aliases:
-      - "btov Partners"
-      - "btov"
-    legal_entities:
-      - "btov Partners GmbH"
-    partners:
-      - "Christian Reitberger"
-
-  - name: "Redalpine"
-    type: vc
-    website: "https://redalpine.com"
-    headquarters: Zurich
-    stage_focus: [seed, series_a]
-    sector_focus: [technology, internet]
-    aliases:
-      - "Redalpine"
-      - "Redalpine Venture Partners"
-    legal_entities:
-      - "Redalpine Capital Management GmbH"
-    partners:
-      - "Peter Niederhauser"
-
-  - name: "Acton Capital"
-    type: vc
-    website: "https://acton.de"
-    headquarters: Munich
-    stage_focus: [seed, series_a, series_b]
-    sector_focus: [consumer, marketplace, fintech]
-    aliases:
-      - "Acton Capital"
-      - "Acton Capital Partners"
-    legal_entities:
-      - "Acton Capital Partners GmbH"
-    partners:
-      - "Christoph Braun"
-
-  - name: "APX"
-    type: vc
-    website: "https://apx.ac"
-    headquarters: Berlin
-    stage_focus: [pre_seed, seed]
-    sector_focus: [technology, digital]
-    aliases:
-      - "APX"
-      - "Axel Springer Porsche"
-    legal_entities:
-      - "APX GmbH"
-
-  - name: "Cavalry Ventures"
-    type: vc
-    website: "https://cavalry.vc"
-    headquarters: Berlin
-    stage_focus: [pre_seed, seed]
-    sector_focus: [fintech, enterprise, health]
-    aliases:
-      - "Cavalry"
-      - "Cavalry Ventures"
-    legal_entities:
-      - "Cavalry Ventures Management GmbH"
-    partners:
-      - "Rouven Dresselhaus"
-
-  - name: "b2venture"
-    type: vc
-    website: "https://b2venture.vc"
-    headquarters: Zurich
-    stage_focus: [seed, series_a]
-    sector_focus: [enterprise, fintech]
-    aliases:
-      - "b2venture"
-      - "bto venture"
-    legal_entities:
-      - "b2venture AG"
-
-  - name: "Senovo"
-    type: vc
-    website: "https://senovo.vc"
-    headquarters: Munich
-    stage_focus: [seed, series_a]
-    sector_focus: [enterprise, saas]
-    aliases:
-      - "Senovo"
-    legal_entities:
-      - "Senovo GmbH"
-    partners:
-      - "Matthias Ick"
-
-  - name: "Atlantic Labs"
-    type: vc
-    website: "https://atlanticlabs.de"
-    headquarters: Berlin
-    stage_focus: [pre_seed, seed]
-    sector_focus: [digital, consumer]
-    aliases:
-      - "Atlantic Labs"
-      - "Atlantic Internet"
-    legal_entities:
-      - "Atlantic Labs GmbH"
-    partners:
-      - "Christophe Maire"
-
-  - name: "42CAP"
-    type: vc
-    website: "https://42cap.com"
-    headquarters: Munich
-    stage_focus: [pre_seed, seed]
-    sector_focus: [b2b, saas, fintech]
-    aliases:
-      - "42CAP"
-      - "FortyTwo Cap"
-    legal_entities:
-      - "42CAP GmbH"
-    partners:
-      - "Thomas Wilke"
-
-  - name: "10x Group"
-    type: vc
-    website: "https://10xgroup.com"
-    headquarters: Munich
-    stage_focus: [seed, series_a, series_b]
-    sector_focus: [technology, digital]
-    aliases:
-      - "10x Group"
-    legal_entities:
-      - "10x Group GmbH"
-
-  - name: "ALSTIN Capital"
-    type: vc
-    website: "https://alstincapital.com"
-    headquarters: Berlin
-    stage_focus: [pre_seed, seed]
-    sector_focus: [technology]
-    aliases:
-      - "ALSTIN Capital"
-      - "ALSTIN"
-    legal_entities:
-      - "ALSTIN Capital GmbH"
-
-  - name: "Ananda Impact Ventures"
-    type: vc
-    website: "https://ananda.vc"
-    headquarters: Munich
-    stage_focus: [seed, series_a]
-    sector_focus: [impact, social, health]
-    aliases:
-      - "Ananda Impact Ventures"
-      - "Ananda Ventures"
-    legal_entities:
-      - "Ananda Ventures GmbH"
-
-  - name: "Angel Invest"
-    type: vc
-    website: "https://angelinvest.de"
-    headquarters: Berlin
-    stage_focus: [seed, series_a]
-    sector_focus: [technology]
-    aliases:
-      - "Angel Invest"
-    legal_entities:
-      - "Angel Invest GmbH"
-
-  - name: "Auxxo Female Catalyst Fund"
-    type: vc
-    website: "https://auxxo.com"
-    headquarters: Berlin
-    stage_focus: [pre_seed, seed]
-    sector_focus: [female founders]
-    aliases:
-      - "Auxxo"
-      - "Auxxo Female Catalyst"
-    legal_entities:
-      - "Auxxo GmbH"
-
-  - name: "Concept Ventures"
-    type: vc
-    website: "https://concept.vc"
-    headquarters: London
-    stage_focus: [pre_seed, seed]
-    sector_focus: [b2b, software]
-    aliases:
-      - "Concept Ventures"
-    legal_entities:
-      - "Concept Ventures LLP"
-
-  - name: "Digital+ Partners"
-    type: vc
-    website: "https://digitalplus.partners"
-    headquarters: Munich
-    stage_focus: [series_b, series_c, growth]
-    sector_focus: [growth equity]
-    aliases:
-      - "Digital+ Partners"
-      - "Digital Plus"
-    legal_entities:
-      - "Digital+ Partners GmbH"
-
-  - name: "Flex Capital"
-    type: vc
-    website: "https://flex-capital.com"
-    headquarters: Berlin
-    stage_focus: [seed, series_a, series_b]
-    sector_focus: [technology, software]
-    aliases:
-      - "Flex Capital"
-    legal_entities:
-      - "Flex Capital GmbH"
-
-  - name: "Iris Capital"
-    type: vc
-    website: "https://iris.capital"
-    headquarters: Paris
-    stage_focus: [seed, series_a, series_b]
-    sector_focus: [digital, technology]
-    aliases:
-      - "Iris Capital"
-    legal_entities:
-      - "Iris Capital Management SAS"
-
-  - name: "JVH Ventures"
-    type: vc
-    website: "https://jvh.vc"
-    headquarters: Munich
-    stage_focus: [pre_seed, seed]
-    sector_focus: [enterprise, saas]
-    aliases:
-      - "JVH Ventures"
-      - "JVH"
-    legal_entities:
-      - "JVH Ventures GmbH"
-
-  - name: "Lea Partners"
-    type: vc
-    website: "https://lea-partners.com"
-    headquarters: Munich
-    stage_focus: [seed, series_a]
-    sector_focus: [b2b, software]
-    aliases:
-      - "Lea Partners"
-    legal_entities:
-      - "Lea Partners GmbH"
-
-  - name: "Nextblue VC"
-    type: vc
-    website: "https://nextblue.vc"
-    headquarters: Berlin
-    stage_focus: [pre_seed, seed, series_a]
-    sector_focus: [climate, sustainability]
-    aliases:
-      - "Nextblue"
-      - "Nextblue VC"
-    legal_entities:
-      - "Nextblue VC GmbH"
-
-  - name: "Paua Ventures"
-    type: vc
-    website: "https://pauaventures.com"
-    headquarters: Berlin
-    stage_focus: [seed, series_a]
-    sector_focus: [mobility, logistics, supply chain]
-    aliases:
-      - "Paua Ventures"
-      - "Paua"
-    legal_entities:
-      - "Paua Ventures GmbH"
-
-  - name: "Possible Ventures"
-    type: vc
-    website: "https://possibleventures.com"
-    headquarters: Berlin
-    stage_focus: [pre_seed, seed]
-    sector_focus: [climate, sustainability]
-    aliases:
-      - "Possible Ventures"
-    legal_entities:
-      - "Possible Ventures GmbH"
-
-  - name: "Redstone VC"
-    type: vc
-    website: "https://redstone.vc"
-    headquarters: Berlin
-    stage_focus: [pre_seed, seed, series_a]
-    sector_focus: [enterprise, saas]
-    aliases:
-      - "Redstone"
-      - "Redstone VC"
-    legal_entities:
-      - "Redstone Digital GmbH"
-
-  - name: "Seed + Speed Ventures"
-    type: vc
-    website: "https://seedandspeed.com"
-    headquarters: Munich
-    stage_focus: [pre_seed, seed]
-    sector_focus: [technology]
-    aliases:
-      - "Seed + Speed"
-      - "Seed and Speed"
-    legal_entities:
-      - "Seed + Speed Ventures GmbH"
-
-  - name: "SquareOne Capital"
-    type: vc
-    website: "https://squareone-capital.com"
-    headquarters: Munich
-    stage_focus: [pre_seed, seed, series_a]
-    sector_focus: [fintech, enterprise]
-    aliases:
-      - "SquareOne"
-      - "SquareOne Capital"
-    legal_entities:
-      - "SquareOne Capital GmbH"
-
-  - name: "TA Ventures"
-    type: vc
-    website: "https://taventures.vc"
-    headquarters: Berlin
-    stage_focus: [seed, series_a]
-    sector_focus: [consumer, fintech]
-    aliases:
-      - "TA Ventures"
-    legal_entities:
-      - "TA Ventures GmbH"
-
-  - name: "Tiburon"
-    type: vc
-    website: "https://tiburon-partners.com"
-    headquarters: Munich
-    stage_focus: [pre_seed, seed]
-    sector_focus: [climate, sustainability]
-    aliases:
-      - "Tiburon Partners"
-      - "Tiburon"
-    legal_entities:
-      - "Tiburon Partners GmbH"
-
-  - name: "TruVenturo"
-    type: vc
-    website: "https://truventuro.com"
-    headquarters: Berlin
-    stage_focus: [seed]
-    sector_focus: [fintech]
-    aliases:
-      - "TruVenturo"
-    legal_entities:
-      - "TruVenturo GmbH"
-
-  - name: "WENVEST Capital"
-    type: vc
-    website: "https://wenvest.com"
-    headquarters: Berlin
-    stage_focus: [pre_seed, seed]
-    sector_focus: [technology]
-    aliases:
-      - "WENVEST"
-      - "WENVEST Capital"
-    legal_entities:
-      - "WENVEST Capital GmbH"
-
-  - name: "Wellington Partners"
-    type: vc
-    website: "https://wellington-partners.com"
-    headquarters: Munich
-    stage_focus: [seed, series_a]
-    sector_focus: [life sciences, digital]
-    aliases:
-      - "Wellington Partners"
-    legal_entities:
-      - "Wellington Partners GmbH"
-
-  - name: "WestTech Ventures"
-    type: vc
-    website: "https://westtech.vc"
-    headquarters: Berlin
-    stage_focus: [pre_seed, seed]
-    sector_focus: [technology]
-    aliases:
-      - "WestTech"
-      - "WestTech Ventures"
-    legal_entities:
-      - "WestTech Ventures GmbH"
-
-  - name: "Yabeo"
-    type: vc
-    website: "https://yabeo.com"
-    headquarters: Munich
-    stage_focus: [seed, series_a]
-    sector_focus: [enterprise, saas]
-    aliases:
-      - "Yabeo"
-      - "Yabeo Capital"
-    legal_entities:
-      - "Yabeo Capital GmbH"
-
-  - name: "Yttrium"
-    type: vc
-    website: "https://yttrium.de"
-    headquarters: Munich
-    stage_focus: [series_a, series_b]
-    sector_focus: [enterprise, saas]
-    aliases:
-      - "Yttrium"
-    legal_entities:
-      - "Yttrium GmbH"
-
-  - name: "signals Venture Capital"
-    type: vc
-    website: "https://signals.vc"
-    headquarters: Munich
-    stage_focus: [seed, series_a]
-    sector_focus: [enterprise, industrial]
-    aliases:
-      - "signals VC"
-      - "signals Venture Capital"
-    legal_entities:
-      - "signals Venture Capital GmbH"
-
-  - name: "Verdane"
-    type: pe
-    website: "https://verdane.com"
-    headquarters: Oslo
-    stage_focus: [series_b, series_c, growth]
-    sector_focus: [growth equity, technology]
-    aliases:
-      - "Verdane"
-      - "Verdane Capital"
-    legal_entities:
-      - "Verdane Capital Advisors AB"
-
-  - name: "Augmentum"
-    type: vc
-    website: "https://augmentum.vc"
-    headquarters: London
-    stage_focus: [series_a, series_b, series_c]
-    sector_focus: [fintech]
-    aliases:
-      - "Augmentum"
-      - "Augmentum Fintech"
-    legal_entities:
-      - "Augmentum Fintech PLC"
-
-  - name: "Vorwerk Ventures"
-    type: cvc
-    website: "https://vorwerk-ventures.com"
-    headquarters: Wuppertal
-    stage_focus: [seed, series_a]
-    sector_focus: [consumer, d2c]
-    aliases:
-      - "Vorwerk Ventures"
-    legal_entities:
-      - "Vorwerk Ventures GmbH"
-
-  - name: "Creandum"
-    type: vc
-    website: "https://creandum.com"
-    headquarters: Stockholm
-    stage_focus: [seed, series_a, series_b]
-    sector_focus: [technology, consumer]
-    aliases:
-      - "Creandum"
-    legal_entities:
-      - "Creandum AB"
-    partners:
-      - "Simon Schmincke"
-
-  - name: "EQT Ventures"
-    type: vc
-    website: "https://eqtventures.com"
-    headquarters: Stockholm
-    stage_focus: [seed, series_a, series_b]
-    sector_focus: [technology, health, fintech]
-    aliases:
-      - "EQT Ventures"
-      - "EQT"
-    legal_entities:
-      - "EQT Partners AB"
-
-  - name: "Northzone"
-    type: vc
-    website: "https://northzone.com"
-    headquarters: Stockholm
-    stage_focus: [seed, series_a, series_b]
-    sector_focus: [technology, consumer]
-    aliases:
-      - "Northzone"
-    legal_entities:
-      - "Northzone Ventures AB"
-
-  - name: "Felix Capital"
-    type: vc
-    website: "https://felixcap.com"
-    headquarters: London
-    stage_focus: [seed, series_a, series_b]
-    sector_focus: [consumer, creative]
-    aliases:
-      - "Felix Capital"
-    legal_entities:
-      - "Felix Capital LLP"
-
-  - name: "Partech"
-    type: vc
-    website: "https://partechpartners.com"
-    headquarters: Paris
-    stage_focus: [seed, series_a, series_b, growth]
-    sector_focus: [technology, enterprise]
-    aliases:
-      - "Partech"
-      - "Partech Partners"
-      - "Partech Ventures"
-    legal_entities:
-      - "Partech Partners SAS"
-
-  # =============================================================================
-  # TIER 2: Corporate VCs & Government Funds (40)
-  # =============================================================================
-
-  - name: "High-Tech Gründerfonds"
-    type: government
-    website: "https://htgf.de"
-    headquarters: Bonn
-    stage_focus: [pre_seed, seed]
-    sector_focus: [deeptech, industrial, life_sciences, digital]
-    aliases:
-      - "HTGF"
-      - "High-Tech Gründerfonds"
-      - "Hightech Gruenderfonds"
-      - "High Tech Gründerfonds"
-    legal_entities:
-      - "High-Tech Gründerfonds Management GmbH"
-      - "HTGF III GmbH & Co. KG"
-      - "HTGF IV GmbH & Co. KG"
-
-  - name: "Bayern Kapital"
-    type: government
-    website: "https://bayernkapital.de"
-    headquarters: Munich
-    stage_focus: [pre_seed, seed, series_a, series_b]
-    sector_focus: [technology, life_sciences]
-    aliases:
-      - "Bayern Kapital"
-      - "BayernKapital"
-    legal_entities:
-      - "Bayern Kapital GmbH"
-
-  - name: "IBB Ventures"
-    type: government
-    website: "https://ibbventures.de"
-    headquarters: Berlin
-    stage_focus: [seed, series_a]
-    sector_focus: [software, health, industrial]
-    aliases:
-      - "IBB Ventures"
-      - "IBB Beteiligungsgesellschaft"
-    legal_entities:
-      - "IBB Ventures GmbH"
-      - "IBB Beteiligungsgesellschaft mbH"
-
-  - name: "Coparion"
-    type: government
-    website: "https://coparion.vc"
-    headquarters: Cologne
-    stage_focus: [seed, series_a, series_b]
-    sector_focus: [technology]
-    aliases:
-      - "Coparion"
-    legal_entities:
-      - "Coparion GmbH & Co. KG"
-
-  - name: "NRW.BANK Venture Fonds"
-    type: government
-    website: "https://nrwbank.de"
-    headquarters: Dusseldorf
-    stage_focus: [seed, series_a, growth]
-    sector_focus: [climate, ai, life_sciences]
-    aliases:
-      - "NRW.BANK"
-      - "NRW Bank"
-      - "NRW.BANK Venture Fonds"
-    legal_entities:
-      - "NRW.BANK Venture Fonds GmbH"
-
-  - name: "KfW Capital"
-    type: government
-    website: "https://kfw-capital.de"
-    headquarters: Frankfurt
-    stage_focus: [seed, series_a, series_b]
-    sector_focus: [technology]
-    aliases:
-      - "KfW Capital"
-      - "KfW"
-    legal_entities:
-      - "KfW Capital GmbH & Co. KG"
-
-  - name: "bm|t"
-    type: government
-    website: "https://bm-t.de"
-    headquarters: Erfurt
-    stage_focus: [seed, series_a]
-    sector_focus: [technology]
-    aliases:
-      - "bm|t"
-      - "bmt"
-      - "bm|t Beteiligungsmanagement"
-    legal_entities:
-      - "bm|t beteiligungsmanagement thüringen gmbh"
-
-  - name: "Technologiegründerfonds Sachsen"
-    type: government
-    website: "https://tgfs.de"
-    headquarters: Dresden
-    stage_focus: [seed, series_a]
-    sector_focus: [technology, semiconductors, medtech]
-    aliases:
-      - "TGFS"
-      - "Technologiegründerfonds Sachsen"
-    legal_entities:
-      - "Technologiegründerfonds Sachsen GmbH & Co. KG"
-
-  - name: "Brandenburg Kapital"
-    type: government
-    website: "https://ilb.de"
-    headquarters: Potsdam
-    stage_focus: [seed, series_a, series_b]
-    sector_focus: [technology, health]
-    aliases:
-      - "Brandenburg Kapital"
-      - "ILB"
-    legal_entities:
-      - "Brandenburg Kapital GmbH"
-
-  - name: "Hessen Kapital"
-    type: government
-    website: "https://hessen-kapital.de"
-    headquarters: Wiesbaden
-    stage_focus: [seed, series_a]
-    sector_focus: [technology]
-    aliases:
-      - "Hessen Kapital"
-      - "Hessen Kapital III"
-    legal_entities:
-      - "Hessen Kapital III GmbH & Co. KG"
-
-  - name: "IFB Innovationsstarter"
-    type: government
-    website: "https://innovationsstarter.com"
-    headquarters: Hamburg
-    stage_focus: [seed, series_a]
-    sector_focus: [technology]
-    aliases:
-      - "IFB Innovationsstarter"
-      - "Innovationsstarter Hamburg"
-    legal_entities:
-      - "Innovationsstarter Fonds Hamburg GmbH"
-
-  - name: "L-Bank"
-    type: government
-    website: "https://l-bank.de"
-    headquarters: Karlsruhe
-    stage_focus: [seed, series_a]
-    sector_focus: [technology]
-    aliases:
-      - "L-Bank"
-      - "Landeskreditbank"
-    legal_entities:
-      - "L-Bank"
-
-  - name: "Siemens Next47"
-    type: cvc
-    website: "https://next47.com"
-    headquarters: Munich
-    stage_focus: [seed, series_a, series_b, series_c]
-    sector_focus: [industrial, ai, automation, energy]
-    aliases:
-      - "Next47"
-      - "Siemens Next47"
-    legal_entities:
-      - "Next47 GmbH"
-
-  - name: "BMW i Ventures"
-    type: cvc
-    website: "https://bmwiventures.com"
-    headquarters: Munich
-    stage_focus: [series_a, series_b, series_c]
-    sector_focus: [mobility, ai, sustainability]
-    aliases:
-      - "BMW i Ventures"
-      - "BMW Ventures"
-    legal_entities:
-      - "BMW i Ventures GmbH"
-
-  - name: "Bosch Ventures"
-    type: cvc
-    website: "https://bosch-ventures.com"
-    headquarters: Stuttgart
-    stage_focus: [seed, series_a, series_b]
-    sector_focus: [mobility, industrial, ai, iot]
-    aliases:
-      - "Bosch Ventures"
-      - "Robert Bosch Venture Capital"
-      - "RBVC"
-    legal_entities:
-      - "Robert Bosch Venture Capital GmbH"
-
-  - name: "Porsche Ventures"
-    type: cvc
-    website: "https://porsche.com/ventures"
-    headquarters: Stuttgart
-    stage_focus: [series_a, series_b]
-    sector_focus: [mobility, ai, manufacturing]
-    aliases:
-      - "Porsche Ventures"
-    legal_entities:
-      - "Porsche Ventures GmbH"
-
-  - name: "Deutsche Telekom Ventures"
-    type: cvc
-    website: "https://telekom.com/ventures"
-    headquarters: Bonn
-    stage_focus: [seed, series_a, series_b]
-    sector_focus: [telecom, 5g, iot, ai]
-    aliases:
-      - "Deutsche Telekom Ventures"
-      - "DTCP"
-      - "Deutsche Telekom Capital Partners"
-      - "Telekom Innovation Pool"
-    legal_entities:
-      - "Deutsche Telekom Capital Partners GmbH"
-
-  - name: "CommerzVentures"
-    type: cvc
-    website: "https://commerzventures.com"
-    headquarters: Frankfurt
-    stage_focus: [seed, series_a, series_b]
-    sector_focus: [fintech, insurtech]
-    aliases:
-      - "CommerzVentures"
-      - "Commerzbank Ventures"
-    legal_entities:
-      - "CommerzVentures GmbH"
-
-  - name: "Allianz X"
-    type: cvc
-    website: "https://allianzx.com"
-    headquarters: Munich
-    stage_focus: [series_b, series_c, growth]
-    sector_focus: [insurtech, fintech, health]
-    aliases:
-      - "Allianz X"
-    legal_entities:
-      - "Allianz X GmbH"
-
-  - name: "SAP.iO"
-    type: cvc
-    website: "https://sap.io"
-    headquarters: Walldorf
-    stage_focus: [seed, series_a]
-    sector_focus: [enterprise, saas]
-    aliases:
-      - "SAP.iO"
-      - "SAP io"
-      - "SAP Ventures"
-    legal_entities:
-      - "SAP.iO Fund GmbH"
-
-  - name: "BASF Venture Capital"
-    type: cvc
-    website: "https://basf.com/venturecapital"
-    headquarters: Ludwigshafen
-    stage_focus: [seed, series_a, series_b]
-    sector_focus: [chemicals, materials, sustainability]
-    aliases:
-      - "BASF Venture Capital"
-      - "BASF VC"
-    legal_entities:
-      - "BASF Venture Capital GmbH"
-
-  - name: "Merck Ventures"
-    type: cvc
-    website: "https://merckgroup.com/ventures"
-    headquarters: Darmstadt
-    stage_focus: [seed, series_a, series_b]
-    sector_focus: [health, life_sciences, technology]
-    aliases:
-      - "Merck Ventures"
-      - "M Ventures"
-    legal_entities:
-      - "M Ventures GmbH"
-
-  - name: "Evonik Venture Capital"
-    type: cvc
-    website: "https://evonik.com/venturecapital"
-    headquarters: Essen
-    stage_focus: [seed, series_a]
-    sector_focus: [chemicals, materials, nutrition]
-    aliases:
-      - "Evonik Venture Capital"
-      - "Evonik VC"
-    legal_entities:
-      - "Evonik Venture Capital GmbH"
-
-  - name: "E.ON :agile"
-    type: cvc
-    website: "https://eon.com/agile"
-    headquarters: Essen
-    stage_focus: [seed, series_a]
-    sector_focus: [energy, sustainability, grid]
-    aliases:
-      - "E.ON :agile"
-      - "EON agile"
-      - "E.ON Ventures"
-    legal_entities:
-      - "E.ON :agile GmbH"
-
-  - name: "Future Energy Ventures"
-    type: cvc
-    website: "https://fev.vc"
-    headquarters: Berlin
-    stage_focus: [seed, series_a, series_b]
-    sector_focus: [energy, sustainability, mobility]
-    aliases:
-      - "Future Energy Ventures"
-      - "FEV"
-    legal_entities:
-      - "Future Energy Ventures GmbH"
-
-  - name: "Hubraum"
-    type: cvc
-    website: "https://hubraum.com"
-    headquarters: Berlin
-    stage_focus: [pre_seed, seed]
-    sector_focus: [telecom, iot, 5g]
-    aliases:
-      - "Hubraum"
-      - "hub:raum"
-    legal_entities:
-      - "hub:raum GmbH"
-
-  - name: "Hitachi Ventures"
-    type: cvc
-    website: "https://hitachi.com/ventures"
-    headquarters: Munich
-    stage_focus: [seed, series_a]
-    sector_focus: [industrial, iot, ai]
-    aliases:
-      - "Hitachi Ventures"
-    legal_entities:
-      - "Hitachi Ventures GmbH"
-
-  # =============================================================================
-  # TIER 3: Major European/US VCs Active in Germany (30)
-  # =============================================================================
-
-  - name: "Sequoia Capital"
-    type: vc
-    website: "https://sequoiacap.com"
-    headquarters: Menlo Park
-    stage_focus: [seed, series_a, series_b, growth]
-    sector_focus: [technology, consumer, enterprise]
-    aliases:
-      - "Sequoia"
-      - "Sequoia Capital"
-    legal_entities:
-      - "Sequoia Capital Operations LLC"
-
-  - name: "Index Ventures"
-    type: vc
-    website: "https://indexventures.com"
-    headquarters: London
-    stage_focus: [seed, series_a, series_b, growth]
-    sector_focus: [technology, fintech, gaming]
-    aliases:
-      - "Index Ventures"
-      - "Index"
-    legal_entities:
-      - "Index Ventures Growth LLP"
-
-  - name: "Balderton Capital"
-    type: vc
-    website: "https://balderton.com"
-    headquarters: London
-    stage_focus: [series_a, series_b]
-    sector_focus: [technology, consumer, enterprise]
-    aliases:
-      - "Balderton"
-      - "Balderton Capital"
-    legal_entities:
-      - "Balderton Capital LLP"
-
-  - name: "Atomico"
-    type: vc
-    website: "https://atomico.com"
-    headquarters: London
-    stage_focus: [series_a, series_b, series_c]
-    sector_focus: [technology, deeptech]
-    aliases:
-      - "Atomico"
-    legal_entities:
-      - "Atomico LLP"
-    partners:
-      - "Niklas Zennström"
-
-  - name: "General Catalyst"
-    type: vc
-    website: "https://generalcatalyst.com"
-    headquarters: Boston
-    stage_focus: [seed, series_a, series_b, growth]
-    sector_focus: [technology, health, fintech]
-    aliases:
-      - "General Catalyst"
-      - "GC"
-    legal_entities:
-      - "General Catalyst Partners LP"
-
-  - name: "Accel"
-    type: vc
-    website: "https://accel.com"
-    headquarters: Palo Alto
-    stage_focus: [seed, series_a, series_b]
-    sector_focus: [technology, enterprise, consumer]
-    aliases:
-      - "Accel"
-      - "Accel Partners"
-    legal_entities:
-      - "Accel Partners LP"
-
-  - name: "Insight Partners"
-    type: pe
-    website: "https://insightpartners.com"
-    headquarters: New York
-    stage_focus: [series_b, series_c, growth]
-    sector_focus: [software, technology]
-    aliases:
-      - "Insight Partners"
-      - "Insight Venture Partners"
-    legal_entities:
-      - "Insight Partners LP"
-
-  - name: "Tiger Global"
-    type: pe
-    website: "https://tigerglobal.com"
-    headquarters: New York
-    stage_focus: [series_b, series_c, growth]
-    sector_focus: [technology, internet]
-    aliases:
-      - "Tiger Global"
-      - "Tiger Global Management"
-    legal_entities:
-      - "Tiger Global Management LLC"
-
-  - name: "Andreessen Horowitz"
-    type: vc
-    website: "https://a16z.com"
-    headquarters: Menlo Park
-    stage_focus: [seed, series_a, series_b, growth]
-    sector_focus: [technology, crypto, ai, bio]
-    aliases:
-      - "a16z"
-      - "Andreessen Horowitz"
-    legal_entities:
-      - "AH Capital Management LLC"
-
-  - name: "Lightspeed Venture Partners"
-    type: vc
-    website: "https://lsvp.com"
-    headquarters: Menlo Park
-    stage_focus: [seed, series_a, series_b, growth]
-    sector_focus: [enterprise, consumer, fintech]
-    aliases:
-      - "Lightspeed"
-      - "Lightspeed Venture Partners"
-    legal_entities:
-      - "Lightspeed Venture Partners LP"
-
-  - name: "Coatue Management"
-    type: pe
-    website: "https://coatue.com"
-    headquarters: New York
-    stage_focus: [series_b, series_c, growth]
-    sector_focus: [technology]
-    aliases:
-      - "Coatue"
-      - "Coatue Management"
-    legal_entities:
-      - "Coatue Management LLC"
-
-  - name: "DST Global"
-    type: pe
-    website: "https://dst.global"
-    headquarters: Hong Kong
-    stage_focus: [series_b, series_c, growth]
-    sector_focus: [internet, technology]
-    aliases:
-      - "DST Global"
-      - "DST"
-    legal_entities:
-      - "DST Global LP"
-
-  - name: "Bessemer Venture Partners"
-    type: vc
-    website: "https://bvp.com"
-    headquarters: Menlo Park
-    stage_focus: [seed, series_a, series_b, growth]
-    sector_focus: [cloud, enterprise, consumer]
-    aliases:
-      - "Bessemer"
-      - "Bessemer Venture Partners"
-      - "BVP"
-    legal_entities:
-      - "Bessemer Venture Partners LP"
-
-  - name: "Greylock Partners"
-    type: vc
-    website: "https://greylock.com"
-    headquarters: Menlo Park
-    stage_focus: [seed, series_a, series_b]
-    sector_focus: [enterprise, consumer, ai]
-    aliases:
-      - "Greylock"
-      - "Greylock Partners"
-    legal_entities:
-      - "Greylock Partners LP"
-
-  - name: "Founders Fund"
-    type: vc
-    website: "https://foundersfund.com"
-    headquarters: San Francisco
-    stage_focus: [seed, series_a, series_b, growth]
-    sector_focus: [technology, deeptech, space]
-    aliases:
-      - "Founders Fund"
-    legal_entities:
-      - "Founders Fund LP"
-    partners:
-      - "Peter Thiel"
-
-  - name: "Battery Ventures"
-    type: vc
-    website: "https://battery.com"
-    headquarters: Boston
-    stage_focus: [series_a, series_b, series_c]
-    sector_focus: [technology, enterprise]
-    aliases:
-      - "Battery Ventures"
-      - "Battery"
-    legal_entities:
-      - "Battery Ventures LP"
-
-  - name: "IVP"
-    type: vc
-    website: "https://ivp.com"
-    headquarters: Menlo Park
-    stage_focus: [series_b, series_c, growth]
-    sector_focus: [technology, enterprise, consumer]
-    aliases:
-      - "IVP"
-      - "Institutional Venture Partners"
-    legal_entities:
-      - "Institutional Venture Partners LP"
-
-  - name: "Ribbit Capital"
-    type: vc
-    website: "https://ribbitcap.com"
-    headquarters: Palo Alto
-    stage_focus: [seed, series_a, series_b]
-    sector_focus: [fintech]
-    aliases:
-      - "Ribbit Capital"
-      - "Ribbit"
-    legal_entities:
-      - "Ribbit Capital LP"
-
-  - name: "QED Investors"
-    type: vc
-    website: "https://qedinvestors.com"
-    headquarters: Alexandria
-    stage_focus: [seed, series_a, series_b]
-    sector_focus: [fintech]
-    aliases:
-      - "QED Investors"
-      - "QED"
-    legal_entities:
-      - "QED Investors LP"
-
-  - name: "TCV"
-    type: pe
-    website: "https://tcv.com"
-    headquarters: Menlo Park
-    stage_focus: [series_b, series_c, growth]
-    sector_focus: [technology, fintech, enterprise]
-    aliases:
-      - "TCV"
-      - "Technology Crossover Ventures"
-    legal_entities:
-      - "TCV Management LLC"
-    partners:
-      - "John Doran"
-      - "David Yuan"
-
-  - name: "Thrive Capital"
-    type: vc
-    website: "https://thrivecap.com"
-    headquarters: New York
-    stage_focus: [seed, series_a, series_b, growth]
-    sector_focus: [technology, fintech, consumer]
-    aliases:
-      - "Thrive Capital"
-      - "Thrive"
-    legal_entities:
-      - "Thrive Capital Management LLC"
-    partners:
-      - "Josh Kushner"
-
-  - name: "Ribbit Capital"
-    type: vc
-    website: "https://ribbitcap.com"
-    headquarters: Palo Alto
-    stage_focus: [seed, series_a, series_b, growth]
-    sector_focus: [fintech]
-    aliases:
-      - "Ribbit Capital"
-      - "Ribbit"
-    legal_entities:
-      - "Ribbit Capital LP"
-    partners:
-      - "Micky Malka"
-
-  - name: "Greenoaks Capital"
-    type: pe
-    website: "https://greenoaks.com"
-    headquarters: San Francisco
-    stage_focus: [series_b, series_c, growth]
-    sector_focus: [technology, fintech]
-    aliases:
-      - "Greenoaks"
-      - "Greenoaks Capital"
-    legal_entities:
-      - "Greenoaks Capital Partners LLC"
-
-  - name: "Softbank Vision Fund"
-    type: pe
-    website: "https://visionfund.com"
-    headquarters: London
-    stage_focus: [series_c, growth]
-    sector_focus: [technology, ai, mobility]
-    aliases:
-      - "Softbank"
-      - "Softbank Vision Fund"
-      - "SVF"
-    legal_entities:
-      - "SB Investment Advisers (UK) Limited"
-    partners:
-      - "Masayoshi Son"
-
-  # =============================================================================
-  # TIER 4: Accelerators (15)
-  # =============================================================================
-
-  - name: "Techstars"
-    type: accelerator
-    website: "https://techstars.com"
-    headquarters: Boulder
-    stage_focus: [pre_seed]
-    sector_focus: [technology]
-    aliases:
-      - "Techstars"
-      - "Techstars Berlin"
-    legal_entities:
-      - "Techstars Central LLC"
-
-  - name: "Plug and Play"
-    type: accelerator
-    website: "https://plugandplaytechcenter.com"
-    headquarters: Sunnyvale
-    stage_focus: [pre_seed, seed]
-    sector_focus: [technology, corporate innovation]
-    aliases:
-      - "Plug and Play"
-      - "Plug & Play"
-    legal_entities:
-      - "Plug and Play Tech Center LLC"
-
-  - name: "Antler"
-    type: accelerator
-    website: "https://antler.co"
-    headquarters: Singapore
-    stage_focus: [pre_seed]
-    sector_focus: [technology]
-    aliases:
-      - "Antler"
-    legal_entities:
-      - "Antler GmbH"
-
-  - name: "Entrepreneur First"
-    type: accelerator
-    website: "https://joinef.com"
-    headquarters: London
-    stage_focus: [pre_seed]
-    sector_focus: [technology, deeptech]
-    aliases:
-      - "Entrepreneur First"
-      - "EF"
-    legal_entities:
-      - "Entrepreneur First Ltd"
-
-  - name: "German Accelerator"
-    type: accelerator
-    website: "https://germanaccelerator.com"
-    headquarters: Berlin
-    stage_focus: [seed, series_a]
-    sector_focus: [technology]
-    aliases:
-      - "German Accelerator"
-    legal_entities:
-      - "German Accelerator GmbH"
-
-  - name: "SpinLab"
-    type: accelerator
-    website: "https://spinlab.co"
-    headquarters: Leipzig
-    stage_focus: [pre_seed, seed]
-    sector_focus: [technology, energy, health]
-    aliases:
-      - "SpinLab"
-      - "Spin Lab"
-    legal_entities:
-      - "SpinLab GmbH"
-
-  - name: "Wayra"
-    type: accelerator
-    website: "https://wayra.com"
-    headquarters: Munich
-    stage_focus: [pre_seed, seed]
-    sector_focus: [telecom, digital]
-    aliases:
-      - "Wayra"
-      - "Wayra Germany"
-    legal_entities:
-      - "Wayra Germany GmbH"
-
-  - name: "Microsoft for Startups"
-    type: accelerator
-    website: "https://startups.microsoft.com"
-    headquarters: Redmond
-    stage_focus: [seed, series_a]
-    sector_focus: [technology, ai, cloud]
-    aliases:
-      - "Microsoft for Startups"
-      - "Microsoft Accelerator"
-    legal_entities:
-      - "Microsoft Corporation"
-
-  - name: "Google for Startups"
-    type: accelerator
-    website: "https://startup.google.com"
-    headquarters: Mountain View
-    stage_focus: [seed, series_a]
-    sector_focus: [technology, ai]
-    aliases:
-      - "Google for Startups"
-      - "Google Accelerator"
-    legal_entities:
-      - "Google LLC"
-
-  - name: "NVIDIA Inception"
-    type: accelerator
-    website: "https://nvidia.com/inception"
-    headquarters: Santa Clara
-    stage_focus: [seed, series_a]
-    sector_focus: [ai, deeptech, autonomous]
-    aliases:
-      - "NVIDIA Inception"
-    legal_entities:
-      - "NVIDIA Corporation"
+- name: HV Capital
+  type: vc
+  website: https://hvcapital.com
+  headquarters: Munich
+  stage_focus:
+  - pre_seed
+  - seed
+  - series_a
+  - series_b
+  - series_c
+  sector_focus:
+  - software
+  - fintech
+  - consumer
+  - marketplace
+  aliases:
+  - HV Capital
+  - Holtzbrinck Ventures
+  - HV Holtzbrinck Ventures
+  legal_entities:
+  - HV Capital Manager GmbH
+  - HV Holtzbrinck Ventures GmbH
+  partners:
+  - David Kuczek
+  - Christian Saller
+- name: Earlybird Venture Capital
+  type: vc
+  website: https://earlybird.com
+  headquarters: Berlin
+  stage_focus:
+  - seed
+  - series_a
+  - series_b
+  sector_focus:
+  - digital
+  - health
+  - deeptech
+  aliases:
+  - Earlybird
+  - Earlybird VC
+  - Earlybird Venture Capital
+  legal_entities:
+  - Earlybird VC Management GmbH
+  - Earlybird Venture Capital GmbH & Co. KG
+  partners:
+  - Christian Nagel
+  - Hendrik Brandis
+- name: Cherry Ventures
+  type: vc
+  website: https://cherry.vc
+  headquarters: Berlin
+  stage_focus:
+  - seed
+  - series_a
+  - series_b
+  sector_focus:
+  - consumer
+  - saas
+  - fintech
+  - health
+  aliases:
+  - Cherry Ventures
+  - Cherry VC
+  legal_entities:
+  - Cherry Ventures Management GmbH
+  - Cherry Ventures Fund III GmbH & Co. KG
+  - Cherry Ventures Fund IV GmbH & Co. KG
+  partners:
+  - Filip Dames
+  - Christian Meermann
+- name: Project A Ventures
+  type: vc
+  website: https://project-a.com
+  headquarters: Berlin
+  stage_focus:
+  - seed
+  - series_a
+  - series_b
+  sector_focus:
+  - digital
+  - marketplace
+  - software
+  aliases:
+  - Project A
+  - Project A Ventures
+  legal_entities:
+  - Project A Ventures GmbH & Co. KG
+  - Project A Services GmbH & Co. KG
+  partners:
+  - Florian Heinemann
+  - Uwe Horstmann
+- name: Lakestar
+  type: vc
+  website: https://lakestar.com
+  headquarters: Zurich
+  stage_focus:
+  - seed
+  - series_a
+  - series_b
+  - series_c
+  sector_focus:
+  - fintech
+  - enterprise
+  - consumer
+  aliases:
+  - Lakestar
+  - Lakestar Advisors
+  legal_entities:
+  - Lakestar Advisors GmbH
+  - Lakestar III GmbH & Co. KG
+  partners:
+  - Klaus Hommels
+- name: Target Global
+  type: vc
+  website: https://targetglobal.vc
+  headquarters: Berlin
+  stage_focus:
+  - seed
+  - series_a
+  - series_b
+  - series_c
+  sector_focus:
+  - fintech
+  - mobility
+  - health
+  - enterprise
+  aliases:
+  - Target Global
+  - Target Global VC
+  legal_entities:
+  - Target Global Management GmbH
+  partners:
+  - Shmuel Chafets
+  - Mike Lobanov
+- name: 468 Capital
+  type: vc
+  website: https://four68.com
+  headquarters: Berlin
+  stage_focus:
+  - seed
+  - series_a
+  sector_focus:
+  - consumer
+  - enterprise
+  - fintech
+  aliases:
+  - 468 Capital
+  - Four68
+  legal_entities:
+  - 468 Capital GmbH
+  partners:
+  - Alexander Kudlich
+  - Florian Leibert
+  - Ludwig Ensthaler
+- name: Global Founders Capital
+  type: vc
+  website: https://globalfounders.vc
+  headquarters: Berlin
+  stage_focus:
+  - pre_seed
+  - seed
+  - series_a
+  sector_focus:
+  - internet
+  - technology
+  aliases:
+  - Global Founders Capital
+  - GFC
+  legal_entities:
+  - Global Founders Capital GmbH
+  partners:
+  - Oliver Samwer
+- name: Point Nine Capital
+  type: vc
+  website: https://pointnine.com
+  headquarters: Berlin
+  stage_focus:
+  - pre_seed
+  - seed
+  sector_focus:
+  - saas
+  - marketplace
+  - fintech
+  aliases:
+  - Point Nine
+  - Point Nine Capital
+  - P9
+  legal_entities:
+  - Point Nine Capital GmbH
+  partners:
+  - Christoph Janz
+  - Pawel Chudzinski
+- name: Fly Ventures
+  type: vc
+  website: https://fly.vc
+  headquarters: Berlin
+  stage_focus:
+  - pre_seed
+  - seed
+  sector_focus:
+  - ai
+  - automation
+  - deeptech
+  aliases:
+  - Fly Ventures
+  - Fly VC
+  legal_entities:
+  - Fly Ventures Management GmbH
+  partners:
+  - Gabriel Matuschka
+  - Fredrik Bergenlid
+- name: La Famiglia
+  type: vc
+  website: https://lafamiglia.vc
+  headquarters: Berlin
+  stage_focus:
+  - seed
+  - series_a
+  sector_focus:
+  - b2b
+  - infrastructure
+  - industrial
+  aliases:
+  - La Famiglia
+  - La Famiglia VC
+  legal_entities:
+  - La Famiglia GmbH
+  partners:
+  - Jeannette zu Fürstenberg
+- name: BlueYard Capital
+  type: vc
+  website: https://blueyard.com
+  headquarters: Berlin
+  stage_focus:
+  - seed
+  - series_a
+  sector_focus:
+  - decentralization
+  - privacy
+  - ai
+  aliases:
+  - BlueYard
+  - BlueYard Capital
+  legal_entities:
+  - BlueYard Capital GmbH
+  partners:
+  - Ciarán O'Leary
+  - Jason Whitmire
+- name: Capnamic
+  type: vc
+  website: https://capnamic.com
+  headquarters: Cologne
+  stage_focus:
+  - seed
+  - series_a
+  - series_b
+  sector_focus:
+  - enterprise
+  - fintech
+  - health
+  aliases:
+  - Capnamic
+  - Capnamic Ventures
+  legal_entities:
+  - Capnamic Ventures GmbH
+  partners:
+  - Christian Siegele
+  - Olaf Jacobi
+- name: Headline
+  type: vc
+  website: https://headline.com
+  headquarters: Berlin
+  stage_focus:
+  - seed
+  - series_a
+  - series_b
+  sector_focus:
+  - enterprise
+  - fintech
+  - consumer
+  aliases:
+  - Headline
+  - e.ventures
+  legal_entities:
+  - Headline GmbH
+  partners:
+  - Mathias Schilling
+- name: Picus Capital
+  type: vc
+  website: https://picuscap.com
+  headquarters: Munich
+  stage_focus:
+  - seed
+  - series_a
+  sector_focus:
+  - saas
+  - fintech
+  - health
+  aliases:
+  - Picus Capital
+  - Picus
+  legal_entities:
+  - Picus Capital GmbH
+  partners:
+  - Alexander Giesecke
+  - Florian Reichert
+- name: Speedinvest
+  type: vc
+  website: https://speedinvest.com
+  headquarters: Vienna
+  stage_focus:
+  - pre_seed
+  - seed
+  - series_a
+  sector_focus:
+  - fintech
+  - industrial
+  - health
+  - marketplace
+  aliases:
+  - Speedinvest
+  legal_entities:
+  - Speedinvest GmbH
+  partners:
+  - Oliver Holle
+  - Daniel Keiper-Knorr
+- name: Visionaries Club
+  type: vc
+  website: https://visionaries.club
+  headquarters: Berlin
+  stage_focus:
+  - seed
+  - series_a
+  sector_focus:
+  - b2b
+  - digital transformation
+  aliases:
+  - Visionaries Club
+  - Visionaries
+  legal_entities:
+  - Visionaries Club GmbH
+  partners:
+  - Robert Lacher
+- name: btov Partners
+  type: vc
+  website: https://btov.vc
+  headquarters: Munich
+  stage_focus:
+  - seed
+  - series_a
+  - series_b
+  sector_focus:
+  - industrial
+  - deeptech
+  - digital
+  aliases:
+  - btov Partners
+  - btov
+  legal_entities:
+  - btov Partners GmbH
+  partners:
+  - Christian Reitberger
+- name: Redalpine
+  type: vc
+  website: https://redalpine.com
+  headquarters: Zurich
+  stage_focus:
+  - seed
+  - series_a
+  sector_focus:
+  - technology
+  - internet
+  aliases:
+  - Redalpine
+  - Redalpine Venture Partners
+  legal_entities:
+  - Redalpine Capital Management GmbH
+  partners:
+  - Peter Niederhauser
+- name: Acton Capital
+  type: vc
+  website: https://acton.de
+  headquarters: Munich
+  stage_focus:
+  - seed
+  - series_a
+  - series_b
+  sector_focus:
+  - consumer
+  - marketplace
+  - fintech
+  aliases:
+  - Acton Capital
+  - Acton Capital Partners
+  legal_entities:
+  - Acton Capital Partners GmbH
+  partners:
+  - Christoph Braun
+- name: APX
+  type: vc
+  website: https://apx.ac
+  headquarters: Berlin
+  stage_focus:
+  - pre_seed
+  - seed
+  sector_focus:
+  - technology
+  - digital
+  aliases:
+  - APX
+  - Axel Springer Porsche
+  legal_entities:
+  - APX GmbH
+- name: Cavalry Ventures
+  type: vc
+  website: https://cavalry.vc
+  headquarters: Berlin
+  stage_focus:
+  - pre_seed
+  - seed
+  sector_focus:
+  - fintech
+  - enterprise
+  - health
+  aliases:
+  - Cavalry
+  - Cavalry Ventures
+  legal_entities:
+  - Cavalry Ventures Management GmbH
+  partners:
+  - Rouven Dresselhaus
+- name: b2venture
+  type: vc
+  website: https://b2venture.vc
+  headquarters: Zurich
+  stage_focus:
+  - seed
+  - series_a
+  sector_focus:
+  - enterprise
+  - fintech
+  aliases:
+  - b2venture
+  - bto venture
+  legal_entities:
+  - b2venture AG
+- name: Senovo
+  type: vc
+  website: https://senovo.vc
+  headquarters: Munich
+  stage_focus:
+  - seed
+  - series_a
+  sector_focus:
+  - enterprise
+  - saas
+  aliases:
+  - Senovo
+  legal_entities:
+  - Senovo GmbH
+  partners:
+  - Matthias Ick
+- name: Atlantic Labs
+  type: vc
+  website: https://atlanticlabs.de
+  headquarters: Berlin
+  stage_focus:
+  - pre_seed
+  - seed
+  sector_focus:
+  - digital
+  - consumer
+  aliases:
+  - Atlantic Labs
+  - Atlantic Internet
+  legal_entities:
+  - Atlantic Labs GmbH
+  partners:
+  - Christophe Maire
+- name: 42CAP
+  type: vc
+  website: https://42cap.com
+  headquarters: Munich
+  stage_focus:
+  - pre_seed
+  - seed
+  sector_focus:
+  - b2b
+  - saas
+  - fintech
+  aliases:
+  - 42CAP
+  - FortyTwo Cap
+  legal_entities:
+  - 42CAP GmbH
+  partners:
+  - Thomas Wilke
+- name: 10x Group
+  type: vc
+  website: https://10xgroup.com
+  headquarters: Munich
+  stage_focus:
+  - seed
+  - series_a
+  - series_b
+  sector_focus:
+  - technology
+  - digital
+  aliases:
+  - 10x Group
+  legal_entities:
+  - 10x Group GmbH
+- name: ALSTIN Capital
+  type: vc
+  website: https://alstincapital.com
+  headquarters: Berlin
+  stage_focus:
+  - pre_seed
+  - seed
+  sector_focus:
+  - technology
+  aliases:
+  - ALSTIN Capital
+  - ALSTIN
+  legal_entities:
+  - ALSTIN Capital GmbH
+- name: Ananda Impact Ventures
+  type: vc
+  website: https://ananda.vc
+  headquarters: Munich
+  stage_focus:
+  - seed
+  - series_a
+  sector_focus:
+  - impact
+  - social
+  - health
+  aliases:
+  - Ananda Impact Ventures
+  - Ananda Ventures
+  legal_entities:
+  - Ananda Ventures GmbH
+- name: Angel Invest
+  type: vc
+  website: https://angelinvest.de
+  headquarters: Berlin
+  stage_focus:
+  - seed
+  - series_a
+  sector_focus:
+  - technology
+  aliases:
+  - Angel Invest
+  legal_entities:
+  - Angel Invest GmbH
+- name: Auxxo Female Catalyst Fund
+  type: vc
+  website: https://auxxo.com
+  headquarters: Berlin
+  stage_focus:
+  - pre_seed
+  - seed
+  sector_focus:
+  - female founders
+  aliases:
+  - Auxxo
+  - Auxxo Female Catalyst
+  legal_entities:
+  - Auxxo GmbH
+- name: Concept Ventures
+  type: vc
+  website: https://concept.vc
+  headquarters: London
+  stage_focus:
+  - pre_seed
+  - seed
+  sector_focus:
+  - b2b
+  - software
+  aliases:
+  - Concept Ventures
+  legal_entities:
+  - Concept Ventures LLP
+- name: Digital+ Partners
+  type: vc
+  website: https://digitalplus.partners
+  headquarters: Munich
+  stage_focus:
+  - series_b
+  - series_c
+  - growth
+  sector_focus:
+  - growth equity
+  aliases:
+  - Digital+ Partners
+  - Digital Plus
+  legal_entities:
+  - Digital+ Partners GmbH
+- name: Flex Capital
+  type: vc
+  website: https://flex-capital.com
+  headquarters: Berlin
+  stage_focus:
+  - seed
+  - series_a
+  - series_b
+  sector_focus:
+  - technology
+  - software
+  aliases:
+  - Flex Capital
+  legal_entities:
+  - Flex Capital GmbH
+- name: Iris Capital
+  type: vc
+  website: https://iris.capital
+  headquarters: Paris
+  stage_focus:
+  - seed
+  - series_a
+  - series_b
+  sector_focus:
+  - digital
+  - technology
+  aliases:
+  - Iris Capital
+  legal_entities:
+  - Iris Capital Management SAS
+- name: JVH Ventures
+  type: vc
+  website: https://jvh.vc
+  headquarters: Munich
+  stage_focus:
+  - pre_seed
+  - seed
+  sector_focus:
+  - enterprise
+  - saas
+  aliases:
+  - JVH Ventures
+  - JVH
+  legal_entities:
+  - JVH Ventures GmbH
+- name: Lea Partners
+  type: vc
+  website: https://lea-partners.com
+  headquarters: Munich
+  stage_focus:
+  - seed
+  - series_a
+  sector_focus:
+  - b2b
+  - software
+  aliases:
+  - Lea Partners
+  legal_entities:
+  - Lea Partners GmbH
+- name: Nextblue VC
+  type: vc
+  website: https://nextblue.vc
+  headquarters: Berlin
+  stage_focus:
+  - pre_seed
+  - seed
+  - series_a
+  sector_focus:
+  - climate
+  - sustainability
+  aliases:
+  - Nextblue
+  - Nextblue VC
+  legal_entities:
+  - Nextblue VC GmbH
+- name: Paua Ventures
+  type: vc
+  website: https://pauaventures.com
+  headquarters: Berlin
+  stage_focus:
+  - seed
+  - series_a
+  sector_focus:
+  - mobility
+  - logistics
+  - supply chain
+  aliases:
+  - Paua Ventures
+  - Paua
+  legal_entities:
+  - Paua Ventures GmbH
+- name: Possible Ventures
+  type: vc
+  website: https://possibleventures.com
+  headquarters: Berlin
+  stage_focus:
+  - pre_seed
+  - seed
+  sector_focus:
+  - climate
+  - sustainability
+  aliases:
+  - Possible Ventures
+  legal_entities:
+  - Possible Ventures GmbH
+- name: Redstone VC
+  type: vc
+  website: https://redstone.vc
+  headquarters: Berlin
+  stage_focus:
+  - pre_seed
+  - seed
+  - series_a
+  sector_focus:
+  - enterprise
+  - saas
+  aliases:
+  - Redstone
+  - Redstone VC
+  legal_entities:
+  - Redstone Digital GmbH
+- name: Seed + Speed Ventures
+  type: vc
+  website: https://seedandspeed.com
+  headquarters: Munich
+  stage_focus:
+  - pre_seed
+  - seed
+  sector_focus:
+  - technology
+  aliases:
+  - Seed + Speed
+  - Seed and Speed
+  legal_entities:
+  - Seed + Speed Ventures GmbH
+- name: SquareOne Capital
+  type: vc
+  website: https://squareone-capital.com
+  headquarters: Munich
+  stage_focus:
+  - pre_seed
+  - seed
+  - series_a
+  sector_focus:
+  - fintech
+  - enterprise
+  aliases:
+  - SquareOne
+  - SquareOne Capital
+  legal_entities:
+  - SquareOne Capital GmbH
+- name: TA Ventures
+  type: vc
+  website: https://taventures.vc
+  headquarters: Berlin
+  stage_focus:
+  - seed
+  - series_a
+  sector_focus:
+  - consumer
+  - fintech
+  aliases:
+  - TA Ventures
+  legal_entities:
+  - TA Ventures GmbH
+- name: Tiburon
+  type: vc
+  website: https://tiburon-partners.com
+  headquarters: Munich
+  stage_focus:
+  - pre_seed
+  - seed
+  sector_focus:
+  - climate
+  - sustainability
+  aliases:
+  - Tiburon Partners
+  - Tiburon
+  legal_entities:
+  - Tiburon Partners GmbH
+- name: TruVenturo
+  type: vc
+  website: https://truventuro.com
+  headquarters: Berlin
+  stage_focus:
+  - seed
+  sector_focus:
+  - fintech
+  aliases:
+  - TruVenturo
+  legal_entities:
+  - TruVenturo GmbH
+- name: WENVEST Capital
+  type: vc
+  website: https://wenvest.com
+  headquarters: Berlin
+  stage_focus:
+  - pre_seed
+  - seed
+  sector_focus:
+  - technology
+  aliases:
+  - WENVEST
+  - WENVEST Capital
+  legal_entities:
+  - WENVEST Capital GmbH
+- name: Wellington Partners
+  type: vc
+  website: https://wellington-partners.com
+  headquarters: Munich
+  stage_focus:
+  - seed
+  - series_a
+  sector_focus:
+  - life sciences
+  - digital
+  aliases:
+  - Wellington Partners
+  legal_entities:
+  - Wellington Partners GmbH
+- name: WestTech Ventures
+  type: vc
+  website: https://westtech.vc
+  headquarters: Berlin
+  stage_focus:
+  - pre_seed
+  - seed
+  sector_focus:
+  - technology
+  aliases:
+  - WestTech
+  - WestTech Ventures
+  legal_entities:
+  - WestTech Ventures GmbH
+- name: Yabeo
+  type: vc
+  website: https://yabeo.com
+  headquarters: Munich
+  stage_focus:
+  - seed
+  - series_a
+  sector_focus:
+  - enterprise
+  - saas
+  aliases:
+  - Yabeo
+  - Yabeo Capital
+  legal_entities:
+  - Yabeo Capital GmbH
+- name: Yttrium
+  type: vc
+  website: https://yttrium.de
+  headquarters: Munich
+  stage_focus:
+  - series_a
+  - series_b
+  sector_focus:
+  - enterprise
+  - saas
+  aliases:
+  - Yttrium
+  legal_entities:
+  - Yttrium GmbH
+- name: signals Venture Capital
+  type: vc
+  website: https://signals.vc
+  headquarters: Munich
+  stage_focus:
+  - seed
+  - series_a
+  sector_focus:
+  - enterprise
+  - industrial
+  aliases:
+  - signals VC
+  - signals Venture Capital
+  legal_entities:
+  - signals Venture Capital GmbH
+- name: Verdane
+  type: pe
+  website: https://verdane.com
+  headquarters: Oslo
+  stage_focus:
+  - series_b
+  - series_c
+  - growth
+  sector_focus:
+  - growth equity
+  - technology
+  aliases:
+  - Verdane
+  - Verdane Capital
+  legal_entities:
+  - Verdane Capital Advisors AB
+- name: Augmentum
+  type: vc
+  website: https://augmentum.vc
+  headquarters: London
+  stage_focus:
+  - series_a
+  - series_b
+  - series_c
+  sector_focus:
+  - fintech
+  aliases:
+  - Augmentum
+  - Augmentum Fintech
+  legal_entities:
+  - Augmentum Fintech PLC
+- name: Vorwerk Ventures
+  type: cvc
+  website: https://vorwerk-ventures.com
+  headquarters: Wuppertal
+  stage_focus:
+  - seed
+  - series_a
+  sector_focus:
+  - consumer
+  - d2c
+  aliases:
+  - Vorwerk Ventures
+  legal_entities:
+  - Vorwerk Ventures GmbH
+- name: Creandum
+  type: vc
+  website: https://creandum.com
+  headquarters: Stockholm
+  stage_focus:
+  - seed
+  - series_a
+  - series_b
+  sector_focus:
+  - technology
+  - consumer
+  aliases:
+  - Creandum
+  legal_entities:
+  - Creandum AB
+  partners:
+  - Simon Schmincke
+- name: EQT Ventures
+  type: vc
+  website: https://eqtventures.com
+  headquarters: Stockholm
+  stage_focus:
+  - seed
+  - series_a
+  - series_b
+  sector_focus:
+  - technology
+  - health
+  - fintech
+  aliases:
+  - EQT Ventures
+  - EQT
+  legal_entities:
+  - EQT Partners AB
+- name: Northzone
+  type: vc
+  website: https://northzone.com
+  headquarters: Stockholm
+  stage_focus:
+  - seed
+  - series_a
+  - series_b
+  sector_focus:
+  - technology
+  - consumer
+  aliases:
+  - Northzone
+  legal_entities:
+  - Northzone Ventures AB
+- name: Felix Capital
+  type: vc
+  website: https://felixcap.com
+  headquarters: London
+  stage_focus:
+  - seed
+  - series_a
+  - series_b
+  sector_focus:
+  - consumer
+  - creative
+  aliases:
+  - Felix Capital
+  legal_entities:
+  - Felix Capital LLP
+- name: Partech
+  type: vc
+  website: https://partechpartners.com
+  headquarters: Paris
+  stage_focus:
+  - seed
+  - series_a
+  - series_b
+  - growth
+  sector_focus:
+  - technology
+  - enterprise
+  aliases:
+  - Partech
+  - Partech Partners
+  - Partech Ventures
+  legal_entities:
+  - Partech Partners SAS
+- name: High-Tech Gründerfonds
+  type: government
+  website: https://htgf.de
+  headquarters: Bonn
+  stage_focus:
+  - pre_seed
+  - seed
+  sector_focus:
+  - deeptech
+  - industrial
+  - life_sciences
+  - digital
+  aliases:
+  - HTGF
+  - High-Tech Gründerfonds
+  - Hightech Gruenderfonds
+  - High Tech Gründerfonds
+  legal_entities:
+  - High-Tech Gründerfonds Management GmbH
+  - HTGF III GmbH & Co. KG
+  - HTGF IV GmbH & Co. KG
+- name: Bayern Kapital
+  type: government
+  website: https://bayernkapital.de
+  headquarters: Munich
+  stage_focus:
+  - pre_seed
+  - seed
+  - series_a
+  - series_b
+  sector_focus:
+  - technology
+  - life_sciences
+  aliases:
+  - Bayern Kapital
+  - BayernKapital
+  legal_entities:
+  - Bayern Kapital GmbH
+- name: IBB Ventures
+  type: government
+  website: https://ibbventures.de
+  headquarters: Berlin
+  stage_focus:
+  - seed
+  - series_a
+  sector_focus:
+  - software
+  - health
+  - industrial
+  aliases:
+  - IBB Ventures
+  - IBB Beteiligungsgesellschaft
+  legal_entities:
+  - IBB Ventures GmbH
+  - IBB Beteiligungsgesellschaft mbH
+- name: Coparion
+  type: government
+  website: https://coparion.vc
+  headquarters: Cologne
+  stage_focus:
+  - seed
+  - series_a
+  - series_b
+  sector_focus:
+  - technology
+  aliases:
+  - Coparion
+  legal_entities:
+  - Coparion GmbH & Co. KG
+- name: NRW.BANK Venture Fonds
+  type: government
+  website: https://nrwbank.de
+  headquarters: Dusseldorf
+  stage_focus:
+  - seed
+  - series_a
+  - growth
+  sector_focus:
+  - climate
+  - ai
+  - life_sciences
+  aliases:
+  - NRW.BANK
+  - NRW Bank
+  - NRW.BANK Venture Fonds
+  legal_entities:
+  - NRW.BANK Venture Fonds GmbH
+- name: KfW Capital
+  type: government
+  website: https://kfw-capital.de
+  headquarters: Frankfurt
+  stage_focus:
+  - seed
+  - series_a
+  - series_b
+  sector_focus:
+  - technology
+  aliases:
+  - KfW Capital
+  - KfW
+  legal_entities:
+  - KfW Capital GmbH & Co. KG
+- name: bm|t
+  type: government
+  website: https://bm-t.de
+  headquarters: Erfurt
+  stage_focus:
+  - seed
+  - series_a
+  sector_focus:
+  - technology
+  aliases:
+  - bm|t
+  - bmt
+  - bm|t Beteiligungsmanagement
+  legal_entities:
+  - bm|t beteiligungsmanagement thüringen gmbh
+- name: Technologiegründerfonds Sachsen
+  type: government
+  website: https://tgfs.de
+  headquarters: Dresden
+  stage_focus:
+  - seed
+  - series_a
+  sector_focus:
+  - technology
+  - semiconductors
+  - medtech
+  aliases:
+  - TGFS
+  - Technologiegründerfonds Sachsen
+  legal_entities:
+  - Technologiegründerfonds Sachsen GmbH & Co. KG
+- name: Brandenburg Kapital
+  type: government
+  website: https://ilb.de
+  headquarters: Potsdam
+  stage_focus:
+  - seed
+  - series_a
+  - series_b
+  sector_focus:
+  - technology
+  - health
+  aliases:
+  - Brandenburg Kapital
+  - ILB
+  legal_entities:
+  - Brandenburg Kapital GmbH
+- name: Hessen Kapital
+  type: government
+  website: https://hessen-kapital.de
+  headquarters: Wiesbaden
+  stage_focus:
+  - seed
+  - series_a
+  sector_focus:
+  - technology
+  aliases:
+  - Hessen Kapital
+  - Hessen Kapital III
+  legal_entities:
+  - Hessen Kapital III GmbH & Co. KG
+- name: IFB Innovationsstarter
+  type: government
+  website: https://innovationsstarter.com
+  headquarters: Hamburg
+  stage_focus:
+  - seed
+  - series_a
+  sector_focus:
+  - technology
+  aliases:
+  - IFB Innovationsstarter
+  - Innovationsstarter Hamburg
+  legal_entities:
+  - Innovationsstarter Fonds Hamburg GmbH
+- name: L-Bank
+  type: government
+  website: https://l-bank.de
+  headquarters: Karlsruhe
+  stage_focus:
+  - seed
+  - series_a
+  sector_focus:
+  - technology
+  aliases:
+  - L-Bank
+  - Landeskreditbank
+  legal_entities:
+  - L-Bank
+- name: Siemens Next47
+  type: cvc
+  website: https://next47.com
+  headquarters: Munich
+  stage_focus:
+  - seed
+  - series_a
+  - series_b
+  - series_c
+  sector_focus:
+  - industrial
+  - ai
+  - automation
+  - energy
+  aliases:
+  - Next47
+  - Siemens Next47
+  legal_entities:
+  - Next47 GmbH
+- name: BMW i Ventures
+  type: cvc
+  website: https://bmwiventures.com
+  headquarters: Munich
+  stage_focus:
+  - series_a
+  - series_b
+  - series_c
+  sector_focus:
+  - mobility
+  - ai
+  - sustainability
+  aliases:
+  - BMW i Ventures
+  - BMW Ventures
+  legal_entities:
+  - BMW i Ventures GmbH
+- name: Bosch Ventures
+  type: cvc
+  website: https://bosch-ventures.com
+  headquarters: Stuttgart
+  stage_focus:
+  - seed
+  - series_a
+  - series_b
+  sector_focus:
+  - mobility
+  - industrial
+  - ai
+  - iot
+  aliases:
+  - Bosch Ventures
+  - Robert Bosch Venture Capital
+  - RBVC
+  legal_entities:
+  - Robert Bosch Venture Capital GmbH
+- name: Porsche Ventures
+  type: cvc
+  website: https://porsche.com/ventures
+  headquarters: Stuttgart
+  stage_focus:
+  - series_a
+  - series_b
+  sector_focus:
+  - mobility
+  - ai
+  - manufacturing
+  aliases:
+  - Porsche Ventures
+  legal_entities:
+  - Porsche Ventures GmbH
+- name: Deutsche Telekom Ventures
+  type: cvc
+  website: https://telekom.com/ventures
+  headquarters: Bonn
+  stage_focus:
+  - seed
+  - series_a
+  - series_b
+  sector_focus:
+  - telecom
+  - 5g
+  - iot
+  - ai
+  aliases:
+  - Deutsche Telekom Ventures
+  - DTCP
+  - Deutsche Telekom Capital Partners
+  - Telekom Innovation Pool
+  legal_entities:
+  - Deutsche Telekom Capital Partners GmbH
+- name: CommerzVentures
+  type: cvc
+  website: https://commerzventures.com
+  headquarters: Frankfurt
+  stage_focus:
+  - seed
+  - series_a
+  - series_b
+  sector_focus:
+  - fintech
+  - insurtech
+  aliases:
+  - CommerzVentures
+  - Commerzbank Ventures
+  legal_entities:
+  - CommerzVentures GmbH
+- name: Allianz X
+  type: cvc
+  website: https://allianzx.com
+  headquarters: Munich
+  stage_focus:
+  - series_b
+  - series_c
+  - growth
+  sector_focus:
+  - insurtech
+  - fintech
+  - health
+  aliases:
+  - Allianz X
+  legal_entities:
+  - Allianz X GmbH
+- name: SAP.iO
+  type: cvc
+  website: https://sap.io
+  headquarters: Walldorf
+  stage_focus:
+  - seed
+  - series_a
+  sector_focus:
+  - enterprise
+  - saas
+  aliases:
+  - SAP.iO
+  - SAP io
+  - SAP Ventures
+  legal_entities:
+  - SAP.iO Fund GmbH
+- name: BASF Venture Capital
+  type: cvc
+  website: https://basf.com/venturecapital
+  headquarters: Ludwigshafen
+  stage_focus:
+  - seed
+  - series_a
+  - series_b
+  sector_focus:
+  - chemicals
+  - materials
+  - sustainability
+  aliases:
+  - BASF Venture Capital
+  - BASF VC
+  legal_entities:
+  - BASF Venture Capital GmbH
+- name: Merck Ventures
+  type: cvc
+  website: https://merckgroup.com/ventures
+  headquarters: Darmstadt
+  stage_focus:
+  - seed
+  - series_a
+  - series_b
+  sector_focus:
+  - health
+  - life_sciences
+  - technology
+  aliases:
+  - Merck Ventures
+  - M Ventures
+  legal_entities:
+  - M Ventures GmbH
+- name: Evonik Venture Capital
+  type: cvc
+  website: https://evonik.com/venturecapital
+  headquarters: Essen
+  stage_focus:
+  - seed
+  - series_a
+  sector_focus:
+  - chemicals
+  - materials
+  - nutrition
+  aliases:
+  - Evonik Venture Capital
+  - Evonik VC
+  legal_entities:
+  - Evonik Venture Capital GmbH
+- name: E.ON :agile
+  type: cvc
+  website: https://eon.com/agile
+  headquarters: Essen
+  stage_focus:
+  - seed
+  - series_a
+  sector_focus:
+  - energy
+  - sustainability
+  - grid
+  aliases:
+  - E.ON :agile
+  - EON agile
+  - E.ON Ventures
+  legal_entities:
+  - E.ON :agile GmbH
+- name: Future Energy Ventures
+  type: cvc
+  website: https://fev.vc
+  headquarters: Berlin
+  stage_focus:
+  - seed
+  - series_a
+  - series_b
+  sector_focus:
+  - energy
+  - sustainability
+  - mobility
+  aliases:
+  - Future Energy Ventures
+  - FEV
+  legal_entities:
+  - Future Energy Ventures GmbH
+- name: Hubraum
+  type: cvc
+  website: https://hubraum.com
+  headquarters: Berlin
+  stage_focus:
+  - pre_seed
+  - seed
+  sector_focus:
+  - telecom
+  - iot
+  - 5g
+  aliases:
+  - Hubraum
+  - hub:raum
+  legal_entities:
+  - hub:raum GmbH
+- name: Hitachi Ventures
+  type: cvc
+  website: https://hitachi.com/ventures
+  headquarters: Munich
+  stage_focus:
+  - seed
+  - series_a
+  sector_focus:
+  - industrial
+  - iot
+  - ai
+  aliases:
+  - Hitachi Ventures
+  legal_entities:
+  - Hitachi Ventures GmbH
+- name: Sequoia Capital
+  type: vc
+  website: https://sequoiacap.com
+  headquarters: Menlo Park
+  stage_focus:
+  - seed
+  - series_a
+  - series_b
+  - growth
+  sector_focus:
+  - technology
+  - consumer
+  - enterprise
+  aliases:
+  - Sequoia
+  - Sequoia Capital
+  legal_entities:
+  - Sequoia Capital Operations LLC
+- name: Index Ventures
+  type: vc
+  website: https://indexventures.com
+  headquarters: London
+  stage_focus:
+  - seed
+  - series_a
+  - series_b
+  - growth
+  sector_focus:
+  - technology
+  - fintech
+  - gaming
+  aliases:
+  - Index Ventures
+  - Index
+  legal_entities:
+  - Index Ventures Growth LLP
+- name: Balderton Capital
+  type: vc
+  website: https://balderton.com
+  headquarters: London
+  stage_focus:
+  - series_a
+  - series_b
+  sector_focus:
+  - technology
+  - consumer
+  - enterprise
+  aliases:
+  - Balderton
+  - Balderton Capital
+  legal_entities:
+  - Balderton Capital LLP
+- name: Atomico
+  type: vc
+  website: https://atomico.com
+  headquarters: London
+  stage_focus:
+  - series_a
+  - series_b
+  - series_c
+  sector_focus:
+  - technology
+  - deeptech
+  aliases:
+  - Atomico
+  legal_entities:
+  - Atomico LLP
+  partners:
+  - Niklas Zennström
+- name: General Catalyst
+  type: vc
+  website: https://generalcatalyst.com
+  headquarters: Boston
+  stage_focus:
+  - seed
+  - series_a
+  - series_b
+  - growth
+  sector_focus:
+  - technology
+  - health
+  - fintech
+  aliases:
+  - General Catalyst
+  - GC
+  legal_entities:
+  - General Catalyst Partners LP
+- name: Accel
+  type: vc
+  website: https://accel.com
+  headquarters: Palo Alto
+  stage_focus:
+  - seed
+  - series_a
+  - series_b
+  sector_focus:
+  - technology
+  - enterprise
+  - consumer
+  aliases:
+  - Accel
+  - Accel Partners
+  legal_entities:
+  - Accel Partners LP
+- name: Insight Partners
+  type: pe
+  website: https://insightpartners.com
+  headquarters: New York
+  stage_focus:
+  - series_b
+  - series_c
+  - growth
+  sector_focus:
+  - software
+  - technology
+  aliases:
+  - Insight Partners
+  - Insight Venture Partners
+  legal_entities:
+  - Insight Partners LP
+- name: Tiger Global
+  type: pe
+  website: https://tigerglobal.com
+  headquarters: New York
+  stage_focus:
+  - series_b
+  - series_c
+  - growth
+  sector_focus:
+  - technology
+  - internet
+  aliases:
+  - Tiger Global
+  - Tiger Global Management
+  legal_entities:
+  - Tiger Global Management LLC
+- name: Andreessen Horowitz
+  type: vc
+  website: https://a16z.com
+  headquarters: Menlo Park
+  stage_focus:
+  - seed
+  - series_a
+  - series_b
+  - growth
+  sector_focus:
+  - technology
+  - crypto
+  - ai
+  - bio
+  aliases:
+  - a16z
+  - Andreessen Horowitz
+  legal_entities:
+  - AH Capital Management LLC
+- name: Lightspeed Venture Partners
+  type: vc
+  website: https://lsvp.com
+  headquarters: Menlo Park
+  stage_focus:
+  - seed
+  - series_a
+  - series_b
+  - growth
+  sector_focus:
+  - enterprise
+  - consumer
+  - fintech
+  aliases:
+  - Lightspeed
+  - Lightspeed Venture Partners
+  legal_entities:
+  - Lightspeed Venture Partners LP
+- name: Coatue Management
+  type: pe
+  website: https://coatue.com
+  headquarters: New York
+  stage_focus:
+  - series_b
+  - series_c
+  - growth
+  sector_focus:
+  - technology
+  aliases:
+  - Coatue
+  - Coatue Management
+  legal_entities:
+  - Coatue Management LLC
+- name: DST Global
+  type: pe
+  website: https://dst.global
+  headquarters: Hong Kong
+  stage_focus:
+  - series_b
+  - series_c
+  - growth
+  sector_focus:
+  - internet
+  - technology
+  aliases:
+  - DST Global
+  - DST
+  legal_entities:
+  - DST Global LP
+- name: Bessemer Venture Partners
+  type: vc
+  website: https://bvp.com
+  headquarters: Menlo Park
+  stage_focus:
+  - seed
+  - series_a
+  - series_b
+  - growth
+  sector_focus:
+  - cloud
+  - enterprise
+  - consumer
+  aliases:
+  - Bessemer
+  - Bessemer Venture Partners
+  - BVP
+  legal_entities:
+  - Bessemer Venture Partners LP
+- name: Greylock Partners
+  type: vc
+  website: https://greylock.com
+  headquarters: Menlo Park
+  stage_focus:
+  - seed
+  - series_a
+  - series_b
+  sector_focus:
+  - enterprise
+  - consumer
+  - ai
+  aliases:
+  - Greylock
+  - Greylock Partners
+  legal_entities:
+  - Greylock Partners LP
+- name: Founders Fund
+  type: vc
+  website: https://foundersfund.com
+  headquarters: San Francisco
+  stage_focus:
+  - seed
+  - series_a
+  - series_b
+  - growth
+  sector_focus:
+  - technology
+  - deeptech
+  - space
+  aliases:
+  - Founders Fund
+  legal_entities:
+  - Founders Fund LP
+  partners:
+  - Peter Thiel
+- name: Battery Ventures
+  type: vc
+  website: https://battery.com
+  headquarters: Boston
+  stage_focus:
+  - series_a
+  - series_b
+  - series_c
+  sector_focus:
+  - technology
+  - enterprise
+  aliases:
+  - Battery Ventures
+  - Battery
+  legal_entities:
+  - Battery Ventures LP
+- name: IVP
+  type: vc
+  website: https://ivp.com
+  headquarters: Menlo Park
+  stage_focus:
+  - series_b
+  - series_c
+  - growth
+  sector_focus:
+  - technology
+  - enterprise
+  - consumer
+  aliases:
+  - IVP
+  - Institutional Venture Partners
+  legal_entities:
+  - Institutional Venture Partners LP
+- name: Ribbit Capital
+  type: vc
+  website: https://ribbitcap.com
+  headquarters: Palo Alto
+  stage_focus:
+  - seed
+  - series_a
+  - series_b
+  sector_focus:
+  - fintech
+  aliases:
+  - Ribbit Capital
+  - Ribbit
+  legal_entities:
+  - Ribbit Capital LP
+- name: QED Investors
+  type: vc
+  website: https://qedinvestors.com
+  headquarters: Alexandria
+  stage_focus:
+  - seed
+  - series_a
+  - series_b
+  sector_focus:
+  - fintech
+  aliases:
+  - QED Investors
+  - QED
+  legal_entities:
+  - QED Investors LP
+- name: TCV
+  type: pe
+  website: https://tcv.com
+  headquarters: Menlo Park
+  stage_focus:
+  - series_b
+  - series_c
+  - growth
+  sector_focus:
+  - technology
+  - fintech
+  - enterprise
+  aliases:
+  - TCV
+  - Technology Crossover Ventures
+  legal_entities:
+  - TCV Management LLC
+  partners:
+  - John Doran
+  - David Yuan
+- name: Thrive Capital
+  type: vc
+  website: https://thrivecap.com
+  headquarters: New York
+  stage_focus:
+  - seed
+  - series_a
+  - series_b
+  - growth
+  sector_focus:
+  - technology
+  - fintech
+  - consumer
+  aliases:
+  - Thrive Capital
+  - Thrive
+  legal_entities:
+  - Thrive Capital Management LLC
+  partners:
+  - Josh Kushner
+- name: Ribbit Capital
+  type: vc
+  website: https://ribbitcap.com
+  headquarters: Palo Alto
+  stage_focus:
+  - seed
+  - series_a
+  - series_b
+  - growth
+  sector_focus:
+  - fintech
+  aliases:
+  - Ribbit Capital
+  - Ribbit
+  legal_entities:
+  - Ribbit Capital LP
+  partners:
+  - Micky Malka
+- name: Greenoaks Capital
+  type: pe
+  website: https://greenoaks.com
+  headquarters: San Francisco
+  stage_focus:
+  - series_b
+  - series_c
+  - growth
+  sector_focus:
+  - technology
+  - fintech
+  aliases:
+  - Greenoaks
+  - Greenoaks Capital
+  legal_entities:
+  - Greenoaks Capital Partners LLC
+- name: Softbank Vision Fund
+  type: pe
+  website: https://visionfund.com
+  headquarters: London
+  stage_focus:
+  - series_c
+  - growth
+  sector_focus:
+  - technology
+  - ai
+  - mobility
+  aliases:
+  - Softbank
+  - Softbank Vision Fund
+  - SVF
+  legal_entities:
+  - SB Investment Advisers (UK) Limited
+  partners:
+  - Masayoshi Son
+- name: Techstars
+  type: accelerator
+  website: https://techstars.com
+  headquarters: Boulder
+  stage_focus:
+  - pre_seed
+  sector_focus:
+  - technology
+  aliases:
+  - Techstars
+  - Techstars Berlin
+  legal_entities:
+  - Techstars Central LLC
+- name: Plug and Play
+  type: accelerator
+  website: https://plugandplaytechcenter.com
+  headquarters: Sunnyvale
+  stage_focus:
+  - pre_seed
+  - seed
+  sector_focus:
+  - technology
+  - corporate innovation
+  aliases:
+  - Plug and Play
+  - Plug & Play
+  legal_entities:
+  - Plug and Play Tech Center LLC
+- name: Antler
+  type: accelerator
+  website: https://antler.co
+  headquarters: Singapore
+  stage_focus:
+  - pre_seed
+  sector_focus:
+  - technology
+  aliases:
+  - Antler
+  legal_entities:
+  - Antler GmbH
+- name: Entrepreneur First
+  type: accelerator
+  website: https://joinef.com
+  headquarters: London
+  stage_focus:
+  - pre_seed
+  sector_focus:
+  - technology
+  - deeptech
+  aliases:
+  - Entrepreneur First
+  - EF
+  legal_entities:
+  - Entrepreneur First Ltd
+- name: German Accelerator
+  type: accelerator
+  website: https://germanaccelerator.com
+  headquarters: Berlin
+  stage_focus:
+  - seed
+  - series_a
+  sector_focus:
+  - technology
+  aliases:
+  - German Accelerator
+  legal_entities:
+  - German Accelerator GmbH
+- name: SpinLab
+  type: accelerator
+  website: https://spinlab.co
+  headquarters: Leipzig
+  stage_focus:
+  - pre_seed
+  - seed
+  sector_focus:
+  - technology
+  - energy
+  - health
+  aliases:
+  - SpinLab
+  - Spin Lab
+  legal_entities:
+  - SpinLab GmbH
+- name: Wayra
+  type: accelerator
+  website: https://wayra.com
+  headquarters: Munich
+  stage_focus:
+  - pre_seed
+  - seed
+  sector_focus:
+  - telecom
+  - digital
+  aliases:
+  - Wayra
+  - Wayra Germany
+  legal_entities:
+  - Wayra Germany GmbH
+- name: Microsoft for Startups
+  type: accelerator
+  website: https://startups.microsoft.com
+  headquarters: Redmond
+  stage_focus:
+  - seed
+  - series_a
+  sector_focus:
+  - technology
+  - ai
+  - cloud
+  aliases:
+  - Microsoft for Startups
+  - Microsoft Accelerator
+  legal_entities:
+  - Microsoft Corporation
+- name: Google for Startups
+  type: accelerator
+  website: https://startup.google.com
+  headquarters: Mountain View
+  stage_focus:
+  - seed
+  - series_a
+  sector_focus:
+  - technology
+  - ai
+  aliases:
+  - Google for Startups
+  - Google Accelerator
+  legal_entities:
+  - Google LLC
+- name: NVIDIA Inception
+  type: accelerator
+  website: https://nvidia.com/inception
+  headquarters: Santa Clara
+  stage_focus:
+  - seed
+  - series_a
+  sector_focus:
+  - ai
+  - deeptech
+  - autonomous
+  aliases:
+  - NVIDIA Inception
+  legal_entities:
+  - NVIDIA Corporation
+- name: Piva
+  type: vc
+  website: https://piva.vc
+  aliases:
+  - Piva
+  legal_entities:
+  - Piva Capital GmbH
+  partners:
+  - Issam Dairanieh
+- name: Partners Group
+  type: pe
+  website: https://partnersgroup.com
+  aliases:
+  - Partners Group
+  legal_entities:
+  - Partners Group AG
+  partners:
+  - Andreas Thors
+- name: Marble
+  type: vc
+  website: https://marble.studio
+  aliases:
+  - Marble
+  - Marble Studio
+  legal_entities:
+  - Marble Studio GmbH
+  partners:
+  - Benjamin Tincq
+  - Jonny Everett
+  - Lipsa Nag
+- name: Axeleo Capital
+  type: vc
+  website: https://axeleo.com
+  aliases:
+  - Axeleo Capital
+  - Axeleo
+  legal_entities:
+  - Axeleo Capital SAS
+  partners:
+  - Guillaume Sarlat
+- name: Addition
+  type: vc
+  website: https://addition.com
+  aliases:
+  - Addition
+  legal_entities:
+  - Addition LLC
+- name: Grok Ventures
+  type: vc
+  website: https://grok.ventures
+  aliases:
+  - Grok Ventures
+  - Grok
+  legal_entities:
+  - Grok Ventures Pty Ltd
+  partners:
+  - Sam Tidswell
+  - Lucinda Hankin
+- name: Collab Fund
+  type: vc
+  website: https://collabfund.com
+  aliases:
+  - Collab Fund
+  - Collab
+  legal_entities:
+  - Collab Fund LP
+  partners:
+  - Andrew Montgomery
+  - Guy Vidra
+  - Sophie Bakalar
+- name: Planet A Ventures
+  type: vc
+  website: https://planet-a.com
+  headquarters: Berlin
+  aliases:
+  - Planet A Ventures
+  - Planet A
+  legal_entities:
+  - Planet A GmbH
+  partners:
+  - Nick de la Forge
+  - Christian Schad
+  - Fridtjof Detzner
+  - Tobias Seikel
+- name: Wind Capital Group
+  type: vc
+  website: https://wind.capital
+  aliases:
+  - Wind Capital Group
+  - Wind Capital
+  legal_entities:
+  - Wind Capital Group SAS
+  partners:
+  - Xavier Gury
+  - Thierry Vandewalle
+- name: Ontario Teachers' Pension Plan
+  type: pe
+  website: https://otpp.com
+  aliases:
+  - Ontario Teachers' Pension Plan
+  - OTPP
+  - Ontario Teachers
+  legal_entities:
+  - Ontario Teachers' Pension Plan Board
+  partners:
+  - Kieran Mahanty
+  - Nadya Isack
+- name: DTCF
+  type: government
+  website: https://dtcf.de
+  aliases:
+  - DTCF
+  - DeepTech & Climate Fonds
+  legal_entities:
+  - DeepTech & Climate Fonds GmbH
+  partners:
+  - Elisabeth Schrey
+  - Torsten Löffler
+  - Tobias Faupel
+- name: KfW IPEX Bank
+  type: government
+  website: https://kfw-ipex-bank.de
+  aliases:
+  - KfW IPEX Bank
+  - KfW IPEX
+  - KfW
+  legal_entities:
+  - KfW IPEX-Bank GmbH
+  partners:
+  - Isabell Riek
+  - Michael Greven
+- name: Cape Capital AG
+  type: vc
+  website: https://capecapital.com
+  aliases:
+  - Cape Capital AG
+  - Cape Capital
+  legal_entities:
+  - Cape Capital AG
+  partners:
+  - Alan Riefert
+  - Stephanie Meili
+- name: Coatue
+  type: pe
+  website: https://coatue.com
+  aliases:
+  - Coatue
+  - Coatue Management
+  legal_entities:
+  - Coatue Management LLC
+  partners:
+  - Will Guzick
+  - Sarah Cannon
+- name: Third Sphere
+  type: vc
+  website: https://thirdsphere.com
+  aliases:
+  - Third Sphere
+  legal_entities:
+  - Third Sphere LP
+  partners:
+  - Stonly Blue
+  - Shilpi Kumar
+- name: Galvanize Climate Solutions
+  type: vc
+  website: https://galvanizeclimatesolutions.com
+  aliases:
+  - Galvanize Climate Solutions
+  - Galvanize
+  legal_entities:
+  - Galvanize Climate Solutions LP
+  partners:
+  - Tom Steyer
+  - Veery Maxwell
+- name: Lowercarbon Capital
+  type: vc
+  website: https://lowercarboncapital.com
+  aliases:
+  - Lowercarbon Capital
+  - Lowercarbon
+  - Lower Carbon
+  legal_entities:
+  - Lowercarbon Capital LP
+  partners:
+  - Chris Sacca
+  - Clea Kolster
+  - Clay Dumas
+- name: Maersk Growth
+  type: cvc
+  website: https://maersk.com
+  aliases:
+  - Maersk Growth
+  - Maersk
+  legal_entities:
+  - A.P. Møller - Mærsk A/S
+  partners:
+  - Lasse Kohler
+  - Jeppe Hoier
+- name: Proptech1 Ventures
+  type: vc
+  website: https://proptech1.ventures
+  aliases:
+  - Proptech1 Ventures
+  - Proptech1
+  legal_entities:
+  - Proptech1 Ventures GmbH
+  partners:
+  - Kristofer Fichtner
+  - Nikolas Samios
+- name: Blue Horizon Ventures
+  type: vc
+  website: https://bluehorizonventures.com
+  aliases:
+  - Blue Horizon Ventures
+  - Blue Horizon
+  legal_entities:
+  - Blue Horizon Ventures AG
+  partners:
+  - Michael Kleindl
+  - Björn Witte
+- name: Planet First Partners
+  type: pe
+  website: https://planetfirst.partners
+  aliases:
+  - Planet First Partners
+  - Planet First
+  legal_entities:
+  - Planet First Partners LLP
+  partners:
+  - Ed Arthy
+  - Frédéric de Mévius
+- name: A/O PropTech
+  type: vc
+  website: https://aoproptech.com
+  aliases:
+  - A/O PropTech
+  - A/O
+  - AO PropTech
+  legal_entities:
+  - A/O PropTech GmbH
+  partners:
+  - Gregory Dewerpe
+  - Kia Nejad
+- name: Energy Impact Partners
+  type: vc
+  website: https://energyimpactpartners.com
+  aliases:
+  - Energy Impact Partners
+  - EIP
+  legal_entities:
+  - Energy Impact Partners LP
+  partners:
+  - Andy Lubershane
+  - Matthias Dill
+- name: SOSV
+  type: vc
+  website: https://sosv.com
+  aliases:
+  - SOSV
+  legal_entities:
+  - SOSV LLC
+  partners:
+  - Bill Liao
+  - Cyril Ebersweiler
+- name: Breakthrough Energy Ventures
+  type: vc
+  website: https://b-t.energy
+  aliases:
+  - Breakthrough Energy Ventures
+  - BEV
+  - Breakthrough Energy
+  legal_entities:
+  - Breakthrough Energy Ventures LLC
+  partners:
+  - Eric Toone
+  - Carmichael Roberts
+- name: Lightrock
+  type: pe
+  website: https://lightrock.com
+  aliases:
+  - Lightrock
+  legal_entities:
+  - Lightrock LLP
+  partners:
+  - Marc Moser
+  - Christopher Steinau
+- name: Blue Impact Ventures
+  type: vc
+  website: https://blueimpact.de
+  headquarters: Berlin
+  aliases:
+  - Blue Impact Ventures
+  - Blue Impact
+  legal_entities:
+  - Blue Impact Ventures GmbH
+  partners:
+  - Lawrence Leuschner
+  - Jessica Burley
+- name: Grantham Foundation
+  type: vc
+  website: https://granthamfoundation.org
+  aliases:
+  - Grantham Foundation
+  - Grantham
+  legal_entities:
+  - Grantham Foundation
+  partners:
+  - Maki Tazawa
+- name: '2150'
+  type: vc
+  website: https://2150.tech
+  aliases:
+  - '2150'
+  legal_entities:
+  - 2150 LLP
+  partners:
+  - Christian Jølck
+  - Rahul Parekh
+- name: Climentum Capital
+  type: vc
+  website: https://climentum.com
+  aliases:
+  - Climentum Capital
+  - Climentum
+  legal_entities:
+  - Climentum Capital ApS
+  partners:
+  - Yoann Berno
+  - Stefan Maard
+- name: Norrsken VC
+  type: vc
+  website: https://norrsken.vc
+  aliases:
+  - Norrsken VC
+  - Norrsken
+  legal_entities:
+  - Norrsken VC AB
+  partners:
+  - Erik Engellau-Nilsson
+  - Niklas Adalberth
+- name: Pale Blue Dot
+  type: vc
+  website: https://paleblue.vc
+  aliases:
+  - Pale Blue Dot
+  - PBD
+  legal_entities:
+  - Pale Blue Dot ApS
+  partners:
+  - Joel Larsson
+  - Hampus Jakobsson
+- name: Primepulse
+  type: vc
+  website: https://primepulse.de
+  aliases:
+  - Primepulse
+  legal_entities:
+  - Primepulse SE
+  partners:
+  - Stefan Fritz
+  - Patrick Lanz
+- name: ORLEN VC
+  type: cvc
+  website: https://innowacje.orlen.pl
+  aliases:
+  - ORLEN VC
+  - Orlen
+  legal_entities:
+  - ORLEN VC Sp. z o.o.
+  partners:
+  - Wysmułek Konrad
+- name: TRANSITION
+  type: vc
+  website: https://transition.global
+  aliases:
+  - TRANSITION
+  legal_entities:
+  - TRANSITION VC
+  partners:
+  - David Helgason
+  - Ari Helgason
+- name: FLORA VC
+  type: vc
+  website: https://floravc.com
+  aliases:
+  - FLORA VC
+  - FLORA
+  - Flora VC
+  legal_entities:
+  - FLORA VC GmbH
+  partners:
+  - Gil Horsky
+- name: Kintanna Ventures
+  type: vc
+  website: https://kintanna.com
+  aliases:
+  - Kintanna Ventures
+  - Kintanna
+  legal_entities:
+  - Kintanna Ventures LLP
+  partners:
+  - Ben Saunders
+  - Jack Kennedy
+- name: Innovation Endeavors
+  type: vc
+  website: https://innovationendeavors.com
+  aliases:
+  - Innovation Endeavors
+  legal_entities:
+  - Innovation Endeavors LP
+  partners:
+  - Eric Schmidt
+- name: CV VC
+  type: vc
+  website: https://cvvc.com
+  aliases:
+  - CV VC
+  legal_entities:
+  - CV VC AG
+  partners:
+  - Gideon Greaves
+- name: Seedcamp
+  type: vc
+  website: https://seedcamp.com
+  headquarters: London
+  aliases:
+  - Seedcamp
+  legal_entities:
+  - Seedcamp LLP
+  partners:
+  - Carlos Espinal
+  - Kate McGinn
+- name: Trill Impact
+  type: pe
+  website: https://trillimpact.com
+  aliases:
+  - Trill Impact
+  legal_entities:
+  - Trill Impact AB
+  partners:
+  - Jan Stahlberg
+- name: Bryan, Garnier & Co
+  type: pe
+  website: https://bryangarnier.com
+  aliases:
+  - Bryan, Garnier & Co
+  - Bryan Garnier
+  legal_entities:
+  - Bryan, Garnier & Co. Limited
+  partners:
+  - Falk Müller-Veerse
+- name: Verve Capital Partners
+  type: vc
+  website: https://verve-capital.com
+  aliases:
+  - Verve Capital Partners
+  - Verve Capital
+  legal_entities:
+  - Verve Capital Partners AG
+  partners:
+  - Stefan Albers
+- name: Goldman Sachs
+  type: pe
+  website: https://goldmansachs.com
+  aliases:
+  - Goldman Sachs
+  - Goldman
+  legal_entities:
+  - Goldman Sachs & Co. LLC
+- name: HCVC
+  type: vc
+  website: https://hcvc.co
+  aliases:
+  - HCVC
+  legal_entities:
+  - HCVC SAS
+  partners:
+  - Alexandre Flamant
+- name: Ada Ventures
+  type: vc
+  website: https://adaventures.com
+  aliases:
+  - Ada Ventures
+  - Ada
+  legal_entities:
+  - Ada Ventures LLP
+  partners:
+  - Check Warner
+  - Francesca Warner
+- name: Total Energy Ventures
+  type: cvc
+  website: https://ventures.totalenergies.com
+  aliases:
+  - Total Energy Ventures
+  - Total Ventures
+  - TotalEnergies Ventures
+  legal_entities:
+  - TotalEnergies Ventures SAS
+  partners:
+  - Xin Ma
+- name: Plug and Play Tech Center
+  type: accelerator
+  website: https://plugandplaytechcenter.com
+  aliases:
+  - Plug and Play Tech Center
+  - Plug and Play
+  - PnP
+  legal_entities:
+  - Plug and Play Tech Center LLC
+  partners:
+  - Alireza Masrour
+- name: Kiko Ventures
+  type: vc
+  website: https://kiko.vc
+  aliases:
+  - Kiko Ventures
+  - Kiko
+  legal_entities:
+  - Kiko Ventures LLP
+  partners:
+  - Arne Morteani
+  - Robert Trezona
+- name: Cottonwood Tech Fund
+  type: vc
+  website: https://cottonwood.vc
+  aliases:
+  - Cottonwood Tech Fund
+  - Cottonwood
+  legal_entities:
+  - Cottonwood Management BV
+  partners:
+  - Marie Weijler
+  - Alain Loux
+- name: Burnt Island Ventures
+  type: vc
+  website: https://burntislandventures.com
+  aliases:
+  - Burnt Island Ventures
+  - Burnt Island
+  legal_entities:
+  - Burnt Island Ventures LLC
+  partners:
+  - Marissa Sterling
+- name: At One Ventures
+  type: vc
+  website: https://atoneventures.com
+  aliases:
+  - At One Ventures
+  - At One
+  legal_entities:
+  - At One Ventures LP
+  partners:
+  - Laurie Menoud
+  - Helen Lin
+- name: Alumni Ventures
+  type: vc
+  website: https://av.vc
+  aliases:
+  - Alumni Ventures
+  - AV
+  legal_entities:
+  - Alumni Ventures Group LLC
+  partners:
+  - Jin Kim
+- name: Firstime Venture Capital
+  type: vc
+  website: https://firstime.vc
+  aliases:
+  - Firstime Venture Capital
+  - Firstime
+  - Firstime VC
+  legal_entities:
+  - Firstime VC LP
+  partners:
+  - Noy Rimer
+- name: FullCycle
+  type: pe
+  website: https://fullcycle.com
+  aliases:
+  - FullCycle
+  legal_entities:
+  - FullCycle LP
+  partners:
+  - Ibrahim AlHusseini
+- name: EnBW New Ventures
+  type: cvc
+  website: https://env.vc
+  aliases:
+  - EnBW New Ventures
+  - EnBW
+  - ENV
+  legal_entities:
+  - EnBW New Ventures GmbH
+  partners:
+  - Michael Wagner
+- name: Beyond Ventures
+  type: vc
+  website: https://beyondventures.co
+  aliases:
+  - Beyond Ventures
+  - Beyond
+  legal_entities:
+  - Beyond Ventures LP
+  partners:
+  - Theodore Mollinger
+- name: Elemental Excelerator
+  type: accelerator
+  website: https://elementalexcelerator.com
+  aliases:
+  - Elemental Excelerator
+  - Elemental
+  legal_entities:
+  - Elemental Excelerator
+  partners:
+  - Gabriel Scheer
+- name: PeakBridge VC
+  type: vc
+  website: https://peakbridge.vc
+  aliases:
+  - PeakBridge VC
+  - PeakBridge
+  legal_entities:
+  - PeakBridge Partners LP
+  partners:
+  - Erich Sieber
+  - Leehe Skuler
+- name: AENU
+  type: vc
+  website: https://aenu.com
+  headquarters: Berlin
+  aliases:
+  - AENU
+  legal_entities:
+  - AENU GmbH
+  partners:
+  - Fabian Heilemann
+  - Ferry Heilemann
+- name: Deep Science Ventures
+  type: vc
+  website: https://deepscienceventures.com
+  aliases:
+  - Deep Science Ventures
+  - DSV
+  legal_entities:
+  - Deep Science Ventures Ltd
+  partners:
+  - Dominic Falcao
+- name: Superorganism
+  type: vc
+  website: https://superorganism.com
+  aliases:
+  - Superorganism
+  legal_entities:
+  - Superorganism LLC
+  partners:
+  - Tom Quigley
+  - Kevin Webb
+- name: Eurazeo
+  type: pe
+  website: https://eurazeo.com
+  aliases:
+  - Eurazeo
+  legal_entities:
+  - Eurazeo SE
+  partners:
+  - Matthieu Bonamy
+- name: Matterwave Ventures
+  type: vc
+  website: https://matterwave.vc
+  headquarters: Munich
+  aliases:
+  - Matterwave Ventures
+  - Matterwave
+  legal_entities:
+  - Matterwave Ventures GmbH
+  partners:
+  - Julian Riebartsch
+  - Christian Reitberger
+- name: Hatch Blue
+  type: accelerator
+  website: https://hatch.blue
+  aliases:
+  - Hatch Blue
+  - Hatch
+  legal_entities:
+  - Hatch Blue Ltd
+  partners:
+  - Georg Baunach
+- name: Decarbonization Partners
+  type: pe
+  aliases:
+  - Decarbonization Partners
+  legal_entities:
+  - Decarbonization Partners LP
+  partners:
+  - Tyler Christie
+- name: Blackhorn Ventures
+  type: vc
+  website: https://blackhornvc.com
+  aliases:
+  - Blackhorn Ventures
+  - Blackhorn
+  legal_entities:
+  - Blackhorn Ventures LP
+  partners:
+  - Micah Kotch
+  - Andrew Brose
+- name: Energias de Portugal
+  type: cvc
+  website: https://edp.com
+  aliases:
+  - Energias de Portugal
+  - EDP
+  - EDP Ventures
+  legal_entities:
+  - EDP Ventures SGPS SA
+  partners:
+  - Luís Fábrica
+- name: Cell Capital
+  type: vc
+  website: https://cellcap.co
+  aliases:
+  - Cell Capital
+  legal_entities:
+  - Cell Capital Pte Ltd
+  partners:
+  - Ricardo Beck
+- name: Summa Equity
+  type: pe
+  website: https://summaequity.com
+  aliases:
+  - Summa Equity
+  - Summa
+  legal_entities:
+  - Summa Equity AB
+  partners:
+  - Christoph Waer
+- name: Inven Capital
+  type: cvc
+  website: https://invencapital.cz
+  aliases:
+  - Inven Capital
+  - Inven
+  legal_entities:
+  - Inven Capital SICAV a.s.
+  partners:
+  - Petr Míkovec
+- name: Telos Impact
+  type: vc
+  website: https://telosimpact.com
+  aliases:
+  - Telos Impact
+  - Telos
+  legal_entities:
+  - Telos Impact SAS
+  partners:
+  - Guillaume Boury
+- name: Maki.vc
+  type: vc
+  website: https://maki.vc
+  aliases:
+  - Maki.vc
+  - Maki
+  legal_entities:
+  - Maki.vc Oy
+  partners:
+  - Petra Koivuvaara
+- name: Kima Ventures
+  type: vc
+  website: https://kimaventures.com
+  aliases:
+  - Kima Ventures
+  - Kima
+  legal_entities:
+  - Kima Ventures SAS
+  partners:
+  - Xavier Niel
+- name: Alliance For Impact
+  type: vc
+  website: https://allianceforimpact.com
+  aliases:
+  - Alliance For Impact
+  legal_entities:
+  - Alliance For Impact SAS
+  partners:
+  - Charles Fourault
+- name: Starquest Capital
+  type: vc
+  website: https://starquest-capital.com
+  aliases:
+  - Starquest Capital
+  - Starquest
+  legal_entities:
+  - Starquest Capital SAS
+  partners:
+  - Quentin Simon
+- name: Alter Equity
+  type: pe
+  website: https://alter-equity.com
+  aliases:
+  - Alter Equity
+  - Alter Equity 3P
+  legal_entities:
+  - Alter Equity SAS
+  partners:
+  - Felix Mounier
+- name: Tet Ventures
+  type: vc
+  website: https://tet.vc
+  aliases:
+  - Tet Ventures
+  - Tet
+  legal_entities:
+  - Tet Ventures LLC
+  partners:
+  - Neeraj Berry
+- name: First Momentum Ventures
+  type: vc
+  website: https://firstmomentum.vc
+  headquarters: Munich
+  aliases:
+  - First Momentum Ventures
+  - First Momentum
+  legal_entities:
+  - First Momentum Ventures GmbH
+  partners:
+  - Sebastian Böhmer
+  - Andreas Fischer
+- name: Good Seed Ventures
+  type: vc
+  website: https://goodseedventures.com
+  aliases:
+  - Good Seed Ventures
+  - Good Seed
+  legal_entities:
+  - Good Seed Ventures GmbH
+  partners:
+  - Jaime Betech
+- name: Munich Re Ventures
+  type: cvc
+  website: https://munichre.com
+  headquarters: Munich
+  aliases:
+  - Munich Re Ventures
+  - Munich Re
+  - MR Ventures
+  legal_entities:
+  - Munich Re Ventures GmbH
+  partners:
+  - Sebastian Scholz
+- name: eCAPITAL
+  type: vc
+  website: https://ecapital.vc
+  aliases:
+  - eCAPITAL
+  - eCapital
+  legal_entities:
+  - eCAPITAL Entrepreneurial Partners AG
+  partners:
+  - Paul-Josef Patt
+  - Steffen Reinecke
+- name: Foundamental
+  type: vc
+  website: https://foundamental.com
+  aliases:
+  - Foundamental
+  legal_entities:
+  - Foundamental GmbH
+  partners:
+  - Patric Hellermann
+  - Moritz Henschel
+- name: Contrarian Ventures
+  type: vc
+  website: https://cventures.vc
+  aliases:
+  - Contrarian Ventures
+  - Contrarian
+  legal_entities:
+  - Contrarian Ventures UAB
+  partners:
+  - Rokas Peciulaitis
+- name: Blume Equity
+  type: pe
+  website: https://blumeequity.com
+  aliases:
+  - Blume Equity
+  - Blume
+  legal_entities:
+  - Blume Equity LLP
+  partners:
+  - Daniel Ruben
+- name: 4impact
+  type: vc
+  website: https://4impact.vc
+  aliases:
+  - 4impact
+  legal_entities:
+  - 4impact VC BV
+  partners:
+  - Sven Meyer
+- name: Temasek
+  type: pe
+  website: https://temasek.com.sg
+  aliases:
+  - Temasek
+  legal_entities:
+  - Temasek Holdings Pte Ltd
+  partners:
+  - Mattia Briganti
+- name: Cemex Ventures
+  type: cvc
+  website: https://cemexventures.com
+  aliases:
+  - Cemex Ventures
+  legal_entities:
+  - Cemex Ventures LLC
+  partners:
+  - Mateo Zimmermann
+- name: Trellis Road
+  type: vc
+  website: https://trellisroad.com
+  aliases:
+  - Trellis Road
+  legal_entities:
+  - Trellis Road LLC
+  partners:
+  - Manuella Brito
+- name: Emerald Technology Ventures
+  type: vc
+  website: https://emerald-ventures.com
+  aliases:
+  - Emerald Technology Ventures
+  - Emerald
+  - Emerald Ventures
+  legal_entities:
+  - Emerald Technology Ventures AG
+  partners:
+  - Philipp Hasler
+- name: Generation Investment Management
+  type: pe
+  website: https://generationim.com
+  aliases:
+  - Generation Investment Management
+  - Generation IM
+  - Generation
+  legal_entities:
+  - Generation Investment Management LLP
+  partners:
+  - Colin Le Duc
+- name: Giant Ventures
+  type: vc
+  website: https://giant.vc
+  aliases:
+  - Giant Ventures
+  - Giant
+  legal_entities:
+  - Giant Ventures LLP
+  partners:
+  - Tommy Stadlen
+- name: Concrete Venture Capital
+  type: vc
+  website: https://concretevc.com
+  aliases:
+  - Concrete Venture Capital
+  - Concrete VC
+  legal_entities:
+  - Concrete Venture Capital LLP
+- name: CPT Capital
+  type: vc
+  website: https://cptcap.com
+  aliases:
+  - CPT Capital
+  - CPT
+  legal_entities:
+  - CPT Capital LLP
+  partners:
+  - Harry Kalms
+- name: Eka Ventures
+  type: vc
+  website: https://ekavc.com
+  aliases:
+  - Eka Ventures
+  - Eka
+  legal_entities:
+  - Eka Ventures LLP
+  partners:
+  - Jon Coker
+- name: Agronomics
+  type: vc
+  website: https://agronomics.im
+  aliases:
+  - Agronomics
+  legal_entities:
+  - Agronomics Limited
+  partners:
+  - James Bennett
+- name: Clean Growth Fund
+  type: vc
+  website: https://cleangrowthfund.com
+  aliases:
+  - Clean Growth Fund
+  - Clean Growth
+  - CGF
+  legal_entities:
+  - Clean Growth Fund LP
+  partners:
+  - Beverley Gower-Jones
+- name: WAVE Equity Partners
+  type: pe
+  website: https://waveep.com
+  aliases:
+  - WAVE Equity Partners
+  - WAVE
+  - Wave Equity
+  legal_entities:
+  - WAVE Equity Partners LLC
+  partners:
+  - Praveen Sahay
+- name: Union Square Ventures
+  type: vc
+  website: https://usv.com
+  aliases:
+  - Union Square Ventures
+  - USV
+  - Union Square
+  legal_entities:
+  - Union Square Ventures LP
+  partners:
+  - Albert Wenger
+- name: Alantra
+  type: pe
+  website: https://alantra.com
+  aliases:
+  - Alantra
+  legal_entities:
+  - Alantra Partners SA
+  partners:
+  - Manuel Alamillo
+- name: ECBF
+  type: vc
+  website: https://ecbf.vc
+  aliases:
+  - ECBF
+  legal_entities:
+  - ECBF Management GmbH
+  partners:
+  - Michael Brandkamp
+- name: Ocean 14 Capital
+  type: vc
+  website: https://ocean14capital.com
+  aliases:
+  - Ocean 14 Capital
+  - Ocean 14
+  legal_entities:
+  - Ocean 14 Capital LLP
+  partners:
+  - Chris Barnes
+- name: Atlantic Food Labs
+  type: vc
+  website: https://foodlabs.de
+  headquarters: Berlin
+  aliases:
+  - Atlantic Food Labs
+  - Foodlabs
+  legal_entities:
+  - Atlantic Food Labs GmbH
+  partners:
+  - Christophe Maire
+- name: Nucleus Capital
+  type: vc
+  website: https://nucleus-capital.com
+  aliases:
+  - Nucleus Capital
+  - Nucleus
+  legal_entities:
+  - Nucleus Capital GmbH
+  partners:
+  - Maximilian Bade
+- name: Greengenerationfund
+  type: vc
+  website: https://greengenerationfund.com
+  aliases:
+  - Greengenerationfund
+  - GGF
+  - Green Generation Fund
+  legal_entities:
+  - Green Generation Fund GmbH
+  partners:
+  - Janna Ensthaler
+- name: Mustard Seed MAZE
+  type: vc
+  website: https://mustardseedmaze.vc
+  aliases:
+  - Mustard Seed MAZE
+  - Mustard Seed
+  - MAZE
+  legal_entities:
+  - Mustard Seed MAZE SGPS SA
+  partners:
+  - Tessa Cook
+- name: Übermorgen Ventures
+  type: vc
+  website: https://uebermorgen.vc
+  aliases:
+  - Übermorgen Ventures
+  - Übermorgen
+  - Uebermorgen
+  legal_entities:
+  - Übermorgen Ventures GmbH
+  partners:
+  - Myke Naef
+  - Alexander Langguth
+- name: Vsquared Ventures
+  type: vc
+  website: https://vsquared.vc
+  headquarters: Munich
+  aliases:
+  - Vsquared Ventures
+  - Vsquared
+  - V²
+  legal_entities:
+  - Vsquared Ventures GmbH
+  partners:
+  - Herbert Mangesius
+  - Thomas Oehl
+- name: Zero Carbon Capital
+  type: vc
+  website: https://zerocarbon.capital
+  aliases:
+  - Zero Carbon Capital
+  - Zero Carbon
+  legal_entities:
+  - Zero Carbon Capital LLP
+  partners:
+  - Alex Gawley
+- name: Counteract
+  type: vc
+  website: https://counteract.net
+  aliases:
+  - Counteract
+  legal_entities:
+  - Counteract Ltd
+  partners:
+  - Andrew Shebbeare
+- name: World Fund
+  type: vc
+  website: https://worldfund.vc
+  headquarters: Berlin
+  aliases:
+  - World Fund
+  - Ecosia World Fund
+  legal_entities:
+  - World Fund Management GmbH
+  partners:
+  - Danijel Visevic
+  - Tim Schumacher
+  - Craig Douglas
+- name: Demeter
+  type: vc
+  aliases:
+  - Demeter
+  legal_entities:
+  - Demeter Partners SAS
+  partners:
+  - Thomas Virolle
+- name: European Innovation Council
+  type: government
+  website: https://eic.ec.europa.eu
+  aliases:
+  - European Innovation Council
+  - EIC
+  legal_entities:
+  - European Innovation Council
+- name: Astanor Ventures
+  type: vc
+  website: https://astanor.com
+  aliases:
+  - Astanor Ventures
+  - Astanor
+  legal_entities:
+  - Astanor Ventures SCSP
+  partners:
+  - Eric Archambeau
+- name: Five Seasons Ventures
+  type: vc
+  website: https://fiveseasons.vc
+  aliases:
+  - Five Seasons Ventures
+  - Five Seasons
+  legal_entities:
+  - Five Seasons Ventures SAS
+  partners:
+  - Niccolo Manzoni
+- name: Systemiq Capital
+  type: vc
+  website: https://systemiqcapital.earth
+  aliases:
+  - Systemiq Capital
+  - Systemiq
+  legal_entities:
+  - Systemiq Capital LLP
+  partners:
+  - Martin Stuchtey
+- name: WI Venture
+  type: vc
+  website: https://wiventure.de
+  aliases:
+  - WI Venture
+  legal_entities:
+  - WI Venture GmbH
+  partners:
+  - Matthias Willenbacher
+- name: Climate Ventures
+  type: vc
+  website: https://climate.vc
+  aliases:
+  - Climate Ventures
+  legal_entities:
+  - Climate Ventures LLP
+  partners:
+  - Peet Denny
+- name: ReGen Ventures
+  type: vc
+  website: https://regen.vc
+  aliases:
+  - ReGen Ventures
+  - ReGen
+  legal_entities:
+  - ReGen Ventures LP
+  partners:
+  - Dan Fitzgerald
+- name: Target Partners
+  type: vc
+  website: https://targetpartners.de
+  headquarters: Munich
+  aliases:
+  - Target Partners
+  legal_entities:
+  - Target Partners GmbH
+  partners:
+  - Michael Münnix
+- name: True Ventures
+  type: vc
+  website: https://trueventures.com
+  aliases:
+  - True Ventures
+  - 'True'
+  legal_entities:
+  - True Ventures LP
+  partners:
+  - Tony Conrad
