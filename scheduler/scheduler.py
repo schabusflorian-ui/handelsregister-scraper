@@ -29,7 +29,7 @@ from scheduler.jobs.discovery_job import DiscoveryJob
 from scheduler.jobs.backfill_job import BackfillJob
 from scheduler.jobs.enrichment_job import EnrichmentJob
 from scheduler.jobs.announcement_job import AnnouncementMonitoringJob
-from scheduler.jobs.sheets_export_job import SheetsExportJob
+from scheduler.jobs.csv_export_job import CSVExportJob
 
 logger = logging.getLogger(__name__)
 
@@ -202,26 +202,29 @@ class HandelsregisterScheduler:
         finally:
             db.close()
 
-    def _run_sheets_export_job(self):
-        """Execute Google Sheets export job wrapper."""
-        logger.info("Starting Google Sheets export job")
+    def _run_csv_export_job(self):
+        """Execute CSV export job wrapper."""
+        logger.info("Starting CSV export job")
 
         # Create fresh DB connection for this thread
         db = Database(self.db_path)
         try:
-            job = SheetsExportJob(db=db)
+            # Export to /data/exports (Railway volume)
+            export_dir = "/data/exports"
+            job = CSVExportJob(db=db, export_dir=export_dir)
             stats = job.run()
 
             if stats.get('status') == 'success':
                 logger.info(
-                    "Sheets export completed: %d companies exported",
-                    stats.get('total_exported', 0)
+                    "CSV export completed: %d companies exported to %s",
+                    stats.get('total_exported', 0),
+                    stats.get('export_dir', export_dir)
                 )
             else:
-                logger.warning("Sheets export skipped: %s", stats.get('reason', stats.get('error', 'unknown')))
+                logger.warning("CSV export failed: %s", stats.get('error', 'unknown'))
 
         except Exception as e:
-            logger.exception("Sheets export job failed: %s", e)
+            logger.exception("CSV export job failed: %s", e)
         finally:
             db.close()
 
@@ -282,17 +285,17 @@ class HandelsregisterScheduler:
             replace_existing=True,
         )
 
-        # Google Sheets export job: daily at 6 AM UTC (after all data jobs)
+        # CSV export job: daily at 6 AM UTC (after all data jobs)
         self.scheduler.add_job(
-            self._run_sheets_export_job,
+            self._run_csv_export_job,
             trigger=CronTrigger(hour=6, minute=0),
-            id='sheets_export_job',
-            name='Google Sheets Export Job',
+            id='csv_export_job',
+            name='CSV Export Job',
             replace_existing=True,
         )
 
         logger.info(
-            "Jobs configured: discovery every %d hours, backfill 3 AM, enrichment 4 AM, announcements 5 AM, sheets export 6 AM",
+            "Jobs configured: discovery every %d hours, backfill 3 AM, enrichment 4 AM, announcements 5 AM, CSV export 6 AM",
             self.discovery_interval_hours
         )
 

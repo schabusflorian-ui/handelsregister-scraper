@@ -23,9 +23,5 @@ pyyaml>=6.0.0
 apscheduler>=3.10.0
 sqlalchemy>=2.0.0  # Required by APScheduler for job persistence
 
-# Google Sheets export (optional)
-google-api-python-client>=2.100.0
-google-auth>=2.23.0
-
 # Optional: handelsregister.ai API for enrichment (paid)
 # handelsregister>=0.1.0
