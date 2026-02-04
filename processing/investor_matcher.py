@@ -17,6 +17,15 @@ from dataclasses import dataclass
 
 logger = logging.getLogger(__name__)
 
+# Minimum character requirements to reduce false positives:
+# - Single-word acronyms (all caps): 3 chars (e.g., TCV, EQT, GFC)
+# - Single-word names: 9 chars minimum (avoids "Founders", "Deutsche", etc.)
+# - Multi-word names: 12 chars total minimum (e.g., "Index Ventures")
+# This avoids matching common words that are substrings of other investor names
+MIN_SINGLE_WORD_ACRONYM_LEN = 3
+MIN_SINGLE_WORD_NAME_LEN = 9
+MIN_MULTI_WORD_NAME_LEN = 12
+
 # Try to import rapidfuzz, fall back to simple matching
 try:
     from rapidfuzz import fuzz, process
@@ -132,7 +141,7 @@ class InvestorMatcher:
 
     def _load_from_db(self):
         """Load investors from database."""
-        conn = self.db._get_connection()
+        conn = self.db.conn
 
         # Load investors
         rows = conn.execute("SELECT id, canonical_name, type FROM investors").fetchall()
@@ -378,8 +387,19 @@ class InvestorMatcher:
         for inv in self.investors.values():
             # Check canonical name
             name_lower = inv.canonical_name.lower()
-            # Allow 3-char names only if all uppercase (acronyms like TCV, EQT)
-            min_len = 3 if inv.canonical_name.isupper() else 4
+            name_words = name_lower.split()
+            is_single_word = len(name_words) == 1
+            is_acronym = inv.canonical_name.isupper() and len(inv.canonical_name) <= 5
+
+            # Apply strict length requirements to reduce false positives:
+            # - Acronyms (all caps): min 3 chars (TCV, EQT)
+            # - Single words: min 8 chars (Sequoia ok, Atlas too short)
+            # - Multi-word: min 10 chars total (Index Ventures)
+            if is_single_word:
+                min_len = MIN_SINGLE_WORD_ACRONYM_LEN if is_acronym else MIN_SINGLE_WORD_NAME_LEN
+            else:
+                min_len = MIN_MULTI_WORD_NAME_LEN
+
             if len(name_lower) >= min_len and name_lower in text_lower:
                 # Verify word boundary (avoid matching "Index" in "reindex")
                 if self._is_word_boundary_match(text_lower, name_lower):
@@ -392,11 +412,18 @@ class InvestorMatcher:
                     ))
                     continue  # Found via canonical, skip aliases
 
-            # Check aliases
+            # Check aliases with same length requirements
             for alias in inv.aliases:
                 alias_lower = alias.lower()
-                # Allow 3-char aliases only if all uppercase (acronyms like TCV, GFC)
-                min_len = 3 if alias.isupper() else 4
+                alias_words = alias_lower.split()
+                is_single_word = len(alias_words) == 1
+                is_acronym = alias.isupper() and len(alias) <= 5
+
+                if is_single_word:
+                    min_len = MIN_SINGLE_WORD_ACRONYM_LEN if is_acronym else MIN_SINGLE_WORD_NAME_LEN
+                else:
+                    min_len = MIN_MULTI_WORD_NAME_LEN
+
                 if len(alias_lower) >= min_len and alias_lower in text_lower:
                     if self._is_word_boundary_match(text_lower, alias_lower):
                         all_matches.append(InvestorMatch(
@@ -408,18 +435,21 @@ class InvestorMatcher:
                         ))
                         break  # Found via alias
 
-            # Check legal entities
+            # Check legal entities - must use word boundary and longer minimum
             for entity in inv.legal_entities:
                 entity_lower = entity.lower()
-                if len(entity_lower) >= 6 and entity_lower in text_lower:
-                    all_matches.append(InvestorMatch(
-                        investor_id=inv.id,
-                        investor_name=inv.canonical_name,
-                        matched_text=entity,
-                        match_type='legal_entity',
-                        confidence=0.95
-                    ))
-                    break  # Found via legal entity
+                # Require at least 15 chars for legal entities (e.g., "Sequoia Capital GmbH")
+                if len(entity_lower) >= 15 and entity_lower in text_lower:
+                    # Must match at word boundary to avoid "ING GmbH" in "Holding GmbH"
+                    if self._is_word_boundary_match(text_lower, entity_lower):
+                        all_matches.append(InvestorMatch(
+                            investor_id=inv.id,
+                            investor_name=inv.canonical_name,
+                            matched_text=entity,
+                            match_type='legal_entity',
+                            confidence=0.95
+                        ))
+                        break  # Found via legal entity
 
         # Strategy 2: Try matching the full text
         full_matches = self.match(text, min_confidence)
@@ -477,7 +507,7 @@ class InvestorMatcher:
             Number of investors added
         """
         count = 0
-        conn = db._get_connection()
+        conn = db.conn
 
         for inv in self.investors.values():
             try:

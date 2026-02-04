@@ -54,7 +54,7 @@ class InvestorDetectionJob:
 
     def _ensure_investors_seeded(self):
         """Ensure investor data is in the database."""
-        conn = self.db._get_connection()
+        conn = self.db.conn
         count = conn.execute("SELECT COUNT(*) FROM investors").fetchone()[0]
 
         if count == 0:
@@ -119,7 +119,7 @@ class InvestorDetectionJob:
         """Scan capital events for investor mentions."""
         stats = {'scanned': 0, 'found': 0, 'new': 0}
 
-        conn = self.db._get_connection()
+        conn = self.db.conn
 
         # Get capital events with publication text
         rows = conn.execute("""
@@ -161,7 +161,7 @@ class InvestorDetectionJob:
         """Scan officers for VC partner names."""
         stats = {'scanned': 0, 'found': 0, 'new': 0}
 
-        conn = self.db._get_connection()
+        conn = self.db.conn
 
         # Get officers (board members)
         rows = conn.execute("""
@@ -202,7 +202,7 @@ class InvestorDetectionJob:
         """Scan announcements for investor mentions."""
         stats = {'scanned': 0, 'found': 0, 'new': 0}
 
-        conn = self.db._get_connection()
+        conn = self.db.conn
 
         # Get announcements with text
         rows = conn.execute("""
@@ -258,7 +258,7 @@ class InvestorDetectionJob:
         Returns:
             True if new record created, False if already exists
         """
-        conn = self.db._get_connection()
+        conn = self.db.conn
 
         try:
             # Check if already exists
