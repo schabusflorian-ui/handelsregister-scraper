@@ -67,6 +67,8 @@ STARTUP_NAME_PATTERNS = [
     (r'\bLabs?\b', 3, 'Labs'),
     (r'\b\.io\b', 2, '.io domain hint'),
     (r'\b\.ai\b', 3, '.ai domain hint'),
+    (r'\b\.co\b', 1, '.co domain hint'),
+    (r'\b\.dev\b', 2, '.dev domain hint'),
 
     # English tech terms (medium signal)
     (r'\bTech\b', 2, 'Tech'),
@@ -80,19 +82,40 @@ STARTUP_NAME_PATTERNS = [
     (r'\bPlatform\b', 2, 'Platform'),
     (r'\bAnalytics\b', 2, 'Analytics'),
     (r'\bVentures?\b', 2, 'Ventures'),
+    (r'\bAPI\b', 2, 'API'),
+    (r'\bSaaS\b', 3, 'SaaS'),
+    (r'\bFintech\b', 3, 'Fintech'),
+    (r'\bHealthtech\b', 3, 'Healthtech'),
+    (r'\bEdtech\b', 3, 'Edtech'),
+    (r'\bInsurtech\b', 3, 'Insurtech'),
+    (r'\bProptech\b', 3, 'Proptech'),
+    (r'\bDeeptech\b', 3, 'Deeptech'),
+    (r'\bCleantech\b', 3, 'Cleantech'),
+    (r'\bBiotech\b', 2, 'Biotech'),
+    (r'\bMedtech\b', 2, 'Medtech'),
 
     # Trendy startup naming patterns
-    (r'\bly$', 1, '-ly suffix'),          # e.g., Spotify, Shopify
-    (r'\bify$', 1, '-ify suffix'),
-    (r'\bia$', 1, '-ia suffix'),          # e.g., Nvidia
-    (r'\bio$', 1, '-io suffix'),          # e.g., Twilio
+    (r'ly$', 1, '-ly suffix'),          # e.g., Spotify, Shopify
+    (r'ify$', 2, '-ify suffix'),        # e.g., Shopify, Spotify
+    (r'ia$', 1, '-ia suffix'),          # e.g., Nvidia
+    (r'io$', 1, '-io suffix'),          # e.g., Twilio
     (r'^[A-Z][a-z]+[A-Z]', 1, 'CamelCase'),  # e.g., GitHub, YouTube
+    (r'^[a-z]+\.[a-z]+$', 2, 'domain style name'),  # e.g., scout24
+
+    # Modern startup naming (single word, no GmbH suffix in brand)
+    (r'^[A-Z][a-z]{3,8} (?:GmbH|UG)', 1, 'Short modern name'),
 
     # Innovation/Growth terms
     (r'\bInnovation\b', 1, 'Innovation'),
     (r'\bNext\b', 1, 'Next'),
     (r'\bFuture\b', 1, 'Future'),
     (r'\bSmart\b', 0, 'Smart'),  # 0 because it's also in traditional names
+    (r'\bAgile\b', 1, 'Agile'),
+    (r'\bScale\b', 1, 'Scale'),
+    (r'\bGrowth\b', 1, 'Growth'),
+    (r'\bDisrupt\b', 2, 'Disrupt'),
+    (r'\bAccelerator\b', 2, 'Accelerator'),
+    (r'\bIncubator\b', 2, 'Incubator'),
 ]
 
 # Traditional SME name patterns (negative signals)
