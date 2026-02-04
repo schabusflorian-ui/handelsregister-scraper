@@ -1,10 +1,31 @@
-# Handelsregister Scraper POC - Dependencies
+# Handelsregister Scraper - Dependencies
 
-# Official handelsregister.ai Python SDK
-handelsregister>=0.1.0
+# HTTP requests
+requests>=2.28.0
 
-# Optional: for enhanced CLI output
+# HTML parsing for bundesAPI
+beautifulsoup4>=4.12.0
+lxml>=4.9.0
+
+# Date handling
+python-dateutil>=2.8.0
+
+# CLI framework
+click>=8.0.0
+
+# Pretty terminal output
 rich>=13.0.0
 
-# Data handling
-python-dateutil>=2.8.0
+# Configuration parsing
+pyyaml>=6.0.0
+
+# Scheduling for automated monitoring
+apscheduler>=3.10.0
+sqlalchemy>=2.0.0  # Required by APScheduler for job persistence
+
+# Google Sheets export (optional)
+google-api-python-client>=2.100.0
+google-auth>=2.23.0
+
+# Optional: handelsregister.ai API for enrichment (paid)
+# handelsregister>=0.1.0

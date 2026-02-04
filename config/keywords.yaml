@@ -1,0 +1,295 @@
+# Handelsregister Scraper - Keyword Configuration
+#
+# This file defines keywords for discovering companies in the German
+# Handelsregister. Keywords are organized by category with priority levels.
+#
+# Priority levels:
+#   1 = High priority (search nationwide + all states)
+#   2 = Medium priority (search nationwide only)
+#   3 = Low priority (only during backfill)
+
+categories:
+  # ============================================================================
+  # AI & MACHINE LEARNING
+  # ============================================================================
+  ai_core:
+    description: "Core AI/ML terms"
+    priority: 1
+    keywords:
+      - künstliche intelligenz
+      - artificial intelligence
+      - machine learning
+      - maschinelles lernen
+      - deep learning
+      - neural network
+      - neuronales netz
+
+  ai_applications:
+    description: "AI application domains"
+    priority: 1
+    keywords:
+      - computer vision
+      - bildverarbeitung
+      - natural language processing
+      - NLP
+      - sprachverarbeitung
+      - chatbot
+      - conversational ai
+      - generative ai
+      - large language model
+      - LLM
+
+  ai_business:
+    description: "AI business terms"
+    priority: 2
+    keywords:
+      - AI platform
+      - KI plattform
+      - AI solution
+      - KI lösung
+      - predictive analytics
+      - predictive maintenance
+      - AI GmbH
+      - KI GmbH
+      - .ai GmbH
+
+  # ============================================================================
+  # ROBOTICS & AUTOMATION
+  # ============================================================================
+  robotics_core:
+    description: "Core robotics terms"
+    priority: 1
+    keywords:
+      - robotik
+      - robotics
+      - roboter
+      - autonomous
+      - autonome
+      - automation
+      - automatisierung
+
+  robotics_industrial:
+    description: "Industrial robotics"
+    priority: 2
+    keywords:
+      - cobot
+      - collaborative robot
+      - industrial robot
+      - industrieroboter
+      - smart factory
+      - industrie 4.0
+      - manufacturing automation
+
+  robotics_specific:
+    description: "Specific robotics applications"
+    priority: 2
+    keywords:
+      - drohne
+      - drone
+      - UAV
+      - AGV
+      - autonomous vehicle
+      - warehouse automation
+      - logistics automation
+
+  # ============================================================================
+  # DATA & ANALYTICS
+  # ============================================================================
+  data_science:
+    description: "Data science terms"
+    priority: 2
+    keywords:
+      - data science
+      - data analytics
+      - big data
+      - datenanalyse
+      - business intelligence
+      - data platform
+
+  data_infrastructure:
+    description: "Data infrastructure"
+    priority: 2
+    keywords:
+      - data engineering
+      - data pipeline
+      - data warehouse
+      - data lake
+      - ETL
+
+  # ============================================================================
+  # CLIMATE TECH & SUSTAINABILITY
+  # ============================================================================
+  climate_energy:
+    description: "Renewable energy"
+    priority: 1
+    keywords:
+      - erneuerbare energie
+      - renewable energy
+      - solarenergie
+      - solar energy
+      - windenergie
+      - wind energy
+      - photovoltaik
+      - energiespeicher
+      - energy storage
+      - battery technology
+      - batterietechnologie
+
+  climate_grid:
+    description: "Energy grid & distribution"
+    priority: 2
+    keywords:
+      - smart grid
+      - stromnetz
+      - grid management
+      - energy management
+      - demand response
+      - virtuelle kraftwerk
+      - virtual power plant
+
+  climate_hydrogen:
+    description: "Hydrogen & fuel cells"
+    priority: 1
+    keywords:
+      - wasserstoff
+      - hydrogen
+      - brennstoffzelle
+      - fuel cell
+      - elektrolyse
+      - electrolyzer
+      - green hydrogen
+
+  climate_carbon:
+    description: "Carbon & sustainability"
+    priority: 1
+    keywords:
+      - klimaneutral
+      - carbon neutral
+      - dekarbonisierung
+      - decarbonization
+      - CO2
+      - carbon capture
+      - carbon footprint
+      - sustainability platform
+
+  climate_cleantech:
+    description: "Clean technology"
+    priority: 2
+    keywords:
+      - cleantech
+      - gruene technologie
+      - green technology
+      - umwelttechnologie
+      - environmental technology
+      - circular economy
+      - kreislaufwirtschaft
+      - recycling technologie
+
+  climate_mobility:
+    description: "Clean mobility"
+    priority: 2
+    keywords:
+      - elektromobilitaet
+      - e-mobility
+      - electric vehicle
+      - elektrofahrzeug
+      - ladeinfrastruktur
+      - charging infrastructure
+      - EV charging
+
+  # ============================================================================
+  # CLOUD & SOFTWARE PLATFORMS
+  # ============================================================================
+  cloud_platforms:
+    description: "Cloud platforms"
+    priority: 2
+    keywords:
+      - cloud platform
+      - SaaS
+      - software as a service
+      - PaaS
+      - cloud computing
+      - cloud native
+
+  iot_sensors:
+    description: "IoT & sensors"
+    priority: 2
+    keywords:
+      - IoT
+      - internet of things
+      - sensor technology
+      - sensortechnik
+      - embedded systems
+      - edge computing
+
+  # ============================================================================
+  # BIOTECH & HEALTHTECH (AI-adjacent)
+  # ============================================================================
+  biotech_ai:
+    description: "AI in life sciences"
+    priority: 2
+    keywords:
+      - computational biology
+      - bioinformatik
+      - drug discovery
+      - digital health
+      - medtech
+      - healthtech
+      - diagnostic ai
+
+  # ============================================================================
+  # FINTECH (AI-adjacent)
+  # ============================================================================
+  fintech_ai:
+    description: "AI in finance"
+    priority: 3
+    keywords:
+      - fintech
+      - regtech
+      - insurtech
+      - algorithmic trading
+      - robo advisor
+
+# ============================================================================
+# KEYWORD EXCLUSIONS
+# ============================================================================
+# These patterns cause false positives and should be filtered out
+
+exclusions:
+  # Words that match AI patterns but aren't AI companies
+  false_positives:
+    - hap-ki-do    # Martial arts
+    - qwan ki do   # Martial arts
+    - tai ki       # Martial arts
+    - mu-ki        # Mother-child (Mutter-Kind)
+    - reiki        # Alternative medicine
+
+  # Traditional business patterns (negative signals)
+  traditional_business:
+    - verwaltung
+    - beteiligungs
+    - immobilien
+    - grundstück
+    - vermögens
+    - treuhand
+    - inkasso
+    - autohaus
+
+# ============================================================================
+# SEARCH CONFIGURATION
+# ============================================================================
+search_config:
+  # Maximum results per search query
+  max_results_per_query: 100
+
+  # Whether to search all states or just nationwide
+  search_all_states: true
+
+  # States considered startup hubs (prioritized for medium-priority keywords)
+  startup_hub_states:
+    - be  # Berlin
+    - by  # Bayern (Munich)
+    - hh  # Hamburg
+    - nw  # NRW (Cologne, Düsseldorf)
+    - he  # Hessen (Frankfurt)
+    - bw  # Baden-Württemberg (Stuttgart, Karlsruhe)

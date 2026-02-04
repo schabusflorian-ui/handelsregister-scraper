@@ -1,0 +1,17 @@
+# Railway.app Configuration
+# https://docs.railway.app/deploy/config-as-code
+
+[build]
+builder = "dockerfile"
+dockerfilePath = "deployment/Dockerfile"
+
+[deploy]
+# Use Dockerfile CMD by default, override here for --run-now on deploy
+startCommand = "cd /app && python3 -m scheduler.main --db /data/handelsregister.db --run-now --verbose"
+restartPolicyType = "on-failure"
+numReplicas = 1
+
+# Volume for persistent SQLite database
+[[volumes]]
+name = "handelsregister-data"
+mountPath = "/data"

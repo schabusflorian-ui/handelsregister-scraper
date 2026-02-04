@@ -1,0 +1,40 @@
+# Ignore local data files
+data/
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+
+# Backup files
+*_backup_*.db
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+
+# IDE
+.vscode/
+.idea/
+
+# Environment
+.env
+.env.local
+venv/
+.venv/
+
+# Git
+.git/
+
+# Test artifacts
+htmlcov/
+.coverage
+
+# Logs
+*.log
+logs/
+
+# OS files
+.DS_Store
+Thumbs.db
