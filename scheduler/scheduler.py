@@ -30,6 +30,7 @@ from scheduler.jobs.backfill_job import BackfillJob
 from scheduler.jobs.enrichment_job import EnrichmentJob
 from scheduler.jobs.announcement_job import AnnouncementMonitoringJob
 from scheduler.jobs.csv_export_job import CSVExportJob
+from scheduler.jobs.investor_detection_job import InvestorDetectionJob
 
 logger = logging.getLogger(__name__)
 
@@ -228,6 +229,34 @@ class HandelsregisterScheduler:
         finally:
             db.close()
 
+    def _run_investor_detection_job(self):
+        """Execute investor detection job wrapper."""
+        logger.info("Starting investor detection job")
+
+        # Create fresh DB connection for this thread
+        db = Database(self.db_path)
+        try:
+            job = InvestorDetectionJob(
+                db=db,
+                batch_size=100,
+                min_confidence=0.8,
+            )
+            stats = job.run()
+
+            logger.info(
+                "Investor detection completed: %d investments found, %d new",
+                stats['investments_found'],
+                stats['investments_new']
+            )
+
+            # Log to job history
+            self._log_job_completion('investor_detection', stats, db)
+
+        except Exception as e:
+            logger.exception("Investor detection job failed: %s", e)
+        finally:
+            db.close()
+
     def _log_job_completion(self, job_type: str, stats: Dict[str, Any], db: Database):
         """Log job completion to database."""
         try:
@@ -294,8 +323,18 @@ class HandelsregisterScheduler:
             replace_existing=True,
         )
 
+        # Investor detection job: daily at 7 AM UTC (after CSV export)
+        # Scans capital events, officers, and announcements for VC involvement
+        self.scheduler.add_job(
+            self._run_investor_detection_job,
+            trigger=CronTrigger(hour=7, minute=0),
+            id='investor_detection_job',
+            name='Investor Detection Job',
+            replace_existing=True,
+        )
+
         logger.info(
-            "Jobs configured: discovery every %d hours, backfill 3AM+3PM (50 req each), enrichment 4 AM, announcements 5 AM, CSV export 6 AM",
+            "Jobs configured: discovery every %d hours, backfill 3AM+3PM (50 req each), enrichment 4 AM, announcements 5 AM, CSV export 6 AM, investor detection 7 AM",
             self.discovery_interval_hours
         )
 
