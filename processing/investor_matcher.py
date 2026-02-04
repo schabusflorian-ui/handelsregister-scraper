@@ -355,7 +355,10 @@ class InvestorMatcher:
         """
         Search for any investor mentions within a longer text.
 
-        Splits text into potential entity names and matches each.
+        Uses multiple strategies:
+        1. Direct substring matching for all known investor names
+        2. Segment-based matching (split by delimiters)
+        3. Pattern-based extraction
 
         Args:
             text: Longer text that may contain investor names
@@ -368,12 +371,57 @@ class InvestorMatcher:
             return []
 
         all_matches = []
+        text_lower = text.lower()
 
-        # Try matching the full text first
+        # Strategy 1: Direct substring search for all known names
+        # This catches "Sequoia Capital" even in "Beteiligung von Sequoia Capital GmbH"
+        for inv in self.investors.values():
+            # Check canonical name
+            name_lower = inv.canonical_name.lower()
+            if len(name_lower) >= 4 and name_lower in text_lower:
+                # Verify word boundary (avoid matching "Index" in "reindex")
+                if self._is_word_boundary_match(text_lower, name_lower):
+                    all_matches.append(InvestorMatch(
+                        investor_id=inv.id,
+                        investor_name=inv.canonical_name,
+                        matched_text=inv.canonical_name,
+                        match_type='substring',
+                        confidence=0.9
+                    ))
+                    continue  # Found via canonical, skip aliases
+
+            # Check aliases
+            for alias in inv.aliases:
+                alias_lower = alias.lower()
+                if len(alias_lower) >= 4 and alias_lower in text_lower:
+                    if self._is_word_boundary_match(text_lower, alias_lower):
+                        all_matches.append(InvestorMatch(
+                            investor_id=inv.id,
+                            investor_name=inv.canonical_name,
+                            matched_text=alias,
+                            match_type='substring_alias',
+                            confidence=0.88
+                        ))
+                        break  # Found via alias
+
+            # Check legal entities
+            for entity in inv.legal_entities:
+                entity_lower = entity.lower()
+                if len(entity_lower) >= 6 and entity_lower in text_lower:
+                    all_matches.append(InvestorMatch(
+                        investor_id=inv.id,
+                        investor_name=inv.canonical_name,
+                        matched_text=entity,
+                        match_type='legal_entity',
+                        confidence=0.95
+                    ))
+                    break  # Found via legal entity
+
+        # Strategy 2: Try matching the full text
         full_matches = self.match(text, min_confidence)
         all_matches.extend(full_matches)
 
-        # Split by common delimiters and try each segment
+        # Strategy 3: Split by common delimiters and try each segment
         segments = re.split(r'[,;\n\r\t]+', text)
         for segment in segments:
             segment = segment.strip()
@@ -381,9 +429,9 @@ class InvestorMatcher:
                 matches = self.match(segment, min_confidence)
                 all_matches.extend(matches)
 
-        # Look for patterns like "investor X" or "backed by Y"
+        # Strategy 4: Look for patterns like "investor X" or "backed by Y"
         patterns = [
-            r'(?:investor|backed by|funded by|investment from|capital from)\s+([A-Za-z0-9\s&\.\-]+)',
+            r'(?:investor|backed by|funded by|investment from|capital from|beteiligung von|gesellschafter)\s+([A-Za-z0-9\s&\.\-]+)',
             r'([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)\s+(?:GmbH|UG|AG|KG|Ventures|Capital|Partners)',
         ]
 
@@ -395,6 +443,16 @@ class InvestorMatcher:
 
         # Dedupe and return
         return self._dedupe_matches(all_matches)
+
+    def _is_word_boundary_match(self, text: str, search: str) -> bool:
+        """
+        Check if search term appears at word boundaries in text.
+
+        Prevents matching "Index" in "reindex" or "HV" in "behv".
+        """
+        # Use regex word boundary check
+        pattern = r'(?:^|[\s,;:\(\)\[\]"\'/])' + re.escape(search) + r'(?:[\s,;:\(\)\[\]"\'/\-]|$)'
+        return bool(re.search(pattern, text, re.IGNORECASE))
 
     def get_investor(self, investor_id: int) -> Optional[Investor]:
         """Get investor by ID."""
