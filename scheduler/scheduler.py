@@ -264,15 +264,22 @@ class HandelsregisterScheduler:
 
         db = Database(self.db_path)
         try:
-            job = NewsMonitoringJob(db=db)
+            job = NewsMonitoringJob(
+                db=db,
+                rate_limiter=self.rate_limiter,
+                max_hr_lookups=5,
+            )
             stats = job.run()
 
             logger.info(
-                "News monitoring completed: %d articles, %d funding, %d AI, %d early-stage",
+                "News monitoring completed: %d articles, %d funding, %d AI, %d early-stage, "
+                "%d companies created, %d HR-enriched",
                 stats['articles_fetched'],
                 stats['funding_mentions'],
                 stats['ai_articles'],
                 stats.get('early_stage_articles', 0),
+                stats.get('companies_created', 0),
+                stats.get('companies_enriched_hr', 0),
             )
 
             self._log_job_completion('news_monitoring', stats, db)
