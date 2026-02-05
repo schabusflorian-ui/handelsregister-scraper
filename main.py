@@ -1648,11 +1648,12 @@ def news_funding(ctx):
     console.print(f"\n[bold green]Found {len(funding_mentions)} funding mentions![/bold green]\n")
 
     table = Table(title="Funding Announcements")
-    table.add_column("Company", style="green", width=25)
-    table.add_column("Amount", style="cyan", width=15)
+    table.add_column("Company", style="green", width=22)
+    table.add_column("Amount", style="cyan", width=12)
     table.add_column("Round", style="yellow", width=10)
-    table.add_column("Investors", style="white", width=30)
-    table.add_column("Source", style="dim", width=15)
+    table.add_column("Investors", style="white", width=25)
+    table.add_column("Conf", style="dim", width=5)
+    table.add_column("Source", style="dim", width=12)
 
     for mention in funding_mentions:
         amount_str = ""
@@ -1668,11 +1669,14 @@ def news_funding(ctx):
         if len(mention.investors) > 3:
             investors_str += f" +{len(mention.investors) - 3}"
 
+        conf_str = f"{mention.confidence:.0%}" if hasattr(mention, 'confidence') else "-"
+
         table.add_row(
-            mention.company_name[:23] if mention.company_name else "-",
+            mention.company_name[:20] if mention.company_name else "-",
             amount_str or "-",
             mention.round_type or "-",
             investors_str or "-",
+            conf_str,
             mention.source,
         )
 

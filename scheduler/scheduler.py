@@ -31,6 +31,7 @@ from scheduler.jobs.enrichment_job import EnrichmentJob
 from scheduler.jobs.announcement_job import AnnouncementMonitoringJob
 from scheduler.jobs.csv_export_job import CSVExportJob
 from scheduler.jobs.investor_detection_job import InvestorDetectionJob
+from scheduler.jobs.news_job import NewsMonitoringJob
 
 logger = logging.getLogger(__name__)
 
@@ -257,6 +258,29 @@ class HandelsregisterScheduler:
         finally:
             db.close()
 
+    def _run_news_monitoring_job(self):
+        """Execute news monitoring job wrapper."""
+        logger.info("Starting news monitoring job")
+
+        db = Database(self.db_path)
+        try:
+            job = NewsMonitoringJob(db=db)
+            stats = job.run()
+
+            logger.info(
+                "News monitoring completed: %d articles, %d funding mentions, %d AI articles",
+                stats['articles_fetched'],
+                stats['funding_mentions'],
+                stats['ai_articles'],
+            )
+
+            self._log_job_completion('news_monitoring', stats, db)
+
+        except Exception as e:
+            logger.exception("News monitoring job failed: %s", e)
+        finally:
+            db.close()
+
     def _log_job_completion(self, job_type: str, stats: Dict[str, Any], db: Database):
         """Log job completion to database."""
         try:
@@ -333,8 +357,18 @@ class HandelsregisterScheduler:
             replace_existing=True,
         )
 
+        # News monitoring job: daily at 8 AM UTC (no API calls, just RSS)
+        self.scheduler.add_job(
+            self._run_news_monitoring_job,
+            trigger=CronTrigger(hour=8, minute=0),
+            id='news_monitoring_job',
+            name='News Monitoring Job',
+            replace_existing=True,
+        )
+
         logger.info(
-            "Jobs configured: discovery every %d hours, backfill 3AM+3PM (50 req each), enrichment 4 AM, announcements 5 AM, CSV export 6 AM, investor detection 7 AM",
+            "Jobs configured: discovery every %d hours, backfill 3AM+3PM, enrichment 4AM, "
+            "announcements 5AM, CSV export 6AM, investor detection 7AM, news monitoring 8AM",
             self.discovery_interval_hours
         )
 

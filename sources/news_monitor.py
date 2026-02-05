@@ -13,8 +13,8 @@ import re
 import logging
 import hashlib
 from datetime import datetime, timedelta
-from typing import List, Dict, Optional, Iterator
-from dataclasses import dataclass
+from typing import List, Dict, Optional, Iterator, Tuple
+from dataclasses import dataclass, field
 import xml.etree.ElementTree as ET
 
 try:
@@ -49,6 +49,7 @@ class FundingMention:
     article_title: str
     source: str
     extracted_at: str
+    confidence: float = 0.0  # How confident we are in the extraction
 
 
 # German startup media RSS feeds
@@ -68,31 +69,66 @@ DEFAULT_RSS_FEEDS = [
         'url': 'https://www.deutsche-startups.de/feed/',
         'type': 'startup_news',
     },
-    {
-        'name': 'Handelsblatt Tech',
-        'url': 'https://www.handelsblatt.com/contentexport/feed/tech',
-        'type': 'business_news',
-    },
 ]
 
-# Keywords indicating funding news
-FUNDING_KEYWORDS = [
-    # German
-    'finanzierung', 'finanzierungsrunde', 'investment', 'investition',
-    'millionen', 'kapitalerhöhung', 'series a', 'series b', 'series c',
-    'seed', 'pre-seed', 'wachstumsfinanzierung', 'venture capital',
-    'risikokapital', 'investor', 'investoren', 'beteiligung',
-    # English (often used in German articles)
-    'funding', 'raised', 'round', 'backed', 'million', 'capital',
+# Patterns that strongly indicate actual funding events (not just advice articles)
+# Each is (regex_pattern, weight). An article needs score >= 2 to count.
+FUNDING_SIGNALS = [
+    # Strong signals - actual funding events
+    (r'\berhält\s+\d+\s*(?:Millionen|Mio)', 3),
+    (r'\bsammelt\s+\d+\s*(?:Millionen|Mio)', 3),
+    (r'\beingesammelt\b', 3),
+    (r'\braised?\b.*\d+\s*(?:million|m)\b', 3),
+    (r'\bfinanzierungsrunde\b', 3),
+    (r'\bkapitalerhöhung\b', 3),
+    (r'\bseries\s+[a-d]\b', 3),
+    (r'\b(?:pre-?)?seed(?:-?runde| round)\b', 3),
+    (r'#DealMonitor\b', 3),
+
+    # Medium signals - likely funding context
+    (r'\d+\s*(?:Millionen|Mio\.?)\b.*\b(?:einsammeln|investier|finanzier)', 2),
+    (r'\bfunding\b', 2),
+    (r'\bwachstumsfinanzierung\b', 2),
+    (r'\brisikokapital\b', 2),
+    (r'\bneuer?\s+Fonds\b', 2),
+
+    # Weak signals - need multiple to count
+    (r'\bventure\s+capital\b', 1),
+    (r'\binvestition\b', 1),
+    (r'\bbeteiligung\b', 1),
+    (r'\binvestor(?:en)?\b', 1),
 ]
 
-# Keywords indicating AI/robotics
-AI_ROBOTICS_KEYWORDS = [
-    'künstliche intelligenz', 'ki', 'artificial intelligence', 'ai',
-    'machine learning', 'deep learning', 'robotik', 'robotics',
-    'automation', 'automatisierung', 'neural', 'nlp', 'computer vision',
-    'autonomous', 'autonom', 'chatbot', 'llm', 'generative ai',
+# Keywords indicating AI/robotics - use word boundaries to avoid false matches
+AI_ROBOTICS_PATTERNS = [
+    r'\bkünstliche(?:r|n|s)?\s+intelligenz\b',
+    r'\b(?:K|k)(?:I|i)[-\s](?:Startup|Unternehmen|Firma|Tool|Agent|Model|System|Funktion)',
+    r'\bartificial\s+intelligence\b',
+    r'\bmachine\s+learning\b',
+    r'\bdeep\s+learning\b',
+    r'\brobotik\b',
+    r'\brobotics\b',
+    r'\bnlp\b',
+    r'\bcomputer\s+vision\b',
+    r'\bchatbot\b',
+    r'\bllm\b',
+    r'\bgenerative\s+ai\b',
+    r'\bKI-\w+',  # KI-Startup, KI-Firma, KI-Agenten, etc.
 ]
+
+# Words that should NOT be extracted as company names
+GERMAN_STOPWORDS = {
+    'ich', 'du', 'er', 'sie', 'es', 'wir', 'ihr', 'sie',
+    'der', 'die', 'das', 'den', 'dem', 'des', 'ein', 'eine',
+    'vom', 'von', 'zum', 'zur', 'mit', 'bei', 'nach', 'aus',
+    'vor', 'über', 'unter', 'zwischen', 'hinter', 'neben',
+    'warum', 'wie', 'was', 'wer', 'wo', 'wann', 'welche',
+    'diese', 'dieser', 'dieses', 'jeder', 'jede', 'jedes',
+    'anfang', 'ende', 'plötzlich', 'wegen', 'ohne', 'hier',
+    'dort', 'neue', 'neuer', 'neues', 'zwei', 'drei', 'vier',
+    'auktion', 'fortpflanzung', 'narzissmus', 'rechenzentrum',
+    'aufnahme', 'unzufrieden',
+}
 
 
 class NewsMonitor:
@@ -108,15 +144,8 @@ class NewsMonitor:
     def __init__(
         self,
         feeds: Optional[List[Dict]] = None,
-        user_agent: str = 'HandelsregisterScraper/1.0 (https://github.com)',
+        user_agent: str = 'HandelsregisterScraper/1.0',
     ):
-        """
-        Initialize news monitor.
-
-        Args:
-            feeds: List of feed configs (name, url, type)
-            user_agent: User agent for requests
-        """
         self.feeds = feeds or DEFAULT_RSS_FEEDS
         self.user_agent = user_agent
 
@@ -145,7 +174,6 @@ class NewsMonitor:
 
             # Try Atom format if no RSS items
             if not items:
-                # Atom uses different namespace
                 ns = {'atom': 'http://www.w3.org/2005/Atom'}
                 items = root.findall('.//atom:entry', ns)
                 if not items:
@@ -163,30 +191,30 @@ class NewsMonitor:
 
     def _parse_item(self, item: ET.Element, source_name: str) -> Optional[NewsArticle]:
         """Parse a single RSS/Atom item."""
-        # Try RSS format
         title = self._get_text(item, 'title')
         link = self._get_text(item, 'link')
         pub_date = self._get_text(item, 'pubDate')
         description = self._get_text(item, 'description')
 
-        # Try Atom format if RSS fields empty
         if not link:
             link_elem = item.find('link')
             if link_elem is not None:
                 link = link_elem.get('href', '')
 
-        # Atom uses 'published' or 'updated'
         if not pub_date:
             pub_date = self._get_text(item, 'published') or self._get_text(item, 'updated')
 
-        # Atom uses 'summary' or 'content'
         if not description:
             description = self._get_text(item, 'summary') or self._get_text(item, 'content')
 
         if not title or not link:
             return None
 
-        # Create content hash for deduplication
+        # Strip HTML from description
+        if description:
+            description = re.sub(r'<[^>]+>', ' ', description)
+            description = re.sub(r'\s+', ' ', description).strip()
+
         content_hash = hashlib.md5(
             (title + link).encode('utf-8')
         ).hexdigest()
@@ -206,7 +234,6 @@ class NewsMonitor:
         if child is not None and child.text:
             return child.text.strip()
 
-        # Try with namespace
         for ns_prefix in ['', '{http://www.w3.org/2005/Atom}', '{http://purl.org/rss/1.0/}']:
             child = element.find(ns_prefix + tag)
             if child is not None and child.text:
@@ -233,122 +260,187 @@ class NewsMonitor:
         return all_articles
 
     def is_funding_related(self, article: NewsArticle) -> bool:
-        """Check if article is about funding."""
+        """
+        Check if article is about an actual funding event.
+
+        Uses weighted signals instead of simple keyword matching
+        to reduce false positives from advice/opinion articles.
+        """
         text = f"{article.title} {article.description or ''}".lower()
 
-        return any(keyword in text for keyword in FUNDING_KEYWORDS)
+        score = 0
+        for pattern, weight in FUNDING_SIGNALS:
+            if re.search(pattern, text, re.IGNORECASE):
+                score += weight
+
+        return score >= 2
 
     def is_ai_robotics_related(self, article: NewsArticle) -> bool:
         """Check if article is about AI/robotics."""
-        text = f"{article.title} {article.description or ''}".lower()
+        text = f"{article.title} {article.description or ''}"
 
-        return any(keyword in text for keyword in AI_ROBOTICS_KEYWORDS)
+        return any(re.search(p, text, re.IGNORECASE) for p in AI_ROBOTICS_PATTERNS)
 
     def extract_funding_info(self, article: NewsArticle) -> Optional[FundingMention]:
         """
-        Extract funding information from article.
+        Extract structured funding information from article.
 
-        Uses regex patterns to extract:
-        - Company name
-        - Funding amount
-        - Investors
-        - Round type
+        Tries source-specific parsers first (DealMonitor format),
+        then falls back to generic extraction.
+        """
+        # Try DealMonitor format first (deutsche-startups)
+        if '#DealMonitor' in (article.title or ''):
+            return self._parse_dealmonitor(article)
+
+        # Try StartupTicker format
+        if '#StartupTicker' in (article.title or ''):
+            return self._parse_startup_ticker(article)
+
+        # Generic extraction
+        return self._extract_generic(article)
+
+    def _parse_dealmonitor(self, article: NewsArticle) -> Optional[FundingMention]:
+        """
+        Parse deutsche-startups #DealMonitor format.
+
+        Example: "#DealMonitor - Enua erhält 25 Millionen – Additive Drives..."
         """
         text = f"{article.title} {article.description or ''}"
 
-        # Extract amount (German format: "5 Millionen Euro" or "5M EUR")
-        amount = None
-        currency = None
+        # DealMonitor titles list multiple deals separated by – or +++
+        # Extract the first/main deal
+        deals = re.split(r'\s*[–—]\s*|\s*\+\+\+\s*', text)
 
-        amount_patterns = [
-            r'(\d+(?:[,\.]\d+)?)\s*(?:Millionen|Mio\.?|Million|M)\s*(?:Euro|EUR|€)',
-            r'€\s*(\d+(?:[,\.]\d+)?)\s*(?:Millionen|Mio\.?|Million|M)',
-            r'(\d+(?:[,\.]\d+)?)\s*(?:Milliarden|Mrd\.?|Billion|B)\s*(?:Euro|EUR|€)',
-        ]
+        # Find the first segment with a funding amount
+        for deal in deals:
+            deal = deal.strip()
+            if not deal:
+                continue
 
-        for pattern in amount_patterns:
-            match = re.search(pattern, text, re.IGNORECASE)
+            # Pattern: "CompanyName erhält/sammelt X Millionen"
+            match = re.search(
+                r'([A-Z][A-Za-z0-9\.\-]+(?:\s+[A-Z][A-Za-z0-9\.\-]+)*)\s+'
+                r'(?:erhält|sammelt|bekommt|sichert sich|schließt)\s+'
+                r'(\d+(?:[,\.]\d+)?)\s*(?:Millionen|Mio\.?)',
+                deal
+            )
             if match:
-                amount_str = match.group(1).replace(',', '.')
-                amount = float(amount_str)
-                currency = 'EUR'
+                company = match.group(1).strip()
+                amount = float(match.group(2).replace(',', '.')) * 1_000_000
 
-                # Convert to actual amount
-                if 'milliard' in match.group(0).lower() or 'billion' in match.group(0).lower():
-                    amount *= 1_000_000_000
-                else:
-                    amount *= 1_000_000
-                break
+                return FundingMention(
+                    company_name=company,
+                    investors=[],
+                    amount=amount,
+                    currency='EUR',
+                    round_type=self._extract_round_type(deal),
+                    article_url=article.url,
+                    article_title=article.title,
+                    source=article.source,
+                    extracted_at=datetime.utcnow().isoformat(),
+                    confidence=0.9,
+                )
 
-        # Try USD
-        if not amount:
-            usd_patterns = [
-                r'\$\s*(\d+(?:[,\.]\d+)?)\s*(?:million|m)\b',
-                r'(\d+(?:[,\.]\d+)?)\s*(?:million|m)\s*(?:dollar|usd|\$)',
-            ]
-            for pattern in usd_patterns:
-                match = re.search(pattern, text, re.IGNORECASE)
-                if match:
-                    amount_str = match.group(1).replace(',', '.')
-                    amount = float(amount_str) * 1_000_000
-                    currency = 'USD'
-                    break
-
-        # Extract round type
-        round_type = None
-        round_patterns = [
-            (r'\b(pre-?seed)\b', 'pre_seed'),
-            (r'\b(seed)\s*(?:runde|round|finanzierung)?\b', 'seed'),
-            (r'\b(series\s*a)\b', 'series_a'),
-            (r'\b(series\s*b)\b', 'series_b'),
-            (r'\b(series\s*c)\b', 'series_c'),
-            (r'\b(series\s*d)\b', 'series_d'),
-            (r'\b(wachstums?finanzierung|growth)\b', 'growth'),
-        ]
-
-        for pattern, round_name in round_patterns:
-            if re.search(pattern, text, re.IGNORECASE):
-                round_type = round_name
-                break
-
-        # Extract company name (heuristic: capitalized words before "erhält", "sammelt", "raises")
-        company_name = None
-        company_patterns = [
-            r'([A-Z][A-Za-z0-9]+(?:\s+[A-Z][A-Za-z0-9]+)*)\s+(?:erhält|sammelt|raises|secures|schließt)',
-            r'(?:startup|fintech|healthtech|saas)\s+([A-Z][A-Za-z0-9]+(?:\s+[A-Z][A-Za-z0-9]+)*)',
-        ]
-
-        for pattern in company_patterns:
-            match = re.search(pattern, text)
+            # Pattern: "CompanyName sammelt X Millionen ein"
+            match = re.search(
+                r'([A-Z][A-Za-z0-9\.\-]+(?:\s+[A-Z][A-Za-z0-9\.\-]+)*)\s+'
+                r'sammelt\s+(\d+(?:[,\.]\d+)?)\s*(?:Millionen|Mio\.?)\s+ein',
+                deal
+            )
             if match:
-                company_name = match.group(1).strip()
-                break
+                company = match.group(1).strip()
+                amount = float(match.group(2).replace(',', '.')) * 1_000_000
 
-        if not company_name:
-            # Fall back to first capitalized phrase in title
-            match = re.search(r'^([A-Z][A-Za-z0-9]+(?:\s+[A-Z][A-Za-z0-9]+)*)', article.title)
+                return FundingMention(
+                    company_name=company,
+                    investors=[],
+                    amount=amount,
+                    currency='EUR',
+                    round_type=self._extract_round_type(deal),
+                    article_url=article.url,
+                    article_title=article.title,
+                    source=article.source,
+                    extracted_at=datetime.utcnow().isoformat(),
+                    confidence=0.9,
+                )
+
+        return None
+
+    def _parse_startup_ticker(self, article: NewsArticle) -> Optional[FundingMention]:
+        """
+        Parse deutsche-startups #StartupTicker format.
+
+        These list multiple startups but don't always have funding amounts.
+        Extract company names mentioned.
+        """
+        text = f"{article.title} {article.description or ''}"
+
+        # StartupTicker mentions multiple companies with +++
+        segments = re.split(r'\s*\+\+\+\s*', text)
+
+        # Return the first company name found
+        for segment in segments:
+            segment = segment.strip()
+            # Skip the header
+            if '#StartupTicker' in segment:
+                continue
+            # Extract company-like name
+            match = re.search(r'([A-Z][A-Za-z0-9\.\-]+(?:\s+[A-Z][A-Za-z0-9\.\-]+)*)', segment)
             if match:
-                company_name = match.group(1).strip()
+                name = match.group(1).strip()
+                if name.lower() not in GERMAN_STOPWORDS and len(name) >= 3:
+                    return FundingMention(
+                        company_name=name,
+                        investors=[],
+                        amount=None,
+                        currency=None,
+                        round_type=None,
+                        article_url=article.url,
+                        article_title=article.title,
+                        source=article.source,
+                        extracted_at=datetime.utcnow().isoformat(),
+                        confidence=0.5,
+                    )
 
-        # Extract investors (after "von", "from", "durch", "lead by")
-        investors = []
-        investor_patterns = [
-            r'(?:von|from|durch|angeführt von|lead by|led by)\s+([A-Z][A-Za-z0-9\s,&]+?)(?:\.|,\s*(?:sowie|und|and)|$)',
-        ]
+        return None
 
-        for pattern in investor_patterns:
-            match = re.search(pattern, text)
-            if match:
-                investor_text = match.group(1)
-                # Split by common separators
-                for inv in re.split(r'\s*(?:,|und|and|sowie|&)\s*', investor_text):
-                    inv = inv.strip()
-                    if inv and len(inv) > 2:
-                        investors.append(inv)
-                break
+    def _extract_generic(self, article: NewsArticle) -> Optional[FundingMention]:
+        """
+        Generic funding extraction for non-structured articles.
 
-        if not (amount or company_name):
+        Looks for patterns like:
+        - "X erhält Y Millionen"
+        - "X sammelt Y Millionen ein"
+        - "X raises $Y million"
+        - "Neuer Fonds: X Millionen"
+        """
+        text = f"{article.title} {article.description or ''}"
+
+        # Step 1: Extract amount
+        amount, currency = self._extract_amount(text)
+
+        # Step 2: Extract company name using funding-context patterns
+        company_name = self._extract_company_name(text)
+
+        # Step 3: Extract investors
+        investors = self._extract_investors(text)
+
+        # Step 4: Extract round type
+        round_type = self._extract_round_type(text)
+
+        # Only return if we have meaningful data
+        # Require at least a company name OR an amount
+        if not company_name and not amount:
             return None
+
+        # Calculate confidence based on what we extracted
+        confidence = 0.3
+        if company_name and amount:
+            confidence = 0.8
+        elif company_name and round_type:
+            confidence = 0.7
+        elif amount:
+            confidence = 0.5
 
         return FundingMention(
             company_name=company_name or 'Unknown',
@@ -360,11 +452,165 @@ class NewsMonitor:
             article_title=article.title,
             source=article.source,
             extracted_at=datetime.utcnow().isoformat(),
+            confidence=confidence,
         )
 
-    def scan_for_funding(self) -> List[FundingMention]:
+    def _extract_amount(self, text: str) -> Tuple[Optional[float], Optional[str]]:
+        """Extract funding amount from text."""
+        # Special case: "die erste Million" = 1M EUR
+        if re.search(r'(?:die\s+)?erste\s+Million\b', text, re.IGNORECASE):
+            return 1_000_000.0, 'EUR'
+
+        # EUR amounts - with or without explicit currency
+        eur_patterns = [
+            # "25 Millionen Euro" / "25 Mio. Euro" / "25 Mio. EUR"
+            (r'(\d+(?:[,\.]\d+)?)\s*(?:Millionen|Mio\.?)\s*(?:Euro|EUR|€)', 1_000_000),
+            # "€25 Millionen" / "€ 25 Mio"
+            (r'(?:€|EUR)\s*(\d+(?:[,\.]\d+)?)\s*(?:Millionen|Mio\.?)', 1_000_000),
+            # "25 Milliarden Euro"
+            (r'(\d+(?:[,\.]\d+)?)\s*(?:Milliarden|Mrd\.?)\s*(?:Euro|EUR|€)', 1_000_000_000),
+            # "X erhält/sammelt 25 Millionen" (implicit EUR in German startup context)
+            (r'(?:erhält|sammelt|bekommt|eingesammelt|einsammeln|sichert sich)\s+(\d+(?:[,\.]\d+)?)\s*(?:Millionen|Mio\.?)', 1_000_000),
+            # "90 Millionen in" (investment context, implicit EUR)
+            (r'(\d+(?:[,\.]\d+)?)\s*(?:Millionen|Mio\.?)\s+(?:in\s+|investier)', 1_000_000),
+        ]
+
+        for pattern, multiplier in eur_patterns:
+            match = re.search(pattern, text, re.IGNORECASE)
+            if match:
+                amount_str = match.group(1).replace(',', '.')
+                amount = float(amount_str) * multiplier
+                return amount, 'EUR'
+
+        # USD amounts
+        usd_patterns = [
+            r'\$\s*(\d+(?:[,\.]\d+)?)\s*(?:million|m)\b',
+            r'(\d+(?:[,\.]\d+)?)\s*(?:million|m)\s*(?:dollar|usd|\$)',
+        ]
+
+        for pattern in usd_patterns:
+            match = re.search(pattern, text, re.IGNORECASE)
+            if match:
+                amount_str = match.group(1).replace(',', '.')
+                amount = float(amount_str) * 1_000_000
+                return amount, 'USD'
+
+        return None, None
+
+    def _extract_company_name(self, text: str) -> Optional[str]:
+        """
+        Extract company name from funding article text.
+
+        Uses verb-context patterns specific to German funding headlines.
+        """
+        # Patterns ordered by specificity (most specific first)
+        patterns = [
+            # "CompanyName erhält/sammelt/bekommt X Millionen"
+            r'([A-Z][A-Za-z0-9\.\-]+(?:\s+[A-Z][A-Za-z0-9\.\-]+)*)\s+(?:erhält|sammelt|bekommt|sichert sich|schließt)',
+            # "hat CompanyName ... eingesammelt" / "hat CompanyName ... geschlossen"
+            r'hat\s+([A-Z][A-Za-z0-9\.\-]+(?:\s+[A-Z][A-Za-z0-9\.\-]+)*)\s+.*?(?:eingesammelt|geschlossen|erhalten|bekommen)',
+            # "CompanyName hat ... eingesammelt"
+            r'([A-Z][A-Za-z0-9\.\-]+(?:\s+[A-Z][A-Za-z0-9\.\-]+)*)\s+(?:hat|haben)\s+.*eingesammelt',
+            # "X raises/secures"
+            r'([A-Z][A-Za-z0-9\.\-]+(?:\s+[A-Z][A-Za-z0-9\.\-]+)*)\s+(?:raises|secures|closes)',
+            # "Startup X" / "Fintech X" / "KI-Startup X"
+            r'(?:Startup|Fintech|Healthtech|SaaS|KI-Startup|AI-Startup)\s+([A-Z][A-Za-z0-9\.\-]+(?:\s+[A-Z][A-Za-z0-9\.\-]+)*)',
+            # "Gründer von X" / "Gründer-Team von X"
+            r'(?:Gründer(?:-Team)?|Founder)\s+(?:von|of)\s+([A-Z][A-Za-z0-9\.\-]+)',
+            # "bei X" in funding context, e.g. "investiert bei CompanyName"
+            r'investier\w*\s+(?:bei|in)\s+([A-Z][A-Za-z0-9\.\-]+(?:\s+[A-Z][A-Za-z0-9\.\-]+)*)',
+        ]
+
+        for pattern in patterns:
+            match = re.search(pattern, text)
+            if match:
+                name = match.group(1).strip()
+                # Validate: not a stopword, not too short
+                if self._is_valid_company_name(name):
+                    return name
+
+        return None
+
+    def _is_valid_company_name(self, name: str) -> bool:
+        """Check if extracted name is plausibly a company name."""
+        if not name or len(name) < 2:
+            return False
+
+        # Reject German stopwords and common non-company words
+        if name.lower() in GERMAN_STOPWORDS:
+            return False
+
+        # Reject single common German words (nouns are capitalized in German)
+        single_word_blacklist = {
+            'der', 'die', 'das', 'ein', 'kein', 'maschmeyers',
+            'europäische', 'deutsche', 'berliner', 'münchner',
+            'frühphasen', 'bremer',
+        }
+        if name.lower() in single_word_blacklist:
+            return False
+
+        # Reject if all lowercase or single character
+        if name.islower() or len(name) <= 1:
+            return False
+
+        return True
+
+    def _extract_investors(self, text: str) -> List[str]:
+        """Extract investor names from text."""
+        investors = []
+
+        patterns = [
+            # "angeführt von InvestorName" / "lead by InvestorName"
+            r'(?:angeführt|geführt|geleitet)\s+von\s+([A-Z][A-Za-z0-9\s,&\.\-]+?)(?:\.|,\s+(?:sowie|und|and|mit)|$)',
+            # "led by InvestorName"
+            r'(?:led?|backed)\s+by\s+([A-Z][A-Za-z0-9\s,&\.\-]+?)(?:\.|,\s+(?:and|with)|$)',
+            # "von InvestorName Capital/Ventures/Partners"
+            r'von\s+([A-Z][A-Za-z0-9]+(?:\s+(?:Capital|Ventures|Partners|Invest|Fund))+)',
+            # "Investor InvestorName"
+            r'(?:Investor|Lead-Investor|Hauptinvestor)\s+([A-Z][A-Za-z0-9]+(?:\s+[A-Z][A-Za-z0-9]+)*)',
+        ]
+
+        for pattern in patterns:
+            match = re.search(pattern, text)
+            if match:
+                investor_text = match.group(1).strip()
+                # Split by separators
+                for inv in re.split(r'\s*(?:,|und|and|sowie|&)\s*', investor_text):
+                    inv = inv.strip()
+                    # Must look like an investor name (capitalized, not too short)
+                    if inv and len(inv) > 3 and inv[0].isupper():
+                        # Don't add obvious non-investor words
+                        if inv.lower() not in GERMAN_STOPWORDS:
+                            investors.append(inv)
+                break
+
+        return investors
+
+    def _extract_round_type(self, text: str) -> Optional[str]:
+        """Extract funding round type from text."""
+        round_patterns = [
+            (r'\bpre-?seed\b', 'pre_seed'),
+            (r'\bseed(?:-?runde|\s+round|\s+finanzierung)?\b', 'seed'),
+            (r'\bseries\s*a\b', 'series_a'),
+            (r'\bseries\s*b\b', 'series_b'),
+            (r'\bseries\s*c\b', 'series_c'),
+            (r'\bseries\s*d\b', 'series_d'),
+            (r'\bwachstums?finanzierung\b', 'growth'),
+            (r'\bgrowth\s*(?:round|runde)\b', 'growth'),
+        ]
+
+        for pattern, round_name in round_patterns:
+            if re.search(pattern, text, re.IGNORECASE):
+                return round_name
+
+        return None
+
+    def scan_for_funding(self, min_confidence: float = 0.5) -> List[FundingMention]:
         """
         Scan all feeds for funding news.
+
+        Args:
+            min_confidence: Minimum confidence for extracted mentions
 
         Returns:
             List of extracted funding mentions
@@ -376,13 +622,14 @@ class NewsMonitor:
         for article in articles:
             if self.is_funding_related(article):
                 mention = self.extract_funding_info(article)
-                if mention:
+                if mention and mention.confidence >= min_confidence:
                     funding_mentions.append(mention)
                     logger.info(
-                        "Found funding: %s - %s %s",
+                        "Found funding: %s - %s %s (confidence: %.0f%%)",
                         mention.company_name,
                         mention.amount,
-                        mention.currency
+                        mention.currency,
+                        mention.confidence * 100,
                     )
 
         return funding_mentions
