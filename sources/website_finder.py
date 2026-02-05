@@ -5,6 +5,8 @@ Strategy:
 1. Domain guessing: try predictable patterns ({name}.de, .com, .io)
 2. DuckDuckGo search: fallback for companies where guessing fails
 3. Validation: check HTTP status, title match, Impressum presence
+4. Impressum deep validation: fetch /impressum, parse legal name + HRB number
+   for definitive company match (confidence = 1.0)
 
 No API keys required.
 """
@@ -13,8 +15,8 @@ import re
 import time
 import logging
 from dataclasses import dataclass, field
-from typing import List, Optional, Tuple
-from urllib.parse import urlparse
+from typing import Dict, List, Optional, Tuple
+from urllib.parse import urljoin, urlparse
 
 import requests
 from bs4 import BeautifulSoup
@@ -72,6 +74,16 @@ PARKED_INDICATORS = [
 
 
 @dataclass
+class ImpressumData:
+    """Parsed data from a company's Impressum page."""
+    legal_name: Optional[str] = None
+    registry_number: Optional[str] = None  # e.g. 'HRB 187497'
+    registry_court: Optional[str] = None  # e.g. 'Amtsgericht Charlottenburg'
+    address: Optional[str] = None
+    managing_directors: List[str] = field(default_factory=list)
+
+
+@dataclass
 class WebsiteResult:
     """Result of a website lookup."""
     url: str
@@ -79,6 +91,9 @@ class WebsiteResult:
     source: str  # 'domain_guess', 'search'
     title_match: bool = False
     has_impressum: bool = False
+    impressum_url: Optional[str] = None
+    impressum_verified: bool = False
+    impressum_data: Optional[ImpressumData] = None
     is_parked: bool = False
 
 
@@ -240,11 +255,9 @@ def _validate_website(url: str, company_name: str) -> WebsiteResult:
             url,
             timeout=REQUEST_TIMEOUT,
             headers={'User-Agent': USER_AGENT},
-            stream=True,
         )
-        # Read max 500KB
-        content = resp.raw.read(512_000).decode('utf-8', errors='replace')
-        resp.close()
+        # Limit to 500KB decoded content
+        content = resp.text[:512_000]
     except requests.RequestException:
         # URL responded to HEAD but GET failed — still possible website
         return WebsiteResult(
@@ -286,11 +299,13 @@ def _validate_website(url: str, company_name: str) -> WebsiteResult:
                     break
 
         # Impressum link (legally required for German companies)
+        impressum_url = None
         for a in soup.find_all('a', href=True):
             link_text = (a.get_text() or '').lower()
             href = a['href'].lower()
             if 'impressum' in link_text or 'impressum' in href or 'imprint' in link_text or 'imprint' in href:
                 has_impressum = True
+                impressum_url = _resolve_impressum_url(url, a['href'])
                 confidence += 0.2
                 break
 
@@ -300,8 +315,204 @@ def _validate_website(url: str, company_name: str) -> WebsiteResult:
         source='',
         title_match=title_match,
         has_impressum=has_impressum,
+        impressum_url=impressum_url if not is_parked else None,
         is_parked=is_parked,
     )
+
+
+def _resolve_impressum_url(base_url: str, href: str) -> str:
+    """Resolve an Impressum href to an absolute URL."""
+    if href.startswith(('http://', 'https://')):
+        return href
+    return urljoin(base_url, href)
+
+
+# Regex patterns for Impressum parsing
+# Registry number: HRB 12345, HRA 6789
+_RE_REGISTRY_NUMBER = re.compile(
+    r'\b(HR[AB])\s*[\-:]?\s*(\d{3,7})\s*(?:\w)?',
+    re.IGNORECASE,
+)
+
+# Registry court: Amtsgericht Berlin-Charlottenburg, AG München
+# Captures the city name (e.g. "Charlottenburg", "Aachen", "München")
+_RE_REGISTRY_COURT = re.compile(
+    r'(?:'
+    r'Registergericht[ \t]*:[ \t]*(?:\b(?:AG|Amtsgericht)\s+)?'     # "Registergericht: Amtsgericht X"
+    r'|\bAmtsgericht\s+'                                              # "Amtsgericht X" (full word only)
+    r'|\bDistrict\s+Court\s+(?:of\s+)?'                              # "District Court of X"
+    r'|eingetragen\s+(?:im|beim)\s+Handelsregister\s+(?:des\s+)?\b(?:AG|Amtsgericht)\s+'  # "eingetragen im HR des AG X"
+    r'|commercial\s+register\s+(?:of\s+)?(?:the\s+)?(?:District\s+Court\s+(?:of\s+)?)?' # "commercial register of the District Court of X"
+    r')'
+    r'([A-ZÄÖÜ][a-zäöüß]+(?:[\-][A-Za-zÄÖÜäöüß]+){0,2})',  # City name (hyphenated ok)
+    re.IGNORECASE,
+)
+
+# German legal forms in Impressum - used to find the full legal name
+# Uses [ \t] instead of \s to avoid matching across newlines
+_RE_LEGAL_NAME = re.compile(
+    r'([A-ZÄÖÜa-zäöüß][A-Za-zÄÖÜäöüß0-9\.\- \t&]{1,60}?'
+    r'[ \t]+(?:GmbH[ \t]*&[ \t]*Co\.?[ \t]*KG|GmbH|UG[ \t]*\(?haftungsbeschränkt\)?|AG|SE|KG|OHG|e\.?[ \t]*V\.?|KGaA|eG|mbH))'
+    r'(?:[ \t\n]|$|,|\.|<)',
+)
+
+
+def _fetch_and_parse_impressum(impressum_url: str) -> Optional[ImpressumData]:
+    """
+    Fetch an Impressum page and parse structured company data.
+
+    German law (§5 TMG / §18 MStV) requires Impressum to contain:
+    - Full legal company name
+    - Address
+    - Registry court and number (e.g. Amtsgericht Berlin, HRB 12345)
+    - Managing director(s)
+    """
+    try:
+        resp = requests.get(
+            impressum_url,
+            timeout=REQUEST_TIMEOUT,
+            headers={'User-Agent': USER_AGENT},
+        )
+        if resp.status_code >= 400:
+            return None
+        content = resp.text[:512_000]
+    except requests.RequestException:
+        return None
+
+    soup = BeautifulSoup(content, 'lxml')
+
+    # Remove script/style elements
+    for tag in soup.find_all(['script', 'style', 'nav', 'header', 'footer']):
+        tag.decompose()
+
+    text = soup.get_text(separator='\n')
+    # Clean up whitespace
+    lines = [line.strip() for line in text.splitlines() if line.strip()]
+    text_block = '\n'.join(lines)
+
+    data = ImpressumData()
+
+    # Extract registry number (HRB/HRA)
+    m = _RE_REGISTRY_NUMBER.search(text_block)
+    if m:
+        data.registry_number = f'{m.group(1).upper()} {m.group(2)}'
+
+    # Extract registry court
+    m = _RE_REGISTRY_COURT.search(text_block)
+    if m:
+        court = m.group(1).strip().rstrip('.,;:')
+        data.registry_court = court
+
+    # Extract legal name
+    # Strategy: find lines containing a German legal form suffix
+    # The Impressum typically has the legal name near the top
+    m = _RE_LEGAL_NAME.search(text_block)
+    if m:
+        data.legal_name = m.group(1).strip()
+
+    # Extract address (German postal code pattern: "Straße 5, 10997 Berlin")
+    # Require at least one lowercase letter in street to avoid matching headers like "IMPRINT"
+    addr_match = re.search(
+        r'(?:^|\n)([A-Za-zÄÖÜäöüß][A-Za-zÄÖÜäöüß\.\- ]*[a-zäöüß][A-Za-zÄÖÜäöüß\.\- ]*\d+[a-z]?)[ \t]*[,\n][ \t]*(\d{5})[ \t]+([A-Za-zÄÖÜäöüß][\w\s\-]+)',
+        text_block,
+    )
+    if addr_match:
+        street = addr_match.group(1).strip()
+        plz = addr_match.group(2)
+        city = addr_match.group(3).strip()
+        data.address = f'{street}, {plz} {city}'
+
+    # Extract managing directors (Geschäftsführer)
+    gf_match = re.search(
+        r'(?:Geschäftsführe(?:r|rin)|Managing\s+Director|Vertretungsberechtig(?:t|te)r?|'
+        r'Vorstand|CEO|Vertreten\s+durch)\s*[:\s]+(.+?)(?:\n\n|\n[A-Z]|\Z)',
+        text_block,
+        re.IGNORECASE | re.DOTALL,
+    )
+    if gf_match:
+        gf_text = gf_match.group(1).strip()
+        # Split on common separators: comma, newline, "und", "and"
+        names = re.split(r'\s*[,\n]\s*|\s+und\s+|\s+and\s+', gf_text)
+        data.managing_directors = [
+            n.strip() for n in names
+            if n.strip() and len(n.strip()) > 2 and not n.strip().startswith(('Tel', 'Fax', 'E-', 'USt'))
+        ][:5]  # Cap at 5
+
+    # Only return if we found at least one useful field
+    if data.legal_name or data.registry_number:
+        return data
+
+    return None
+
+
+def _match_impressum_to_company(
+    impressum: ImpressumData,
+    company_name: str,
+    native_company_number: Optional[str] = None,
+    registry_court: Optional[str] = None,
+) -> float:
+    """
+    Match Impressum data against a company record.
+
+    Returns a confidence boost (0.0 to 1.0):
+    - Registry number match: 1.0 (definitive proof)
+    - Legal name exact match: 0.8
+    - Legal name fuzzy match + court match: 0.7
+    - Legal name fuzzy match alone: 0.4
+    """
+    boost = 0.0
+
+    # Match 1: Registry number (definitive — HRB numbers are unique per court)
+    if impressum.registry_number and native_company_number:
+        # Normalize both: strip spaces, uppercase
+        imp_num = re.sub(r'\s+', ' ', impressum.registry_number.upper().strip())
+        db_num = re.sub(r'\s+', ' ', native_company_number.upper().strip())
+        # Also try without the prefix (some DBs store just the number)
+        imp_digits = re.search(r'\d+', imp_num)
+        db_digits = re.search(r'\d+', db_num)
+
+        if imp_num == db_num:
+            return 1.0  # Exact HRB match — definitive
+        elif imp_digits and db_digits and imp_digits.group() == db_digits.group():
+            # Same number, check if type prefix matches too
+            imp_type = re.match(r'(HR[AB])', imp_num)
+            db_type = re.match(r'(HR[AB])', db_num)
+            if imp_type and db_type and imp_type.group() == db_type.group():
+                return 1.0
+            # Same digits, might be same company
+            boost = max(boost, 0.6)
+
+    # Match 2: Legal name from Impressum vs company name
+    if impressum.legal_name:
+        # Compare full legal names
+        ratio = fuzz.token_set_ratio(
+            company_name.lower(),
+            impressum.legal_name.lower(),
+        )
+        if ratio >= 90:
+            boost = max(boost, 0.8)  # Near-exact legal name match
+        elif ratio >= 75:
+            boost = max(boost, 0.5)
+        elif ratio >= 60:
+            boost = max(boost, 0.3)
+
+        # Also compare normalized brand names
+        brand = normalize_company_name(company_name)
+        imp_brand = normalize_company_name(impressum.legal_name)
+        brand_ratio = fuzz.token_set_ratio(brand, imp_brand)
+        if brand_ratio >= 85:
+            boost = max(boost, 0.6)
+
+    # Match 3: Registry court match (supplementary signal)
+    if impressum.registry_court and registry_court:
+        court_ratio = fuzz.token_set_ratio(
+            registry_court.lower(),
+            impressum.registry_court.lower(),
+        )
+        if court_ratio >= 70:
+            boost = min(boost + 0.15, 1.0)
+
+    return boost
 
 
 def _search_duckduckgo(company_name: str, max_results: int = 5) -> List[Tuple[str, str]]:
@@ -364,13 +575,22 @@ class WebsiteFinder:
         self.search_delay = search_delay
         self._last_search_time = 0.0
 
-    def find(self, company_name: str) -> Optional[WebsiteResult]:
+    def find(
+        self,
+        company_name: str,
+        native_company_number: Optional[str] = None,
+        registry_court: Optional[str] = None,
+    ) -> Optional[WebsiteResult]:
         """
         Find the website for a company.
 
-        Tries domain guessing first, then DuckDuckGo search.
-        Validates all candidates and returns the best one above
-        the confidence threshold.
+        Tries domain guessing first, then DuckDuckGo search, then
+        verifies via Impressum deep validation for definitive matching.
+
+        Args:
+            company_name: Full legal company name
+            native_company_number: HRB/HRA number from DB (e.g. 'HRB 12345')
+            registry_court: Registry court from DB (e.g. 'Amtsgericht Berlin')
 
         Returns:
             WebsiteResult or None if no confident match found
@@ -392,20 +612,25 @@ class WebsiteFinder:
                 result.confidence = min(result.confidence, 1.0)
 
                 if result.confidence >= 0.7:
-                    # High confidence — return immediately
+                    # High confidence — try Impressum verification
                     logger.debug("Domain guess hit: %s -> %s (conf=%.2f)",
                                  company_name, url, result.confidence)
-                    return result
+                    best = result
+                    break
 
                 if not best or result.confidence > best.confidence:
                     best = result
 
         # Early return if domain guessing found something decent
         if best and best.confidence >= self.min_confidence and not self.enable_search:
+            # Still try Impressum before returning
+            best = self._try_impressum_verification(
+                best, company_name, native_company_number, registry_court,
+            )
             return best
 
         # Phase 2: DuckDuckGo search (slower, rate-limited)
-        if self.enable_search:
+        if self.enable_search and (not best or best.confidence < 0.7):
             # Respect delay between searches
             elapsed = time.time() - self._last_search_time
             if elapsed < self.search_delay:
@@ -424,11 +649,81 @@ class WebsiteFinder:
                 if best and best.confidence >= 0.7:
                     break
 
-        # Return best if above threshold
+        # Phase 3: Impressum deep validation
         if best and best.confidence >= self.min_confidence:
-            logger.info("Found website: %s -> %s (conf=%.2f, src=%s)",
-                        company_name, best.url, best.confidence, best.source)
+            best = self._try_impressum_verification(
+                best, company_name, native_company_number, registry_court,
+            )
+            logger.info("Found website: %s -> %s (conf=%.2f, src=%s, impressum=%s)",
+                        company_name, best.url, best.confidence, best.source,
+                        'verified' if best.impressum_verified else 'no')
             return best
 
         logger.debug("No website found for: %s", company_name)
         return None
+
+    def _try_impressum_verification(
+        self,
+        result: WebsiteResult,
+        company_name: str,
+        native_company_number: Optional[str],
+        registry_court: Optional[str],
+    ) -> WebsiteResult:
+        """
+        Attempt Impressum deep validation on a candidate website.
+
+        Fetches the Impressum page, parses legal data, and matches
+        against the company record. Can boost confidence up to 1.0.
+        """
+        # Need an Impressum URL to verify
+        impressum_url = result.impressum_url
+
+        # If we didn't find an Impressum link, try common paths
+        if not impressum_url and not result.is_parked:
+            base = result.url.rstrip('/')
+            for path in ['/impressum', '/imprint', '/legal/impressum']:
+                test_url = base + path
+                try:
+                    resp = requests.head(
+                        test_url,
+                        timeout=REQUEST_TIMEOUT,
+                        headers={'User-Agent': USER_AGENT},
+                        allow_redirects=True,
+                    )
+                    if resp.status_code < 400:
+                        impressum_url = resp.url
+                        result.has_impressum = True
+                        result.impressum_url = impressum_url
+                        break
+                except requests.RequestException:
+                    continue
+
+        if not impressum_url:
+            return result
+
+        # Fetch and parse Impressum
+        impressum_data = _fetch_and_parse_impressum(impressum_url)
+        if not impressum_data:
+            return result
+
+        result.impressum_data = impressum_data
+
+        # Match against company record
+        boost = _match_impressum_to_company(
+            impressum_data, company_name, native_company_number, registry_court,
+        )
+
+        if boost > 0:
+            old_conf = result.confidence
+            result.confidence = min(result.confidence + boost, 1.0)
+            if boost >= 0.8:
+                result.impressum_verified = True
+            logger.debug(
+                "Impressum verification: %s conf %.2f -> %.2f (boost=%.2f, "
+                "legal_name=%s, reg=%s, court=%s)",
+                company_name, old_conf, result.confidence, boost,
+                impressum_data.legal_name, impressum_data.registry_number,
+                impressum_data.registry_court,
+            )
+
+        return result

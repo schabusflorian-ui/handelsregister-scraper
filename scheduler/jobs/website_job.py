@@ -60,6 +60,7 @@ class WebsiteFinderJob:
             'websites_found': 0,
             'websites_by_guess': 0,
             'websites_by_search': 0,
+            'websites_impressum_verified': 0,
             'already_had_website': 0,
             'errors': 0,
         }
@@ -70,7 +71,11 @@ class WebsiteFinderJob:
 
             for company in companies:
                 try:
-                    result = self.finder.find(company['name'])
+                    result = self.finder.find(
+                        company['name'],
+                        native_company_number=company.get('native_company_number'),
+                        registry_court=company.get('registry_court'),
+                    )
                     now = datetime.utcnow().isoformat()
 
                     if result:
@@ -85,11 +90,14 @@ class WebsiteFinderJob:
                             stats['websites_by_guess'] += 1
                         else:
                             stats['websites_by_search'] += 1
+                        if result.impressum_verified:
+                            stats['websites_impressum_verified'] += 1
 
                         logger.info(
-                            "Website found: %s -> %s (conf=%.2f, src=%s)",
+                            "Website found: %s -> %s (conf=%.2f, src=%s, impressum=%s)",
                             company['name'], result.url,
                             result.confidence, result.source,
+                            'verified' if result.impressum_verified else 'no',
                         )
                     else:
                         # Mark as checked so we don't retry every run
@@ -110,11 +118,12 @@ class WebsiteFinderJob:
         stats['duration_seconds'] = (datetime.utcnow() - started_at).total_seconds()
 
         logger.info(
-            "Website finder complete: %d checked, %d found (%d guess, %d search)",
+            "Website finder complete: %d checked, %d found (%d guess, %d search, %d impressum-verified)",
             stats['companies_checked'],
             stats['websites_found'],
             stats['websites_by_guess'],
             stats['websites_by_search'],
+            stats['websites_impressum_verified'],
         )
 
         return stats
@@ -131,7 +140,8 @@ class WebsiteFinderJob:
         cutoff = (datetime.utcnow() - timedelta(days=self.relookup_days)).isoformat()
 
         rows = self.db.conn.execute('''
-            SELECT id, name, website, website_lookup_at
+            SELECT id, name, native_company_number, registry_court,
+                   website, website_lookup_at
             FROM companies
             WHERE website IS NULL
               AND (website_lookup_at IS NULL OR website_lookup_at < ?)
