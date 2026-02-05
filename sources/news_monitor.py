@@ -54,6 +54,7 @@ class FundingMention:
 
 # German startup media RSS feeds
 DEFAULT_RSS_FEEDS = [
+    # === Core German Startup News ===
     {
         'name': 'Gruenderszene',
         'url': 'https://www.gruenderszene.de/feed',
@@ -68,6 +69,121 @@ DEFAULT_RSS_FEEDS = [
         'name': 'deutsche-startups',
         'url': 'https://www.deutsche-startups.de/feed/',
         'type': 'startup_news',
+    },
+    {
+        'name': 'Startup Valley',
+        'url': 'https://www.startupvalley.news/de/feed/',
+        'type': 'startup_news',
+    },
+    {
+        'name': 'Sonnenseite',
+        'url': 'https://www.sonnenseite.com/feed/',
+        'type': 'climate_news',
+    },
+    {
+        'name': 'Munich Startup',
+        'url': 'https://www.munich-startup.de/feed/',
+        'type': 'startup_news',
+    },
+    {
+        'name': 'Startbase',
+        'url': 'https://www.startbase.com/feed/',
+        'type': 'startup_news',
+    },
+    {
+        'name': 'Hamburg Startups',
+        'url': 'https://www.hamburg-startups.net/feed/',
+        'type': 'startup_news',
+    },
+
+    # === VC / Deal News ===
+    {
+        'name': 'VC Magazine',
+        'url': 'https://www.vc-magazin.de/feed/',
+        'type': 'vc_news',
+    },
+    {
+        'name': 'Finance Forward',
+        'url': 'https://financefwd.com/de/feed/',
+        'type': 'fintech_news',
+    },
+
+    # === Tech & Innovation ===
+    {
+        'name': 'Heise Online',
+        'url': 'https://www.heise.de/rss/heise-atom.xml',
+        'type': 'tech_news',
+    },
+    {
+        'name': 'Golem.de',
+        'url': 'https://rss.golem.de/rss.php?feed=ATOM1.0',
+        'type': 'tech_news',
+    },
+    {
+        'name': 'Computerbase',
+        'url': 'https://www.computerbase.de/rss/news.xml',
+        'type': 'tech_news',
+    },
+
+    # === Climate / Energy / Sustainability ===
+    {
+        'name': 'Cleanthinking',
+        'url': 'https://www.cleanthinking.de/feed/',
+        'type': 'climate_news',
+    },
+    {
+        'name': 'Edison Media',
+        'url': 'https://edison.media/feed/',
+        'type': 'energy_news',
+    },
+    {
+        'name': 'GreenBiz',
+        'url': 'https://www.greenbiz.com/rss.xml',
+        'type': 'climate_news',
+    },
+    {
+        'name': 'PV Magazine DE',
+        'url': 'https://www.pv-magazine.de/feed/',
+        'type': 'energy_news',
+    },
+    {
+        'name': 'Electrive',
+        'url': 'https://www.electrive.net/feed/',
+        'type': 'emobility_news',
+    },
+    {
+        'name': 'H2 View',
+        'url': 'https://www.h2-view.com/feed/',
+        'type': 'hydrogen_news',
+    },
+
+    # === European Startup Ecosystem ===
+    {
+        'name': 'EU-Startups',
+        'url': 'https://www.eu-startups.com/feed/',
+        'type': 'startup_news',
+    },
+    {
+        'name': 'Tech.eu',
+        'url': 'https://tech.eu/feed/',
+        'type': 'startup_news',
+    },
+    {
+        'name': 'Sifted',
+        'url': 'https://sifted.eu/feed',
+        'type': 'startup_news',
+    },
+
+    # === AI / Robotics Specific ===
+    {
+        'name': 'The Decoder',
+        'url': 'https://the-decoder.de/feed/',
+        'type': 'ai_news',
+    },
+    {
+        'name': 'Autonomes Fahren',
+        'url': 'https://www.autonomes-fahren.de/feed/',
+        'type': 'robotics_news',
     },
 ]
 
@@ -92,6 +208,11 @@ FUNDING_SIGNALS = [
     (r'\brisikokapital\b', 2),
     (r'\bneuer?\s+Fonds\b', 2),
 
+    # Climate funding signals
+    (r'\bklima(?:fonds|finanzierung|investition)\b', 2),
+    (r'\bgreen\s+(?:bond|funding|investment)\b', 2),
+    (r'\bimpact\s+(?:invest|fund)', 2),
+
     # Weak signals - need multiple to count
     (r'\bventure\s+capital\b', 1),
     (r'\binvestition\b', 1),
@@ -99,21 +220,115 @@ FUNDING_SIGNALS = [
     (r'\binvestor(?:en)?\b', 1),
 ]
 
-# Keywords indicating AI/robotics - use word boundaries to avoid false matches
-AI_ROBOTICS_PATTERNS = [
+# Keywords indicating AI/robotics/climate - use word boundaries to avoid false matches
+AI_ROBOTICS_CLIMATE_PATTERNS = [
+    # === AI Core ===
     r'\bkünstliche(?:r|n|s)?\s+intelligenz\b',
     r'\b(?:K|k)(?:I|i)[-\s](?:Startup|Unternehmen|Firma|Tool|Agent|Model|System|Funktion)',
     r'\bartificial\s+intelligence\b',
     r'\bmachine\s+learning\b',
+    r'\bmaschinelles\s+lernen\b',
     r'\bdeep\s+learning\b',
-    r'\brobotik\b',
-    r'\brobotics\b',
+    r'\bgenerative\s+(?:ai|ki)\b',
+    r'\blarge\s+language\s+model\b',
+    r'\bfoundation\s+model\b',
+    r'\bKI-\w+',  # KI-Startup, KI-Firma, KI-Agenten, etc.
+
+    # === NLP / Language AI ===
     r'\bnlp\b',
-    r'\bcomputer\s+vision\b',
     r'\bchatbot\b',
     r'\bllm\b',
-    r'\bgenerative\s+ai\b',
-    r'\bKI-\w+',  # KI-Startup, KI-Firma, KI-Agenten, etc.
+    r'\bconversational\s+ai\b',
+    r'\bsprachverarbeitung\b',
+    r'\bspracherkennung\b',
+    r'\bspeech\s+recognition\b',
+    r'\btext\s+mining\b',
+
+    # === Computer Vision ===
+    r'\bcomputer\s+vision\b',
+    r'\bbildverarbeitung\b',
+    r'\bbilderkennung\b',
+    r'\bobjekterkennung\b',
+    r'\bgesichtserkennung\b',
+    r'\blidar\b',
+    r'\bmachine\s+vision\b',
+    r'\bvideo\s*analytics\b',
+
+    # === Robotics ===
+    r'\brobotik\b',
+    r'\brobotics\b',
+    r'\brobotic\b',
+    r'\bcobot\b',
+    r'\bhumanoide?\b',
+    r'\bexoskelett\b',
+    r'\bdrone\b',
+    r'\bdrohne\b',
+    r'\buav\b',
+    r'\bserviceroboter\b',
+    r'\bindustrieroboter\b',
+
+    # === Automation / Autonomous ===
+    r'\bautonomous?\b',
+    r'\bautonome\s+(?:systeme|fahrzeuge|fahren)\b',
+    r'\bselbstfahrend\b',
+    r'\brpa\b',
+    r'\bprocess\s+automation\b',
+    r'\bindustrie\s+4\.0\b',
+    r'\bsmart\s+factory\b',
+    r'\bdigital(?:er)?\s+zwilling\b',
+    r'\bdigital\s+twin\b',
+
+    # === Data Science / ML ===
+    r'\bdata\s+science\b',
+    r'\bpredictive\s+(?:analytics|maintenance)\b',
+    r'\banomaly\s+detection\b',
+    r'\bmlops\b',
+    r'\bautoml\b',
+    r'\bedge\s+ai\b',
+
+    # === Climate Tech / Cleantech ===
+    r'\bcleantech\b',
+    r'\bgreentech\b',
+    r'\bclimate\s*tech\b',
+    r'\bklimatechnologie\b',
+    r'\berneuerbare\s+energie\b',
+    r'\brenewable\s+energy\b',
+    r'\bphotovoltaik\b',
+    r'\bsolar(?:energie|energy|panel|modul)\b',
+    r'\bwindenergie\b',
+    r'\bwind\s+(?:energy|turbine|kraft)\b',
+    r'\bwasserstoff\b',
+    r'\bhydrogen\b',
+    r'\bgrüne(?:r|n|s)?\s+wasserstoff\b',
+    r'\bgreen\s+hydrogen\b',
+    r'\bbrennstoffzelle\b',
+    r'\bfuel\s+cell\b',
+    r'\belektromobilität\b',
+    r'\belectric\s+vehicle\b',
+    r'\bladeinfrastruktur\b',
+    r'\benergiespeicher\b',
+    r'\benergy\s+storage\b',
+    r'\bbatterietechnologie\b',
+    r'\bsolid\s+state\s+battery\b',
+    r'\bfestkörperbatterie\b',
+    r'\bcarbon\s+capture\b',
+    r'\bco2-abscheidung\b',
+    r'\bdekarbonisierung\b',
+    r'\bdecarbonization\b',
+    r'\bkreislaufwirtschaft\b',
+    r'\bcircular\s+economy\b',
+    r'\bsmart\s+grid\b',
+    r'\bwärmepumpe\b',
+    r'\bheat\s+pump\b',
+    r'\bgeothermie\b',
+    r'\bagritech\b',
+    r'\bvertical\s+farming\b',
+    r'\bprecision\s+farming\b',
+    r'\bnet\s+zero\b',
+    r'\bklimaneutral\b',
+    r'\bnachhaltigkeit\b',
+    r'\bsustainab\w+\b',
+    r'\besg\b',
 ]
 
 # Words that should NOT be extracted as company names
@@ -196,10 +411,15 @@ class NewsMonitor:
         pub_date = self._get_text(item, 'pubDate')
         description = self._get_text(item, 'description')
 
+        # Atom feeds use <link href="..."/> attributes instead of text content
         if not link:
-            link_elem = item.find('link')
-            if link_elem is not None:
-                link = link_elem.get('href', '')
+            for ns_prefix in ['', '{http://www.w3.org/2005/Atom}']:
+                link_elem = item.find(ns_prefix + 'link')
+                if link_elem is not None:
+                    href = link_elem.get('href', '')
+                    if href:
+                        link = href
+                        break
 
         if not pub_date:
             pub_date = self._get_text(item, 'published') or self._get_text(item, 'updated')
@@ -276,10 +496,10 @@ class NewsMonitor:
         return score >= 2
 
     def is_ai_robotics_related(self, article: NewsArticle) -> bool:
-        """Check if article is about AI/robotics."""
+        """Check if article is about AI/robotics/climate tech."""
         text = f"{article.title} {article.description or ''}"
 
-        return any(re.search(p, text, re.IGNORECASE) for p in AI_ROBOTICS_PATTERNS)
+        return any(re.search(p, text, re.IGNORECASE) for p in AI_ROBOTICS_CLIMATE_PATTERNS)
 
     def extract_funding_info(self, article: NewsArticle) -> Optional[FundingMention]:
         """
