@@ -5,14 +5,15 @@ Runs periodically to:
 1. Fetch articles from German startup media
 2. Extract funding announcements
 3. Match companies to our database
-4. Create alerts for relevant news
+4. Create alerts for relevant news (funding + early-stage signals)
 """
 
+import re
 import logging
 from datetime import datetime
-from typing import Dict, Any
+from typing import Dict, Any, List
 
-from sources.news_monitor import NewsMonitor
+from sources.news_monitor import NewsMonitor, EARLY_STAGE_PATTERNS
 from processing.investor_matcher import InvestorMatcher
 from processing.filters import AIRoboticsFilter
 
@@ -23,7 +24,8 @@ class NewsMonitoringJob:
     """
     Monitor RSS feeds for startup news.
 
-    Detects funding announcements and new AI/robotics startups.
+    Detects funding announcements, AI/robotics startups, and early-stage signals
+    (grants, university spinoffs, accelerator entries).
     """
 
     def __init__(self, db, matcher: InvestorMatcher = None):
@@ -66,7 +68,11 @@ class NewsMonitoringJob:
 
             # Process funding-related articles
             for article in articles:
-                if self.monitor.is_funding_related(article):
+                is_funding = self.monitor.is_funding_related(article)
+                is_ai = self.monitor.is_ai_robotics_related(article)
+                is_early_stage = self.monitor.is_early_stage_signal(article)
+
+                if is_funding:
                     mention = self.monitor.extract_funding_info(article)
                     if mention:
                         stats['funding_mentions'] += 1
@@ -79,6 +85,7 @@ class NewsMonitoringJob:
                                 company_id=matched,
                                 article=article,
                                 mention=mention,
+                                alert_type='funding',
                             )
                             stats['new_alerts'] += 1
 
@@ -88,17 +95,34 @@ class NewsMonitoringJob:
                             if inv_matches:
                                 stats['investors_detected'] += 1
 
-                # Track AI/robotics articles
-                if self.monitor.is_ai_robotics_related(article):
+                # Track AI/robotics/climate articles
+                if is_ai:
                     stats['ai_articles'] += 1
 
-                    # Store article for later reference
-                    self._store_article(article)
-
                 # Track early-stage signals (grants, spinoffs, accelerators)
-                if self.monitor.is_early_stage_signal(article):
+                if is_early_stage:
                     stats['early_stage_articles'] += 1
-                    self._store_article(article)
+
+                    # Create alert for early-stage signal if company can be matched
+                    signals = self._extract_early_stage_signals(article)
+                    company_name = self._extract_company_from_early_stage(article)
+                    matched = self._match_company(company_name) if company_name else None
+                    if matched:
+                        self._record_early_stage_alert(
+                            company_id=matched,
+                            article=article,
+                            signals=signals,
+                        )
+                        stats['new_alerts'] += 1
+
+                # Store article if it's relevant (any of the three categories)
+                if is_ai or is_early_stage or is_funding:
+                    self._store_article(
+                        article,
+                        is_funding=is_funding,
+                        is_ai=is_ai,
+                        is_early_stage=is_early_stage,
+                    )
 
         except Exception as e:
             logger.exception("News monitoring failed: %s", e)
@@ -107,10 +131,11 @@ class NewsMonitoringJob:
         stats['duration_seconds'] = (datetime.utcnow() - started_at).total_seconds()
 
         logger.info(
-            "News monitoring complete: %d articles, %d funding mentions, %d AI articles",
+            "News monitoring complete: %d articles, %d funding mentions, %d AI articles, %d early-stage",
             stats['articles_fetched'],
             stats['funding_mentions'],
             stats['ai_articles'],
+            stats['early_stage_articles'],
         )
 
         return stats
@@ -130,39 +155,52 @@ class NewsMonitoringJob:
 
         return row['id'] if row else None
 
-    def _record_news_alert(self, company_id: int, article, mention):
+    def _extract_early_stage_signals(self, article) -> List[str]:
+        """Extract which early-stage patterns matched in the article."""
+        text = f"{article.title} {article.description or ''}"
+        matched = []
+        for pattern in EARLY_STAGE_PATTERNS:
+            m = re.search(pattern, text, re.IGNORECASE)
+            if m:
+                matched.append(m.group(0))
+        return matched
+
+    def _extract_company_from_early_stage(self, article) -> str:
+        """Try to extract a company name from early-stage article title."""
+        title = article.title or ''
+        # Common patterns: "CompanyName erhält EXIST Gründerstipendium"
+        # "CompanyName gewinnt Gründerpreis"
+        # "CompanyName: Ausgründung von TU München"
+        patterns = [
+            r'^([A-Z][A-Za-zÄÖÜäöüß0-9\.\-]+(?:\s+[A-Z][A-Za-zÄÖÜäöüß0-9\.\-]+)?)\s+(?:erhält|bekommt|gewinnt|sichert)',
+            r'^([A-Z][A-Za-zÄÖÜäöüß0-9\.\-]+(?:\s+[A-Z][A-Za-zÄÖÜäöüß0-9\.\-]+)?)\s*[:\-–]',
+            r'(?:Startup|Start-up|Ausgründung)\s+([A-Z][A-Za-zÄÖÜäöüß0-9\.\-]+(?:\s+[A-Z][A-Za-zÄÖÜäöüß0-9\.\-]+)?)',
+        ]
+        for p in patterns:
+            m = re.search(p, title)
+            if m:
+                name = m.group(1).strip()
+                # Filter out common false positives
+                if name.lower() not in ('das', 'die', 'der', 'ein', 'neue', 'deutsche', 'berliner'):
+                    return name
+        return None
+
+    def _record_news_alert(self, company_id: int, article, mention, alert_type: str = 'funding'):
         """Record a news alert for a company."""
         conn = self.db.conn
-
-        # Ensure alerts table exists
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS news_alerts (
-                id INTEGER PRIMARY KEY,
-                company_id INTEGER,
-                article_url TEXT,
-                article_title TEXT,
-                source TEXT,
-                alert_type TEXT,
-                amount REAL,
-                currency TEXT,
-                round_type TEXT,
-                investors TEXT,
-                created_at TEXT,
-                FOREIGN KEY (company_id) REFERENCES companies(id)
-            )
-        """)
 
         try:
             conn.execute("""
                 INSERT INTO news_alerts
                 (company_id, article_url, article_title, source, alert_type,
                  amount, currency, round_type, investors, created_at)
-                VALUES (?, ?, ?, ?, 'funding', ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 company_id,
                 article.url,
                 article.title,
                 article.source,
+                alert_type,
                 mention.amount,
                 mention.currency,
                 mention.round_type,
@@ -173,39 +211,47 @@ class NewsMonitoringJob:
         except Exception as e:
             logger.error("Failed to record news alert: %s", e)
 
-    def _store_article(self, article):
-        """Store article for reference."""
+    def _record_early_stage_alert(self, company_id: int, article, signals: List[str]):
+        """Record an early-stage signal alert for a company."""
         conn = self.db.conn
 
-        # Ensure articles table exists
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS news_articles (
-                id INTEGER PRIMARY KEY,
-                url TEXT UNIQUE,
-                title TEXT,
-                source TEXT,
-                published_date TEXT,
-                content_hash TEXT,
-                is_funding_related INTEGER,
-                is_ai_related INTEGER,
-                fetched_at TEXT
-            )
-        """)
+        try:
+            conn.execute("""
+                INSERT INTO news_alerts
+                (company_id, article_url, article_title, source, alert_type,
+                 early_stage_signals, created_at)
+                VALUES (?, ?, ?, ?, 'early_stage', ?, ?)
+            """, (
+                company_id,
+                article.url,
+                article.title,
+                article.source,
+                ','.join(signals),
+                datetime.utcnow().isoformat(),
+            ))
+            conn.commit()
+        except Exception as e:
+            logger.error("Failed to record early-stage alert: %s", e)
+
+    def _store_article(self, article, is_funding: bool = False, is_ai: bool = False, is_early_stage: bool = False):
+        """Store article for reference with classification flags."""
+        conn = self.db.conn
 
         try:
             conn.execute("""
                 INSERT OR IGNORE INTO news_articles
                 (url, title, source, published_date, content_hash,
-                 is_funding_related, is_ai_related, fetched_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                 is_funding_related, is_ai_related, is_early_stage_related, fetched_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 article.url,
                 article.title,
                 article.source,
                 article.published_date,
                 article.content_hash,
-                1 if self.monitor.is_funding_related(article) else 0,
-                1 if self.monitor.is_ai_robotics_related(article) else 0,
+                1 if is_funding else 0,
+                1 if is_ai else 0,
+                1 if is_early_stage else 0,
                 datetime.utcnow().isoformat(),
             ))
             conn.commit()

@@ -325,7 +325,92 @@ class Database:
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_investments_investor ON investments(investor_id)')
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_investments_date ON investments(investment_date)')
 
+        # News articles table (RSS feed articles)
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS news_articles (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                url TEXT UNIQUE,
+                title TEXT,
+                source TEXT,
+                published_date TEXT,
+                content_hash TEXT,
+                is_funding_related INTEGER DEFAULT 0,
+                is_ai_related INTEGER DEFAULT 0,
+                is_early_stage_related INTEGER DEFAULT 0,
+                fetched_at TEXT
+            )
+        ''')
+
+        # News alerts table (actionable signals from articles)
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS news_alerts (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                company_id INTEGER,
+                article_url TEXT,
+                article_title TEXT,
+                source TEXT,
+                alert_type TEXT,
+                amount REAL,
+                currency TEXT,
+                round_type TEXT,
+                investors TEXT,
+                early_stage_signals TEXT,
+                created_at TEXT,
+                FOREIGN KEY (company_id) REFERENCES companies(id)
+            )
+        ''')
+
+        # News indexes
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_news_articles_url ON news_articles(url)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_news_articles_source ON news_articles(source)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_news_articles_early_stage ON news_articles(is_early_stage_related)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_news_alerts_company ON news_alerts(company_id)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_news_alerts_type ON news_alerts(alert_type)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_news_alerts_created ON news_alerts(created_at)')
+
+        # Job runs table (scheduler job history)
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS job_runs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                job_type TEXT NOT NULL,
+                started_at TEXT,
+                completed_at TEXT,
+                status TEXT DEFAULT 'running',
+                companies_found INTEGER DEFAULT 0,
+                companies_new INTEGER DEFAULT 0,
+                requests_used INTEGER DEFAULT 0
+            )
+        ''')
+
         self.conn.commit()
+
+        # Migration: add is_early_stage_related column if table exists without it
+        self._migrate_news_tables(cursor)
+
+    def _migrate_news_tables(self, cursor):
+        """Add missing columns to news tables (safe migration)."""
+        try:
+            # Check if is_early_stage_related column exists
+            cursor.execute("PRAGMA table_info(news_articles)")
+            columns = [row[1] for row in cursor.fetchall()]
+            if 'is_early_stage_related' not in columns and columns:
+                cursor.execute(
+                    "ALTER TABLE news_articles ADD COLUMN is_early_stage_related INTEGER DEFAULT 0"
+                )
+                self.conn.commit()
+        except Exception:
+            pass  # Table might not exist yet or column already added
+
+        try:
+            cursor.execute("PRAGMA table_info(news_alerts)")
+            columns = [row[1] for row in cursor.fetchall()]
+            if 'early_stage_signals' not in columns and columns:
+                cursor.execute(
+                    "ALTER TABLE news_alerts ADD COLUMN early_stage_signals TEXT"
+                )
+                self.conn.commit()
+        except Exception:
+            pass
 
     # =========================================================================
     # Company Operations
@@ -912,6 +997,38 @@ class Database:
         stats['startup_score_distribution'] = dict(cursor.fetchall())
 
         return stats
+
+    # =========================================================================
+    # News Operations
+    # =========================================================================
+
+    def get_news_alerts(
+        self,
+        alert_type: Optional[str] = None,
+        limit: int = 100,
+    ) -> List[Dict]:
+        """Get news alerts, optionally filtered by type."""
+        cursor = self.conn.cursor()
+        if alert_type:
+            cursor.execute(
+                "SELECT * FROM news_alerts WHERE alert_type = ? ORDER BY created_at DESC LIMIT ?",
+                (alert_type, limit)
+            )
+        else:
+            cursor.execute(
+                "SELECT * FROM news_alerts ORDER BY created_at DESC LIMIT ?",
+                (limit,)
+            )
+        return [dict(row) for row in cursor.fetchall()]
+
+    def get_early_stage_articles(self, limit: int = 100) -> List[Dict]:
+        """Get articles flagged as early-stage related."""
+        cursor = self.conn.cursor()
+        cursor.execute(
+            "SELECT * FROM news_articles WHERE is_early_stage_related = 1 ORDER BY fetched_at DESC LIMIT ?",
+            (limit,)
+        )
+        return [dict(row) for row in cursor.fetchall()]
 
     def close(self):
         """Close database connection."""
