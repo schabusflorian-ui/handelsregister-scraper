@@ -323,6 +323,10 @@ class NewsMonitoringJob:
         if len(name.split()) == 1 and len(name) < 4:
             return False
 
+        # Reject placeholder names
+        if name.lower() in ('unknown', 'unbekannt'):
+            return False
+
         # Filter out common false positives from article titles
         stopwords = {
             'das', 'die', 'der', 'ein', 'eine', 'neue', 'neues', 'neuer',
@@ -333,12 +337,16 @@ class NewsMonitoringJob:
             'investor', 'investoren', 'gründer', 'founder',
             'warum', 'wie', 'was', 'wer', 'welche', 'diese',
             'update', 'news', 'breaking', 'exklusiv', 'analyse',
+            # Countries and regions
+            'deutschland', 'germany', 'europa', 'europe',
+            'kroatien', 'frankreich', 'österreich', 'schweiz',
+            'italien', 'spanien', 'polen', 'china', 'indien',
+            'bayern', 'sachsen', 'hessen', 'brandenburg',
+            # Generic words
+            'incubation', 'investment', 'finanzierung', 'förderung',
+            'prozent', 'umsatz',
         }
         if name.lower() in stopwords:
-            return False
-
-        # Must start with uppercase (company names in German always do)
-        if not name[0].isupper():
             return False
 
         return True

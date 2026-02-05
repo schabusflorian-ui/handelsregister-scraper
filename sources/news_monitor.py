@@ -621,6 +621,9 @@ class NewsMonitor:
         # Extract the first/main deal
         deals = re.split(r'\s*[–—]\s*|\s*\+\+\+\s*', text)
 
+        # Name fragment allowing lowercase starts (one.five, co-reactive, etc.)
+        _n = r'[A-Za-z][A-Za-z0-9\.\-]*(?:\s+[A-Za-z][A-Za-z0-9\.\-]+)*'
+
         # Find the first segment with a funding amount
         for deal in deals:
             deal = deal.strip()
@@ -629,50 +632,50 @@ class NewsMonitor:
 
             # Pattern: "CompanyName erhält/sammelt X Millionen"
             match = re.search(
-                r'([A-Z][A-Za-z0-9\.\-]+(?:\s+[A-Z][A-Za-z0-9\.\-]+)*)\s+'
-                r'(?:erhält|sammelt|bekommt|sichert sich|schließt)\s+'
+                rf'({_n})\s+'
+                r'(?:erhält|sammelt|bekommt|sichert\s+sich|schließt)\s+'
                 r'(\d+(?:[,\.]\d+)?)\s*(?:Millionen|Mio\.?)',
                 deal
             )
             if match:
                 company = match.group(1).strip()
-                amount = float(match.group(2).replace(',', '.')) * 1_000_000
-
-                return FundingMention(
-                    company_name=company,
-                    investors=[],
-                    amount=amount,
-                    currency='EUR',
-                    round_type=self._extract_round_type(deal),
-                    article_url=article.url,
-                    article_title=article.title,
-                    source=article.source,
-                    extracted_at=datetime.utcnow().isoformat(),
-                    confidence=0.9,
-                )
+                if self._is_valid_company_name(company):
+                    amount = float(match.group(2).replace(',', '.')) * 1_000_000
+                    return FundingMention(
+                        company_name=company,
+                        investors=[],
+                        amount=amount,
+                        currency='EUR',
+                        round_type=self._extract_round_type(deal),
+                        article_url=article.url,
+                        article_title=article.title,
+                        source=article.source,
+                        extracted_at=datetime.utcnow().isoformat(),
+                        confidence=0.9,
+                    )
 
             # Pattern: "CompanyName sammelt X Millionen ein"
             match = re.search(
-                r'([A-Z][A-Za-z0-9\.\-]+(?:\s+[A-Z][A-Za-z0-9\.\-]+)*)\s+'
+                rf'({_n})\s+'
                 r'sammelt\s+(\d+(?:[,\.]\d+)?)\s*(?:Millionen|Mio\.?)\s+ein',
                 deal
             )
             if match:
                 company = match.group(1).strip()
-                amount = float(match.group(2).replace(',', '.')) * 1_000_000
-
-                return FundingMention(
-                    company_name=company,
-                    investors=[],
-                    amount=amount,
-                    currency='EUR',
-                    round_type=self._extract_round_type(deal),
-                    article_url=article.url,
-                    article_title=article.title,
-                    source=article.source,
-                    extracted_at=datetime.utcnow().isoformat(),
-                    confidence=0.9,
-                )
+                if self._is_valid_company_name(company):
+                    amount = float(match.group(2).replace(',', '.')) * 1_000_000
+                    return FundingMention(
+                        company_name=company,
+                        investors=[],
+                        amount=amount,
+                        currency='EUR',
+                        round_type=self._extract_round_type(deal),
+                        article_url=article.url,
+                        article_title=article.title,
+                        source=article.source,
+                        extracted_at=datetime.utcnow().isoformat(),
+                        confidence=0.9,
+                    )
 
         return None
 
@@ -694,11 +697,11 @@ class NewsMonitor:
             # Skip the header
             if '#StartupTicker' in segment:
                 continue
-            # Extract company-like name
-            match = re.search(r'([A-Z][A-Za-z0-9\.\-]+(?:\s+[A-Z][A-Za-z0-9\.\-]+)*)', segment)
+            # Extract company-like name (allow lowercase starts for modern names)
+            match = re.search(r'([A-Za-z][A-Za-z0-9\.\-]+(?:\s+[A-Za-z][A-Za-z0-9\.\-]+)*)', segment)
             if match:
                 name = match.group(1).strip()
-                if name.lower() not in GERMAN_STOPWORDS and len(name) >= 3:
+                if self._is_valid_company_name(name) and len(name) >= 3:
                     return FundingMention(
                         company_name=name,
                         investors=[],
@@ -753,7 +756,7 @@ class NewsMonitor:
             confidence = 0.5
 
         return FundingMention(
-            company_name=company_name or 'Unknown',
+            company_name=company_name or '',
             investors=investors,
             amount=amount,
             currency=currency,
@@ -812,27 +815,37 @@ class NewsMonitor:
         Extract company name from funding article text.
 
         Uses verb-context patterns specific to German funding headlines.
+        Handles both uppercase and lowercase startup names (e.g. one.five, co-reactive).
         """
+        # Name fragment: 1-4 words, allows lowercase starts, dots, hyphens
+        # Limited to max 4 words to avoid grabbing sentence fragments
+        _w = r'[A-Za-z][A-Za-z0-9\.\-]*'
+        _n = rf'{_w}(?:\s+{_w}){{0,3}}'
+
         # Patterns ordered by specificity (most specific first)
         patterns = [
+            # "CompanyName: X Mio" / "CompanyName: Seed-Runde" (colon headlines)
+            rf'^({_n})\s*:\s+(?:\d|Seed|Series|Pre|Angel|Grant)',
             # "CompanyName erhält/sammelt/bekommt X Millionen"
-            r'([A-Z][A-Za-z0-9\.\-]+(?:\s+[A-Z][A-Za-z0-9\.\-]+)*)\s+(?:erhält|sammelt|bekommt|sichert sich|schließt)',
+            rf'({_n})\s+(?:erhält|sammelt|bekommt|sichert\s+sich|schließt)',
             # "hat CompanyName ... eingesammelt" / "hat CompanyName ... geschlossen"
-            r'hat\s+([A-Z][A-Za-z0-9\.\-]+(?:\s+[A-Z][A-Za-z0-9\.\-]+)*)\s+.*?(?:eingesammelt|geschlossen|erhalten|bekommen)',
+            rf'hat\s+({_n})\s+.*?(?:eingesammelt|geschlossen|erhalten|bekommen)',
             # "CompanyName hat ... eingesammelt"
-            r'([A-Z][A-Za-z0-9\.\-]+(?:\s+[A-Z][A-Za-z0-9\.\-]+)*)\s+(?:hat|haben)\s+.*eingesammelt',
-            # "X raises/secures"
-            r'([A-Z][A-Za-z0-9\.\-]+(?:\s+[A-Z][A-Za-z0-9\.\-]+)*)\s+(?:raises|secures|closes)',
+            rf'({_n})\s+(?:hat|haben)\s+.*eingesammelt',
+            # "X raises/secures/closes"
+            rf'({_n})\s+(?:raises|secures|closes)',
             # "Startup X" / "Fintech X" / "KI-Startup X"
-            r'(?:Startup|Fintech|Healthtech|SaaS|KI-Startup|AI-Startup)\s+([A-Z][A-Za-z0-9\.\-]+(?:\s+[A-Z][A-Za-z0-9\.\-]+)*)',
+            rf'(?:Startup|Start-up|Fintech|Healthtech|Insurtech|SaaS|KI-Startup|AI-Startup|Cleantech-Startup|HealthTech-Startup)\s+({_n})',
             # "Gründer von X" / "Gründer-Team von X"
-            r'(?:Gründer(?:-Team)?|Founder)\s+(?:von|of)\s+([A-Z][A-Za-z0-9\.\-]+)',
+            rf'(?:Gründer(?:-Team)?|Founder)\s+(?:von|of)\s+({_n})',
+            # "Series/Seed/Runde für CompanyName" (funding context only)
+            rf'(?:Series\s+\w|Seed|Finanzierung|Runde)\s+für\s+({_n})',
             # "bei X" in funding context, e.g. "investiert bei CompanyName"
-            r'investier\w*\s+(?:bei|in)\s+([A-Z][A-Za-z0-9\.\-]+(?:\s+[A-Z][A-Za-z0-9\.\-]+)*)',
+            rf'investier\w*\s+(?:bei|in)\s+({_n})',
         ]
 
         for pattern in patterns:
-            match = re.search(pattern, text)
+            match = re.search(pattern, text, re.MULTILINE)
             if match:
                 name = match.group(1).strip()
                 # Validate: not a stopword, not too short
@@ -846,21 +859,56 @@ class NewsMonitor:
         if not name or len(name) < 2:
             return False
 
+        # Reject placeholder names
+        if name.lower() in ('unknown', 'unbekannt'):
+            return False
+
         # Reject German stopwords and common non-company words
         if name.lower() in GERMAN_STOPWORDS:
             return False
 
-        # Reject single common German words (nouns are capitalized in German)
-        single_word_blacklist = {
-            'der', 'die', 'das', 'ein', 'kein', 'maschmeyers',
+        # Reject common non-company words (German nouns, adjectives, geographic)
+        blacklist = {
+            'der', 'die', 'das', 'ein', 'kein', 'sein', 'ihr',
+            'maschmeyers', 'ehemalige',
             'europäische', 'deutsche', 'berliner', 'münchner',
-            'frühphasen', 'bremer',
+            'frühphasen', 'bremer', 'hamburger', 'kölner',
+            # Countries and regions that appear in headlines
+            'deutschland', 'germany', 'europa', 'europe',
+            'kroatien', 'frankreich', 'österreich', 'schweiz',
+            'italien', 'spanien', 'polen', 'china', 'indien',
+            'bayern', 'sachsen', 'hessen', 'brandenburg',
+            # Generic words that slip through
+            'incubation', 'investment', 'finanzierung', 'förderung',
+            'millionen', 'milliarden', 'prozent', 'umsatz',
+            'wissenschaftler', 'solche',
         }
-        if name.lower() in single_word_blacklist:
+        if name.lower() in blacklist:
             return False
 
-        # Reject if all lowercase or single character
-        if name.islower() or len(name) <= 1:
+        # Single character
+        if len(name) <= 1:
+            return False
+
+        # Reject names that are clearly sentence fragments (contain articles/prepositions)
+        words = name.lower().split()
+        fragment_words = {'der', 'die', 'das', 'den', 'dem', 'des',
+                         'ein', 'eine', 'einer', 'einem', 'einen',
+                         'und', 'oder', 'aber', 'sein', 'ihr', 'alle',
+                         'von', 'vom', 'zum', 'zur', 'mit', 'für',
+                         'wird', 'werden', 'wurde', 'hat', 'haben',
+                         'damit', 'seine', 'seiner', 'seinen',
+                         'the', 'a', 'an', 'and', 'for', 'with',
+                         'based', 'french', 'german', 'dutch',
+                         'lithuanian', 'austrian', 'swiss',
+                         'startup', 'investor', 'company',
+                         'platform', 'analysis', 'tech', 'climate',
+                         'skaliert', 'running'}
+        if len(words) > 1 and any(w in fragment_words for w in words):
+            return False
+
+        # Reject if too many words (likely a sentence, not a name)
+        if len(words) > 3:
             return False
 
         return True
