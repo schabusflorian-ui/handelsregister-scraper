@@ -33,6 +33,7 @@ from scheduler.jobs.csv_export_job import CSVExportJob
 from scheduler.jobs.investor_detection_job import InvestorDetectionJob
 from scheduler.jobs.news_job import NewsMonitoringJob
 from scheduler.jobs.website_job import WebsiteFinderJob
+from scheduler.jobs.website_scrape_job import WebsiteScrapeJob
 
 logger = logging.getLogger(__name__)
 
@@ -314,6 +315,30 @@ class HandelsregisterScheduler:
         finally:
             db.close()
 
+    def _run_website_scrape_job(self):
+        """Execute website scrape job wrapper."""
+        logger.info("Starting website scrape job")
+
+        db = Database(self.db_path)
+        try:
+            job = WebsiteScrapeJob(db=db, batch_size=30)
+            stats = job.run()
+
+            logger.info(
+                "Website scrape completed: %d checked, %d enriched, %d descriptions, %d investors",
+                stats['companies_checked'],
+                stats['companies_enriched'],
+                stats['descriptions_added'],
+                stats['investors_detected'],
+            )
+
+            self._log_job_completion('website_scrape', stats, db)
+
+        except Exception as e:
+            logger.exception("Website scrape job failed: %s", e)
+        finally:
+            db.close()
+
     def _log_job_completion(self, job_type: str, stats: Dict[str, Any], db: Database):
         """Log job completion to database."""
         try:
@@ -408,10 +433,20 @@ class HandelsregisterScheduler:
             replace_existing=True,
         )
 
+        # Website scrape job: daily at 10 AM UTC (after website finder)
+        # Scrapes found websites for company descriptions, tech keywords, etc.
+        self.scheduler.add_job(
+            self._run_website_scrape_job,
+            trigger=CronTrigger(hour=10, minute=0),
+            id='website_scrape_job',
+            name='Website Scrape Job',
+            replace_existing=True,
+        )
+
         logger.info(
             "Jobs configured: discovery every %d hours, backfill 3AM+3PM, enrichment 4AM, "
             "announcements 5AM, CSV export 6AM, investor detection 7AM, news monitoring 8AM, "
-            "website finder 9AM",
+            "website finder 9AM, website scrape 10AM",
             self.discovery_interval_hours
         )
 
