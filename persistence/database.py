@@ -124,6 +124,8 @@ class Database:
                 state TEXT,
                 purpose TEXT,
                 website TEXT,
+                website_confidence REAL,
+                website_lookup_at TEXT,
                 capital_amount REAL,
                 capital_currency TEXT DEFAULT 'EUR',
                 ai_robotics_score INTEGER DEFAULT 0,
@@ -386,6 +388,7 @@ class Database:
 
         # Migration: add is_early_stage_related column if table exists without it
         self._migrate_news_tables(cursor)
+        self._migrate_companies_table(cursor)
 
     def _migrate_news_tables(self, cursor):
         """Add missing columns to news tables (safe migration)."""
@@ -409,6 +412,21 @@ class Database:
                     "ALTER TABLE news_alerts ADD COLUMN early_stage_signals TEXT"
                 )
                 self.conn.commit()
+        except Exception:
+            pass
+
+    def _migrate_companies_table(self, cursor):
+        """Add missing columns to companies table (safe migration)."""
+        try:
+            cursor.execute("PRAGMA table_info(companies)")
+            columns = [row[1] for row in cursor.fetchall()]
+            for col, col_type in [
+                ('website_confidence', 'REAL'),
+                ('website_lookup_at', 'TEXT'),
+            ]:
+                if col not in columns and columns:
+                    cursor.execute(f"ALTER TABLE companies ADD COLUMN {col} {col_type}")
+            self.conn.commit()
         except Exception:
             pass
 

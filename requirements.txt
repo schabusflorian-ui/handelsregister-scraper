@@ -26,5 +26,8 @@ sqlalchemy>=2.0.0  # Required by APScheduler for job persistence
 # Fuzzy matching for investor detection
 rapidfuzz>=3.0.0
 
+# DuckDuckGo search for website discovery
+duckduckgo-search>=8.0.0  # also available as 'ddgs'
+
 # Optional: handelsregister.ai API for enrichment (paid)
 # handelsregister>=0.1.0
