@@ -52,6 +52,7 @@ class NewsMonitoringJob:
             'articles_fetched': 0,
             'funding_mentions': 0,
             'ai_articles': 0,
+            'early_stage_articles': 0,
             'companies_matched': 0,
             'investors_detected': 0,
             'new_alerts': 0,
@@ -92,6 +93,11 @@ class NewsMonitoringJob:
                     stats['ai_articles'] += 1
 
                     # Store article for later reference
+                    self._store_article(article)
+
+                # Track early-stage signals (grants, spinoffs, accelerators)
+                if self.monitor.is_early_stage_signal(article):
+                    stats['early_stage_articles'] += 1
                     self._store_article(article)
 
         except Exception as e:

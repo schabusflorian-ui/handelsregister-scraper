@@ -268,10 +268,11 @@ class HandelsregisterScheduler:
             stats = job.run()
 
             logger.info(
-                "News monitoring completed: %d articles, %d funding mentions, %d AI articles",
+                "News monitoring completed: %d articles, %d funding, %d AI, %d early-stage",
                 stats['articles_fetched'],
                 stats['funding_mentions'],
                 stats['ai_articles'],
+                stats.get('early_stage_articles', 0),
             )
 
             self._log_job_completion('news_monitoring', stats, db)

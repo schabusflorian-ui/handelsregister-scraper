@@ -13575,3 +13575,608 @@ investors:
   - Stephanie Petrick
   - Lukas Adams
   - Hermann Falk
+
+# ============================================================================
+# GERMAN PUBLIC GRANT PROGRAMS (Pre-Seed / Pre-Founding)
+# ============================================================================
+
+- name: EXIST Gründerstipendium
+  type: grant
+  website: https://www.exist.de
+  headquarters: Berlin
+  stage_focus:
+  - pre_seed
+  sector_focus:
+  - all
+  aliases:
+  - EXIST
+  - EXIST Gründerstipendium
+  - EXIST Research Transfer
+  - EXIST Forschungstransfer
+  - EXIST Gründungskultur
+
+- name: EXIST Forschungstransfer
+  type: grant
+  website: https://www.exist.de
+  headquarters: Berlin
+  stage_focus:
+  - pre_seed
+  - seed
+  sector_focus:
+  - deeptech
+  - research
+  aliases:
+  - EXIST Forschungstransfer
+  - EXIST Research Transfer
+
+- name: BMBF
+  type: grant
+  website: https://www.bmbf.de
+  headquarters: Berlin
+  stage_focus:
+  - pre_seed
+  - seed
+  sector_focus:
+  - research
+  - deeptech
+  - ai
+  - climate
+  aliases:
+  - BMBF
+  - Bundesministerium für Bildung und Forschung
+  - Federal Ministry of Education and Research
+
+- name: BMWK
+  type: grant
+  website: https://www.bmwk.de
+  headquarters: Berlin
+  stage_focus:
+  - pre_seed
+  - seed
+  sector_focus:
+  - all
+  aliases:
+  - BMWK
+  - BMWi
+  - Bundesministerium für Wirtschaft und Klimaschutz
+  - Bundesministerium für Wirtschaft und Energie
+
+- name: INVEST Zuschuss
+  type: grant
+  website: https://www.bmwk.de/invest
+  headquarters: Berlin
+  stage_focus:
+  - pre_seed
+  - seed
+  sector_focus:
+  - all
+  aliases:
+  - INVEST
+  - INVEST Zuschuss
+  - INVEST Zuschuss für Wagniskapital
+
+- name: Gründungszuschuss (Arbeitsagentur)
+  type: grant
+  website: https://www.arbeitsagentur.de
+  headquarters: Nürnberg
+  stage_focus:
+  - pre_seed
+  sector_focus:
+  - all
+  aliases:
+  - Gründungszuschuss
+  - Existenzgründerzuschuss
+
+- name: ERP-Gründerkredit
+  type: grant
+  website: https://www.kfw.de
+  headquarters: Frankfurt
+  stage_focus:
+  - pre_seed
+  - seed
+  sector_focus:
+  - all
+  aliases:
+  - ERP-Gründerkredit
+  - ERP Gründerkredit
+  - KfW Gründerkredit
+  - ERP-Gründerkredit StartGeld
+
+- name: ZIM (Zentrales Innovationsprogramm Mittelstand)
+  type: grant
+  website: https://www.zim.de
+  headquarters: Berlin
+  stage_focus:
+  - seed
+  - series_a
+  sector_focus:
+  - all
+  aliases:
+  - ZIM
+  - Zentrales Innovationsprogramm Mittelstand
+
+- name: EIC Accelerator
+  type: grant
+  website: https://eic.ec.europa.eu
+  headquarters: Brussels
+  stage_focus:
+  - seed
+  - series_a
+  sector_focus:
+  - deeptech
+  - climate
+  aliases:
+  - EIC Accelerator
+  - EIC
+  - European Innovation Council
+  - EIC Pathfinder
+
+- name: InvestEU
+  type: grant
+  website: https://investeu.europa.eu
+  headquarters: Brussels
+  stage_focus:
+  - seed
+  - series_a
+  - series_b
+  sector_focus:
+  - climate
+  - digital
+  aliases:
+  - InvestEU
+  - Invest EU
+
+- name: Horizon Europe
+  type: grant
+  website: https://ec.europa.eu/horizon-europe
+  headquarters: Brussels
+  stage_focus:
+  - pre_seed
+  - seed
+  sector_focus:
+  - research
+  - deeptech
+  - climate
+  aliases:
+  - Horizon Europe
+  - Horizon 2020
+  - EU Horizon
+
+# ============================================================================
+# GERMAN REGIONAL GRANT PROGRAMS
+# ============================================================================
+
+- name: Berliner Startup Stipendium
+  type: grant
+  website: https://www.berlin.de
+  headquarters: Berlin
+  stage_focus:
+  - pre_seed
+  sector_focus:
+  - all
+  aliases:
+  - Berliner Startup Stipendium
+  - BSS
+
+- name: NRW.Start-up Transfer
+  type: grant
+  website: https://www.nrw.de
+  headquarters: Düsseldorf
+  stage_focus:
+  - pre_seed
+  sector_focus:
+  - research
+  aliases:
+  - NRW.Start-up Transfer
+  - NRW Start-up
+
+- name: BayTOU
+  type: grant
+  website: https://www.lfa.de
+  headquarters: Munich
+  stage_focus:
+  - pre_seed
+  - seed
+  sector_focus:
+  - deeptech
+  aliases:
+  - BayTOU
+  - Bayerisches Technologieförderungsprogramm
+
+- name: Innovationsstarter Hamburg
+  type: grant
+  website: https://www.innovationsstarter.com
+  headquarters: Hamburg
+  stage_focus:
+  - pre_seed
+  - seed
+  sector_focus:
+  - all
+  aliases:
+  - Innovationsstarter Hamburg
+  - Innovationsstarter Fonds Hamburg
+  - IFH
+
+# ============================================================================
+# GERMAN ANGEL NETWORKS
+# ============================================================================
+
+- name: Business Angels Netzwerk Deutschland (BAND)
+  type: angel_network
+  website: https://www.business-angels.de
+  headquarters: Berlin
+  stage_focus:
+  - pre_seed
+  - seed
+  sector_focus:
+  - all
+  aliases:
+  - BAND
+  - Business Angels Netzwerk Deutschland
+  - Business Angels Deutschland
+
+- name: Business Angels FrankfurtRheinMain
+  type: angel_network
+  website: https://www.ba-frm.de
+  headquarters: Frankfurt
+  stage_focus:
+  - pre_seed
+  - seed
+  sector_focus:
+  - fintech
+  - deeptech
+  aliases:
+  - Business Angels FrankfurtRheinMain
+  - BA-FRM
+
+- name: Business Angels Region Stuttgart (BARS)
+  type: angel_network
+  website: https://www.bars-ev.de
+  headquarters: Stuttgart
+  stage_focus:
+  - pre_seed
+  - seed
+  sector_focus:
+  - deeptech
+  - industrial
+  aliases:
+  - BARS
+  - Business Angels Region Stuttgart
+
+- name: Business Angel Netzwerk München (BANM)
+  type: angel_network
+  website: https://www.banm.de
+  headquarters: Munich
+  stage_focus:
+  - pre_seed
+  - seed
+  sector_focus:
+  - all
+  aliases:
+  - BANM
+  - Business Angel Netzwerk München
+
+- name: Berlin Startup Academy Angel Network
+  type: angel_network
+  headquarters: Berlin
+  stage_focus:
+  - pre_seed
+  - seed
+  sector_focus:
+  - all
+  aliases:
+  - Berlin Startup Academy
+
+- name: Angel Invest Ventures
+  type: angel
+  headquarters: Berlin
+  stage_focus:
+  - pre_seed
+  - seed
+  sector_focus:
+  - all
+  aliases:
+  - Angel Invest
+  - Angel Invest Ventures
+
+# ============================================================================
+# UNIVERSITY INCUBATORS & STARTUP PROGRAMS
+# ============================================================================
+
+- name: UnternehmerTUM
+  type: incubator
+  website: https://www.unternehmertum.de
+  headquarters: Munich
+  stage_focus:
+  - pre_seed
+  - seed
+  sector_focus:
+  - deeptech
+  - ai
+  - climate
+  aliases:
+  - UnternehmerTUM
+  - TUM Venture Labs
+  - TU München Entrepreneurship
+
+- name: RWTH Aachen Innovation
+  type: incubator
+  website: https://www.rwth-innovation.de
+  headquarters: Aachen
+  stage_focus:
+  - pre_seed
+  sector_focus:
+  - deeptech
+  - industrial
+  aliases:
+  - RWTH Innovation
+  - RWTH Aachen Innovation
+
+- name: KIT Gründerschmiede
+  type: incubator
+  website: https://www.kit-gruenderschmiede.de
+  headquarters: Karlsruhe
+  stage_focus:
+  - pre_seed
+  sector_focus:
+  - deeptech
+  - energy
+  aliases:
+  - KIT Gründerschmiede
+  - KIT Innovation
+  - KIT Venture Hub
+
+- name: Cyber Valley Start-up Network
+  type: incubator
+  website: https://cyber-valley.de
+  headquarters: Tübingen
+  stage_focus:
+  - pre_seed
+  - seed
+  sector_focus:
+  - ai
+  - robotics
+  aliases:
+  - Cyber Valley
+  - Cyber Valley Start-up Network
+
+- name: Science & Startups (Charité / BIH)
+  type: incubator
+  website: https://www.bihealth.org
+  headquarters: Berlin
+  stage_focus:
+  - pre_seed
+  sector_focus:
+  - healthtech
+  - biotech
+  aliases:
+  - Science & Startups
+  - BIH Innovation
+  - Charité Entrepreneurship
+
+- name: SpinLab Leipzig
+  type: incubator
+  website: https://www.spinlab.co
+  headquarters: Leipzig
+  stage_focus:
+  - pre_seed
+  - seed
+  sector_focus:
+  - all
+  aliases:
+  - SpinLab
+  - SpinLab Leipzig
+  - HHL SpinLab
+
+- name: StartUpSecure (ATHENE)
+  type: incubator
+  website: https://startupsecure.de
+  headquarters: Darmstadt
+  stage_focus:
+  - pre_seed
+  sector_focus:
+  - cybersecurity
+  aliases:
+  - StartUpSecure
+  - ATHENE StartUpSecure
+
+- name: DKFZ Innovation Management
+  type: incubator
+  website: https://www.dkfz.de
+  headquarters: Heidelberg
+  stage_focus:
+  - pre_seed
+  sector_focus:
+  - biotech
+  - healthtech
+  aliases:
+  - DKFZ Innovation
+  - DKFZ
+
+- name: Max Planck Innovation
+  type: incubator
+  website: https://www.max-planck-innovation.de
+  headquarters: Munich
+  stage_focus:
+  - pre_seed
+  sector_focus:
+  - deeptech
+  - research
+  aliases:
+  - Max Planck Innovation
+  - MPG Innovation
+
+- name: Fraunhofer Venture
+  type: incubator
+  website: https://www.fraunhoferventure.de
+  headquarters: Munich
+  stage_focus:
+  - pre_seed
+  - seed
+  sector_focus:
+  - deeptech
+  - industrial
+  - ai
+  aliases:
+  - Fraunhofer Venture
+  - Fraunhofer
+
+- name: Helmholtz Enterprise
+  type: incubator
+  website: https://www.helmholtz.de
+  headquarters: Berlin
+  stage_focus:
+  - pre_seed
+  sector_focus:
+  - deeptech
+  - climate
+  - energy
+  aliases:
+  - Helmholtz Enterprise
+  - Helmholtz Innovation
+
+- name: Leibniz Transfer
+  type: incubator
+  website: https://www.leibniz-gemeinschaft.de
+  headquarters: Berlin
+  stage_focus:
+  - pre_seed
+  sector_focus:
+  - research
+  aliases:
+  - Leibniz Transfer
+  - Leibniz Innovation
+
+# ============================================================================
+# CORPORATE STARTUP PROGRAMS (Pre-Seed / Early Stage)
+# ============================================================================
+
+- name: SAP.iO
+  type: accelerator
+  website: https://sap.io
+  headquarters: Walldorf
+  stage_focus:
+  - pre_seed
+  - seed
+  sector_focus:
+  - enterprise
+  - ai
+  aliases:
+  - SAP.iO
+  - SAP iO
+  - SAP.iO Foundry
+
+- name: Siemens Technology Accelerator
+  type: accelerator
+  website: https://new.siemens.com
+  headquarters: Munich
+  stage_focus:
+  - pre_seed
+  - seed
+  sector_focus:
+  - industrial
+  - energy
+  - deeptech
+  aliases:
+  - Siemens Technology Accelerator
+  - STA
+  - Siemens Xcelerator
+
+- name: Bosch Startup Harbour
+  type: accelerator
+  website: https://www.bosch.com
+  headquarters: Ludwigsburg
+  stage_focus:
+  - pre_seed
+  - seed
+  sector_focus:
+  - iot
+  - mobility
+  - industrial
+  aliases:
+  - Bosch Startup Harbour
+  - Robert Bosch Startup
+
+- name: BASF Chemovator
+  type: incubator
+  website: https://chemovator.com
+  headquarters: Ludwigshafen
+  stage_focus:
+  - pre_seed
+  sector_focus:
+  - chemistry
+  - sustainability
+  aliases:
+  - Chemovator
+  - BASF Chemovator
+
+- name: Bayer G4A
+  type: accelerator
+  website: https://g4a.health
+  headquarters: Berlin
+  stage_focus:
+  - pre_seed
+  - seed
+  sector_focus:
+  - healthtech
+  - biotech
+  aliases:
+  - Bayer G4A
+  - G4A
+  - Grants4Apps
+
+- name: BMW Startup Garage
+  type: accelerator
+  website: https://www.bmwstartupgarage.com
+  headquarters: Munich
+  stage_focus:
+  - pre_seed
+  - seed
+  sector_focus:
+  - mobility
+  - autonomy
+  aliases:
+  - BMW Startup Garage
+
+- name: Porsche Digital Lab
+  type: accelerator
+  website: https://www.porsche.digital
+  headquarters: Ludwigsburg
+  stage_focus:
+  - pre_seed
+  - seed
+  sector_focus:
+  - mobility
+  - ai
+  aliases:
+  - Porsche Digital Lab
+  - Porsche Digital
+
+- name: Deutsche Bahn mindbox
+  type: accelerator
+  website: https://www.mindboxberlin.com
+  headquarters: Berlin
+  stage_focus:
+  - pre_seed
+  - seed
+  sector_focus:
+  - mobility
+  - logistics
+  aliases:
+  - DB mindbox
+  - Deutsche Bahn mindbox
+  - mindbox
+
+- name: Eon :agile
+  type: accelerator
+  website: https://www.eon.com
+  headquarters: Essen
+  stage_focus:
+  - pre_seed
+  - seed
+  sector_focus:
+  - energy
+  - climate
+  aliases:
+  - Eon agile
+  - E.ON :agile

@@ -70,6 +70,16 @@ SEARCH_KEYWORDS = [
     "geothermie",
     "agritech",
     "carbon capture",
+
+    # Deeptech / Research Spinoffs
+    "quantum",
+    "quanten",
+    "photonics",
+    "photonik",
+    "nanotechnologie",
+    "synthetische biologie",
+    "genomics",
+    "neue materialien",
 ]
 
 # Maximum results to fetch per keyword

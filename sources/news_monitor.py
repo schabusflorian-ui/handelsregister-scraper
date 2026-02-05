@@ -185,6 +185,23 @@ DEFAULT_RSS_FEEDS = [
         'url': 'https://www.autonomes-fahren.de/feed/',
         'type': 'robotics_news',
     },
+
+    # === Early Stage / Grants / Spinoffs ===
+    {
+        'name': 'Startupdetector',
+        'url': 'https://startupdetector.de/feed/',
+        'type': 'early_stage_news',
+    },
+    {
+        'name': 'Gruenderkueche',
+        'url': 'https://www.gruenderkueche.de/feed/',
+        'type': 'early_stage_news',
+    },
+    {
+        'name': 'VDI Nachrichten',
+        'url': 'https://www.vdi-nachrichten.com/feed/',
+        'type': 'research_news',
+    },
 ]
 
 # Patterns that strongly indicate actual funding events (not just advice articles)
@@ -212,6 +229,26 @@ FUNDING_SIGNALS = [
     (r'\bklima(?:fonds|finanzierung|investition)\b', 2),
     (r'\bgreen\s+(?:bond|funding|investment)\b', 2),
     (r'\bimpact\s+(?:invest|fund)', 2),
+
+    # Grant/stipendium/early-stage signals
+    (r'\bEXIST[- ](?:Gründerstipendium|Forschungstransfer)\b', 3),
+    (r'\bGründerstipendium\b', 3),
+    (r'\bGründerpreis\b', 2),
+    (r'\bFörder(?:ung|bescheid|mittel|programm)\b', 2),
+    (r'\bstipendium\b', 2),
+    (r'\bBMBF[- ](?:Förderung|Projekt)\b', 2),
+    (r'\bBMWK?i?[- ](?:Förderung|Programm)\b', 2),
+    (r'\bHTGF\b', 2),
+    (r'\bHigh-Tech Gründerfonds\b', 3),
+    (r'\bangel\s+(?:round|runde|invest)', 2),
+    (r'\bbusiness\s+angel\b', 1),
+    (r'\bpre-?seed\b', 2),
+    (r'\baccelerator\b', 1),
+    (r'\binkubator\b', 1),
+    (r'\bAusgründung\b', 2),
+    (r'\bspin-?off\b', 2),
+    (r'\buniversitäts?-?(?:startup|gründung|ausgründung)\b', 2),
+    (r'\bEIC\s+(?:Accelerator|Pathfinder)\b', 2),
 
     # Weak signals - need multiple to count
     (r'\bventure\s+capital\b', 1),
@@ -329,6 +366,43 @@ AI_ROBOTICS_CLIMATE_PATTERNS = [
     r'\bnachhaltigkeit\b',
     r'\bsustainab\w+\b',
     r'\besg\b',
+]
+
+# Patterns for early-stage / grant / university spinoff detection
+EARLY_STAGE_PATTERNS = [
+    r'\bEXIST[- ]?(?:Gründerstipendium|Forschungstransfer|Gründungskultur)\b',
+    r'\bGründerstipendium\b',
+    r'\bGründerpreis\b',
+    r'\bstartup[- ]?stipendium\b',
+    r'\bFörder(?:ung|bescheid|mittel|programm)\b',
+    r'\bBMBF\b',
+    r'\bBMWK?\b',
+    r'\bHTGF\b',
+    r'\bHigh-Tech\s+Gründerfonds\b',
+    r'\bpre-?seed\b',
+    r'\bangel[- ](?:round|runde|invest|funding)\b',
+    r'\bbusiness\s+angels?\b',
+    r'\baccelerator(?:-?programm)?\b',
+    r'\binkubator\b',
+    r'\bincubator\b',
+    r'\bAusgründung\b',
+    r'\bspin-?off\b',
+    r'\buni(?:versitäts?)?[- ]?(?:startup|gründung|ausgründung|spinoff)\b',
+    r'\bForschungstransfer\b',
+    r'\bTechnologietransfer\b',
+    r'\bEIC\s+(?:Accelerator|Pathfinder)\b',
+    r'\bHorizon\s+(?:Europe|2020)\b',
+    r'\bINVEST[- ]Zuschuss\b',
+    r'\bERP[- ]Gründerkredit\b',
+    r'\bZIM[- ]Förderung\b',
+    r'\bGründerwettbewerb\b',
+    r'\bfrühphasen(?:finanzierung|investor|kapital)\b',
+    r'\bearly[- ]?stage\b',
+    r'\bfounders?\s+(?:program|programm|grant|stipend)\b',
+    r'\bCyber\s+Valley\b',
+    r'\bUnternehmerTUM\b',
+    r'\bFraunhofer\s+Venture\b',
+    r'\bMax\s+Planck\s+Innovation\b',
 ]
 
 # Words that should NOT be extracted as company names
@@ -500,6 +574,22 @@ class NewsMonitor:
         text = f"{article.title} {article.description or ''}"
 
         return any(re.search(p, text, re.IGNORECASE) for p in AI_ROBOTICS_CLIMATE_PATTERNS)
+
+    def is_early_stage_signal(self, article: NewsArticle) -> bool:
+        """
+        Check if article mentions early-stage signals (grants, stipends, spinoffs).
+
+        Detects:
+        - EXIST Gründerstipendium recipients
+        - BMBF/BMWK grant recipients
+        - University spinoffs (Ausgründung)
+        - Accelerator/incubator program entries
+        - Angel/pre-seed rounds
+        - HTGF investments
+        """
+        text = f"{article.title} {article.description or ''}"
+
+        return any(re.search(p, text, re.IGNORECASE) for p in EARLY_STAGE_PATTERNS)
 
     def extract_funding_info(self, article: NewsArticle) -> Optional[FundingMention]:
         """
@@ -809,12 +899,24 @@ class NewsMonitor:
     def _extract_round_type(self, text: str) -> Optional[str]:
         """Extract funding round type from text."""
         round_patterns = [
+            # Grants & stipends (earliest stage)
+            (r'\bEXIST[- ]?(?:Gründerstipendium|Forschungstransfer)\b', 'grant'),
+            (r'\bGründerstipendium\b', 'grant'),
+            (r'\bFörder(?:ung|bescheid|mittel|programm)\b', 'grant'),
+            (r'\bstipendium\b', 'grant'),
+            (r'\bBMBF\b', 'grant'),
+            # Angel
+            (r'\bangel\s+(?:round|runde|invest)', 'angel'),
+            (r'\bbusiness\s+angels?\b', 'angel'),
+            # Pre-seed & seed
             (r'\bpre-?seed\b', 'pre_seed'),
             (r'\bseed(?:-?runde|\s+round|\s+finanzierung)?\b', 'seed'),
+            # Series rounds
             (r'\bseries\s*a\b', 'series_a'),
             (r'\bseries\s*b\b', 'series_b'),
             (r'\bseries\s*c\b', 'series_c'),
             (r'\bseries\s*d\b', 'series_d'),
+            # Growth
             (r'\bwachstums?finanzierung\b', 'growth'),
             (r'\bgrowth\s*(?:round|runde)\b', 'growth'),
         ]
@@ -853,6 +955,20 @@ class NewsMonitor:
                     )
 
         return funding_mentions
+
+    def scan_for_early_stage(self) -> List[NewsArticle]:
+        """
+        Scan all feeds for early-stage signals.
+
+        Detects grants, stipends, university spinoffs, accelerator entries,
+        angel rounds, and pre-seed funding.
+
+        Returns:
+            List of articles with early-stage signals
+        """
+        articles = self.fetch_all_articles()
+
+        return [a for a in articles if self.is_early_stage_signal(a)]
 
     def scan_for_ai_startups(self) -> List[NewsArticle]:
         """

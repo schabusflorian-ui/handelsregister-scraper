@@ -252,6 +252,27 @@ DEFAULT_AI_KEYWORDS = [
     "grüne finanzierung",
     "carbon footprint",
     "co2-fußabdruck",
+
+    # === Deeptech / Research ===
+    "quantum computing",
+    "quantencomputer",
+    "qubit",
+    "photonics",
+    "photonik",
+    "nanotechnologie",
+    "nanotechnology",
+    "nanomaterial",
+    "advanced materials",
+    "neue materialien",
+    "synthetische biologie",
+    "synthetic biology",
+    "genomics",
+    "proteomics",
+    "crispr",
+    "bioinformatik",
+    "computational biology",
+    "drug discovery",
+    "wirkstoffforschung",
 ]
 
 # Standalone patterns that need special regex handling
@@ -423,6 +444,13 @@ TECH_CATEGORIES = {
         'künstliche intelligenz', 'artificial intelligence',
         'intelligent', 'cognitive', 'kognitiv', 'ai platform',
         'ki plattform', 'ai solutions', 'ki lösungen', 'ai consulting',
+    ],
+    'deeptech': [
+        'quantum computing', 'quantencomputer', 'qubit', 'photonics', 'photonik',
+        'nanotechnologie', 'nanotechnology', 'nanomaterial', 'advanced materials',
+        'neue materialien', 'synthetische biologie', 'synthetic biology',
+        'genomics', 'proteomics', 'crispr', 'bioinformatik',
+        'computational biology', 'drug discovery', 'wirkstoffforschung',
     ],
     'climate_tech': [
         'cleantech', 'greentech', 'climate tech', 'klimatechnologie',

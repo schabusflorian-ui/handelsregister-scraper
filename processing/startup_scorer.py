@@ -53,11 +53,17 @@ TECH_CITIES = {
     'Dresden': 1,        # Silicon Saxony
     'Darmstadt': 1,      # TU Darmstadt
     'Heidelberg': 1,     # BioTech hub
-    'Tübingen': 1,       # AI hub (Cyber Valley)
-    'Leipzig': 1,        # Growing startup scene
+    'Tübingen': 2,       # AI hub (Cyber Valley)
+    'Leipzig': 1,        # Growing startup scene / SpinLab
     'Nürnberg': 1,       # Digital hub
     'Bonn': 1,           # AI / Cyber Security
     'Potsdam': 1,        # Digital / Media hub
+    'Garching': 2,       # TUM / UnternehmerTUM
+    'Jülich': 1,         # Forschungszentrum Jülich
+    'Kaiserslautern': 1, # DFKI / AI research
+    'Erlangen': 1,       # FAU / Fraunhofer
+    'Jena': 1,           # Optics / photonics hub
+    'Greifswald': 1,     # Helmholtz / plasma research
 }
 
 # Name patterns that indicate startups/tech companies
@@ -136,6 +142,20 @@ STARTUP_NAME_PATTERNS = [
     (r'\bDisrupt\b', 2, 'Disrupt'),
     (r'\bAccelerator\b', 2, 'Accelerator'),
     (r'\bIncubator\b', 2, 'Incubator'),
+
+    # University spinoff / research-based patterns
+    (r'\bAusgründung\b', 3, 'Ausgründung (spinoff)'),
+    (r'\bSpin-?off\b', 2, 'Spinoff'),
+    (r'\bTransfer\b', 1, 'Transfer'),
+    (r'\bForschung\b', 1, 'Forschung (research)'),
+    (r'\bResearch\b', 1, 'Research'),
+    (r'\bScience\b', 1, 'Science'),
+    (r'\bBio\b', 1, 'Bio'),
+    (r'\bNano\b', 2, 'Nano'),
+    (r'\bQuantum\b', 3, 'Quantum'),
+    (r'\bQuanten\b', 3, 'Quanten'),
+    (r'\bPhoton\b', 2, 'Photon'),
+    (r'\bGenomics?\b', 2, 'Genomics'),
 ]
 
 # Traditional SME name patterns (negative signals)

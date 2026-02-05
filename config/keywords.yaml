@@ -198,6 +198,37 @@ categories:
       - EV charging
 
   # ============================================================================
+  # EARLY STAGE / UNIVERSITY SPINOFFS / DEEPTECH
+  # ============================================================================
+  early_stage:
+    description: "University spinoffs, deeptech, research-based startups"
+    priority: 2
+    keywords:
+      - Ausgründung
+      - Spin-off
+      - Forschungstransfer
+      - Technologietransfer
+      - fraunhofer venture
+      - helmholtz
+      - max planck
+
+  deeptech_research:
+    description: "Research-based deeptech terms"
+    priority: 2
+    keywords:
+      - quantum computing
+      - quantencomputer
+      - photonics
+      - photonik
+      - nanotechnologie
+      - nanotechnology
+      - advanced materials
+      - neue materialien
+      - synthetische biologie
+      - synthetic biology
+      - genomics
+
+  # ============================================================================
   # CLOUD & SOFTWARE PLATFORMS
   # ============================================================================
   cloud_platforms:

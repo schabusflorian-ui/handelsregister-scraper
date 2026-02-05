@@ -1689,5 +1689,46 @@ def news_funding(ctx):
         console.print(f"    {mention.article_url}")
 
 
+@news.command('early-stage')
+@click.pass_context
+def news_early_stage(ctx):
+    """Scan for early-stage signals: grants, stipends, spinoffs, accelerators."""
+    from sources.news_monitor import NewsMonitor
+
+    console.print("\n[bold blue]Scanning for Early-Stage Signals[/bold blue]")
+    console.print("=" * 50)
+
+    monitor = NewsMonitor()
+
+    with Progress(
+        SpinnerColumn(),
+        TextColumn("[progress.description]{task.description}"),
+        console=console,
+    ) as progress:
+        task = progress.add_task("Scanning feeds...", total=None)
+        articles = monitor.scan_for_early_stage()
+
+    if not articles:
+        console.print("[yellow]No early-stage signals found in recent news.[/yellow]")
+        return
+
+    console.print(f"\n[bold green]Found {len(articles)} articles with early-stage signals![/bold green]\n")
+
+    table = Table(title="Early-Stage / Grant / Spinoff Signals")
+    table.add_column("Source", style="cyan", width=18)
+    table.add_column("Title", style="white", width=60)
+    table.add_column("Funding?", style="green", width=8)
+
+    for article in articles[:30]:
+        is_funding = "Yes" if monitor.is_funding_related(article) else ""
+        table.add_row(
+            article.source,
+            article.title[:58] + "..." if len(article.title) > 60 else article.title,
+            is_funding,
+        )
+
+    console.print(table)
+
+
 if __name__ == '__main__':
     cli(obj={})
