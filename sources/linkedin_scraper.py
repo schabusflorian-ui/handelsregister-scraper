@@ -55,6 +55,24 @@ FOUNDER_KEYWORDS = [
     'entrepreneur', 'serial entrepreneur', 'angel investor',
 ]
 
+# German location indicators for filtering
+GERMAN_LOCATIONS = [
+    # Country
+    'germany', 'deutschland', 'german',
+    # Major cities
+    'berlin', 'munich', 'münchen', 'hamburg', 'frankfurt', 'cologne', 'köln',
+    'düsseldorf', 'dusseldorf', 'stuttgart', 'dortmund', 'essen', 'leipzig',
+    'bremen', 'dresden', 'hanover', 'hannover', 'nuremberg', 'nürnberg',
+    'duisburg', 'bochum', 'wuppertal', 'bielefeld', 'bonn', 'münster',
+    'karlsruhe', 'mannheim', 'augsburg', 'wiesbaden', 'aachen', 'heidelberg',
+    # Regions/States
+    'bavaria', 'bayern', 'baden-württemberg', 'north rhine-westphalia',
+    'nordrhein-westfalen', 'hesse', 'hessen', 'saxony', 'sachsen',
+    'lower saxony', 'niedersachsen', 'rhineland-palatinate', 'rheinland-pfalz',
+    # Tech hubs
+    'potsdam', 'freiburg', 'darmstadt', 'regensburg', 'wolfsburg',
+]
+
 
 @dataclass
 class LinkedInProfile:
@@ -418,21 +436,62 @@ class LinkedInProfileScraper:
         return profiles
 
 
+def is_german_location(location: Optional[str], headline: Optional[str] = None, summary: Optional[str] = None) -> bool:
+    """
+    Check if profile appears to be based in Germany.
+
+    Args:
+        location: Profile location field
+        headline: Profile headline (may contain location)
+        summary: Profile summary (may contain location hints)
+
+    Returns:
+        True if profile appears to be Germany-based
+    """
+    # Combine all text to check
+    texts = [location, headline, summary]
+    combined = ' '.join(t.lower() for t in texts if t)
+
+    # Check for German location indicators
+    for loc in GERMAN_LOCATIONS:
+        if loc in combined:
+            return True
+
+    return False
+
+
 class StealthFounderDetector:
     """
     Analyzes LinkedIn profiles to detect potential stealth founders.
     """
 
-    def __init__(self, min_confidence: float = 0.3):
+    def __init__(self, min_confidence: float = 0.3, require_german_location: bool = True):
         self.min_confidence = min_confidence
+        self.require_german_location = require_german_location
+
+    def is_german(self, profile: LinkedInProfile) -> bool:
+        """Check if profile is based in Germany."""
+        return is_german_location(profile.location, profile.headline, profile.summary)
 
     def is_stealth_founder(self, profile: LinkedInProfile) -> bool:
         """Check if profile matches stealth founder criteria."""
-        return profile.confidence_score >= self.min_confidence
+        # Check confidence threshold
+        if profile.confidence_score < self.min_confidence:
+            return False
+
+        # Check German location if required
+        if self.require_german_location and not self.is_german(profile):
+            return False
+
+        return True
 
     def filter_stealth_founders(self, profiles: List[LinkedInProfile]) -> List[LinkedInProfile]:
         """Filter profiles to only include likely stealth founders."""
         return [p for p in profiles if self.is_stealth_founder(p)]
+
+    def filter_german_only(self, profiles: List[LinkedInProfile]) -> List[LinkedInProfile]:
+        """Filter to only Germany-based profiles."""
+        return [p for p in profiles if self.is_german(p)]
 
     def rank_by_confidence(self, profiles: List[LinkedInProfile]) -> List[LinkedInProfile]:
         """Sort profiles by confidence score (highest first)."""

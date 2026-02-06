@@ -115,6 +115,8 @@ class SlowStealthScraper:
             'total_searches': 0,
             'total_scrapes': 0,
             'total_founders_found': 0,
+            'skipped_non_german': 0,
+            'skipped_low_confidence': 0,
         }
 
         try:
@@ -236,7 +238,8 @@ class SlowStealthScraper:
         logger.info(f"Scraping: {url}")
 
         scraper = LinkedInProfileScraper(delay_range=(1, 2), use_cloudscraper=True)
-        detector = StealthFounderDetector(min_confidence=0.1)
+        # Require German location for filtering
+        detector = StealthFounderDetector(min_confidence=0.1, require_german_location=True)
 
         try:
             profile = scraper.scrape_profile(url)
@@ -247,12 +250,16 @@ class SlowStealthScraper:
                 'name': None,
                 'confidence': 0,
                 'stored': False,
+                'location': None,
+                'is_german': False,
             }
 
             if profile and profile.name:
                 result['success'] = True
                 result['name'] = profile.name
                 result['confidence'] = profile.confidence_score
+                result['location'] = profile.location
+                result['is_german'] = detector.is_german(profile)
 
                 if detector.is_stealth_founder(profile):
                     # Get the query that found this URL (approximate)
@@ -263,9 +270,13 @@ class SlowStealthScraper:
                     result['stored'] = True
                     self.state['total_founders_found'] += 1
 
-                    logger.info(f"  Stored: {profile.name} (conf={profile.confidence_score:.2f})")
+                    logger.info(f"  Stored: {profile.name} (conf={profile.confidence_score:.2f}, loc={profile.location})")
+                elif not result['is_german']:
+                    logger.info(f"  Not in Germany: {profile.name} (loc={profile.location})")
+                    self.state['skipped_non_german'] = self.state.get('skipped_non_german', 0) + 1
                 else:
                     logger.info(f"  Below threshold: {profile.name} (conf={profile.confidence_score:.2f})")
+                    self.state['skipped_low_confidence'] = self.state.get('skipped_low_confidence', 0) + 1
             else:
                 logger.warning(f"  Could not extract profile data")
 
@@ -369,6 +380,8 @@ class SlowStealthScraper:
             'total_searches': self.state['total_searches'],
             'total_scrapes': self.state['total_scrapes'],
             'total_founders_found': self.state['total_founders_found'],
+            'skipped_non_german': self.state.get('skipped_non_german', 0),
+            'skipped_low_confidence': self.state.get('skipped_low_confidence', 0),
             'current_query_index': self.state['query_index'],
             'current_query': STEALTH_QUERIES[self.state['query_index']],
             'last_search_at': self.state['last_search_at'],
