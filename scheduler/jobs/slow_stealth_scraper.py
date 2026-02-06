@@ -20,55 +20,123 @@ logger = logging.getLogger(__name__)
 
 # Search queries to cycle through (DACH region: Germany, Austria, Switzerland)
 STEALTH_QUERIES = [
-    # === GERMANY ===
+    # === GERMANY - Stealth keywords ===
     'linkedin.com/in stealth founder germany',
     'linkedin.com/in stealth founder berlin',
     'linkedin.com/in stealth mode founder germany',
+    'linkedin.com/in stealth startup founder berlin',
+    'linkedin.com/in stealth startup founder hamburg',
+    'linkedin.com/in stealth startup founder frankfurt',
+    'linkedin.com/in stealth startup founder munich',
+    'linkedin.com/in stealth co-founder berlin',
+    'linkedin.com/in stealth co-founder munich',
+
+    # === GERMANY - "Working on something new" variations ===
+    'linkedin.com/in "working on something new" germany',
+    'linkedin.com/in "working on something new" berlin',
+    'linkedin.com/in "working on something new" founder',
     'linkedin.com/in "building something new" founder germany',
     'linkedin.com/in "building something new" founder berlin',
+    'linkedin.com/in "building something new" entrepreneur',
+    'linkedin.com/in "working on something exciting" germany',
+    'linkedin.com/in "building something exciting" berlin',
+    'linkedin.com/in "working on my next thing" founder',
+    'linkedin.com/in "building my next company" germany',
+
+    # === GERMANY - Transition/new venture phrases ===
+    'linkedin.com/in "next chapter" founder berlin',
+    'linkedin.com/in "next adventure" founder germany',
+    'linkedin.com/in "new venture" founder berlin',
+    'linkedin.com/in "new project" founder germany',
+    'linkedin.com/in "exploring opportunities" founder germany',
+    'linkedin.com/in "taking time" founder berlin',
+    'linkedin.com/in "on a sabbatical" founder germany',
+    'linkedin.com/in "between ventures" berlin',
+    'linkedin.com/in "figuring out what\'s next" founder',
+    'linkedin.com/in "what\'s next" entrepreneur germany',
+
+    # === GERMANY - Pre-launch/unannounced ===
+    'linkedin.com/in "pre-launch" founder germany',
+    'linkedin.com/in "pre-seed" founder berlin',
+    'linkedin.com/in "unannounced" founder germany',
+    'linkedin.com/in "coming soon" founder berlin',
+    'linkedin.com/in "launching soon" founder germany',
+    'linkedin.com/in "secret project" founder berlin',
+    'linkedin.com/in "confidential" founder startup germany',
+
+    # === GERMANY - Ex-FAANG founders ===
     'linkedin.com/in "ex-google" founder germany',
     'linkedin.com/in "ex-google" founder berlin',
     'linkedin.com/in "ex-meta" founder germany',
-    'linkedin.com/in "ex-stripe" founder germany',
+    'linkedin.com/in "ex-facebook" founder berlin',
+    'linkedin.com/in "ex-amazon" founder germany',
     'linkedin.com/in "ex-amazon" founder berlin',
-    'linkedin.com/in stealth co-founder munich',
-    'linkedin.com/in stealth co-founder berlin',
-    'linkedin.com/in "serial entrepreneur" berlin',
-    'linkedin.com/in "serial entrepreneur" germany',
-    'linkedin.com/in "working on something exciting" germany',
-    'linkedin.com/in "next chapter" founder berlin',
-    'linkedin.com/in "exploring opportunities" founder germany',
-    'linkedin.com/in stealth startup founder hamburg',
-    'linkedin.com/in stealth startup founder frankfurt',
+    'linkedin.com/in "ex-microsoft" founder germany',
+    'linkedin.com/in "ex-apple" founder berlin',
+    'linkedin.com/in "ex-stripe" founder germany',
+    'linkedin.com/in "ex-uber" founder berlin',
+    'linkedin.com/in "ex-airbnb" founder germany',
+
+    # === GERMANY - Ex-European unicorns ===
     'linkedin.com/in "ex-n26" founder',
     'linkedin.com/in "ex-zalando" founder',
     'linkedin.com/in "ex-delivery hero" founder',
     'linkedin.com/in "ex-celonis" founder',
+    'linkedin.com/in "ex-personio" founder',
+    'linkedin.com/in "ex-flixbus" founder',
+    'linkedin.com/in "ex-trade republic" founder',
+    'linkedin.com/in "ex-contentful" founder',
+    'linkedin.com/in "ex-mambu" founder',
+    'linkedin.com/in "ex-sennder" founder',
+
+    # === GERMANY - Entrepreneur keywords ===
+    'linkedin.com/in "serial entrepreneur" berlin',
+    'linkedin.com/in "serial entrepreneur" germany',
+    'linkedin.com/in "repeat founder" germany',
+    'linkedin.com/in "2x founder" berlin',
+    'linkedin.com/in "3x founder" germany',
     'linkedin.com/in "angel investor" building berlin',
     'linkedin.com/in "entrepreneur in residence" germany',
+    'linkedin.com/in "EIR" startup germany',
+    'linkedin.com/in "venture partner" building berlin',
+
+    # === GERMANY - German language keywords ===
+    'linkedin.com/in "gründer" stealth deutschland',
+    'linkedin.com/in "mitgründer" stealth berlin',
+    'linkedin.com/in "im aufbau" gründer',
+    'linkedin.com/in "neugründung" berlin',
+    'linkedin.com/in "unternehmer" stealth münchen',
 
     # === AUSTRIA ===
     'linkedin.com/in stealth founder austria',
     'linkedin.com/in stealth founder vienna',
     'linkedin.com/in stealth founder wien',
     'linkedin.com/in "building something new" founder austria',
+    'linkedin.com/in "working on something new" vienna',
     'linkedin.com/in "ex-google" founder vienna',
     'linkedin.com/in stealth co-founder graz',
     'linkedin.com/in "serial entrepreneur" vienna',
     'linkedin.com/in "serial entrepreneur" austria',
     'linkedin.com/in stealth startup founder salzburg',
+    'linkedin.com/in "next venture" founder austria',
+    'linkedin.com/in "ex-bitpanda" founder',
+    'linkedin.com/in "ex-refurbed" founder',
 
     # === SWITZERLAND ===
     'linkedin.com/in stealth founder switzerland',
     'linkedin.com/in stealth founder zurich',
     'linkedin.com/in stealth founder zürich',
     'linkedin.com/in "building something new" founder switzerland',
+    'linkedin.com/in "working on something new" zurich',
     'linkedin.com/in "ex-google" founder zurich',
     'linkedin.com/in stealth co-founder geneva',
     'linkedin.com/in "serial entrepreneur" zurich',
     'linkedin.com/in "serial entrepreneur" switzerland',
     'linkedin.com/in stealth startup founder basel',
     'linkedin.com/in "crypto" founder zug',
+    'linkedin.com/in "web3" founder switzerland',
+    'linkedin.com/in "next venture" founder zurich',
+    'linkedin.com/in "ex-google" founder geneva',
 ]
 
 
@@ -290,28 +358,54 @@ class SlowStealthScraper:
         score = 0.0
 
         # Stealth keywords (strong signal)
-        stealth_words = ['stealth', 'building something', 'something new', 'pre-launch', 'unannounced']
+        stealth_words = [
+            'stealth', 'stealth mode', 'stealth startup',
+            'building something', 'something new', 'something exciting',
+            'working on something', 'working on my next',
+            'pre-launch', 'pre-seed', 'unannounced', 'confidential',
+            'coming soon', 'launching soon', 'secret project',
+            'next chapter', 'next adventure', 'next venture', 'new venture',
+            'between ventures', 'taking time', 'sabbatical',
+            'figuring out', "what's next", 'exploring opportunities',
+            'im aufbau', 'neugründung',  # German
+        ]
         for word in stealth_words:
             if word in text:
                 signals.append(word)
                 score += 0.15
 
         # Founder keywords
-        founder_words = ['founder', 'co-founder', 'cofounder', 'gründer', 'ceo', 'entrepreneur']
+        founder_words = [
+            'founder', 'co-founder', 'cofounder', 'mitgründer', 'gründer',
+            'ceo', 'chief executive', 'entrepreneur', 'unternehmer',
+            'serial entrepreneur', 'repeat founder',
+            '2x founder', '3x founder', '4x founder',
+            'angel investor', 'venture partner', 'eir', 'entrepreneur in residence',
+        ]
         for word in founder_words:
             if word in text:
                 signals.append(word)
                 score += 0.1
 
-        # High-value background
-        companies = ['google', 'meta', 'facebook', 'amazon', 'stripe', 'microsoft', 'apple', 'n26', 'zalando']
+        # High-value background (ex-FAANG and European unicorns)
+        companies = [
+            'google', 'meta', 'facebook', 'amazon', 'stripe', 'microsoft', 'apple',
+            'uber', 'airbnb', 'netflix', 'twitter', 'linkedin', 'salesforce',
+            'n26', 'zalando', 'delivery hero', 'celonis', 'personio', 'flixbus',
+            'trade republic', 'contentful', 'mambu', 'sennder', 'gorillas',
+            'bitpanda', 'refurbed', 'wefox', 'scalable capital',
+        ]
         for company in companies:
-            if f"ex-{company}" in text or f"ex {company}" in text or f"former {company}" in text:
+            if f"ex-{company}" in text or f"ex {company}" in text or f"former {company}" in text or f"previously {company}" in text:
                 signals.append(f"ex-{company}")
                 score += 0.1
 
         # DACH location indicators
-        dach_indicators = ['germany', 'berlin', 'munich', 'hamburg', 'austria', 'vienna', 'switzerland', 'zurich']
+        dach_indicators = [
+            'germany', 'deutschland', 'berlin', 'munich', 'münchen', 'hamburg', 'frankfurt', 'cologne', 'köln',
+            'austria', 'österreich', 'vienna', 'wien', 'graz', 'salzburg',
+            'switzerland', 'schweiz', 'zurich', 'zürich', 'geneva', 'genf', 'basel', 'zug',
+        ]
         for loc in dach_indicators:
             if loc in text:
                 signals.append(f"loc:{loc}")
