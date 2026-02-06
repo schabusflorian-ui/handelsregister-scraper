@@ -253,8 +253,13 @@ class SlowStealthScraper:
         self.db.conn.commit()
         logger.info(f"Stored founder: {profile.name} (conf={profile.confidence_score:.2f})")
 
-    def _do_search(self) -> List[str]:
-        """Perform one search query and return new URLs found."""
+    def _do_search(self, max_pages: int = 2) -> List[str]:
+        """
+        Perform one search query and return new URLs found.
+
+        Args:
+            max_pages: Number of result pages to fetch (default 2 = ~60 results)
+        """
         from sources.google_search import DuckDuckGoSearchScraper
 
         # Get current query
@@ -262,10 +267,11 @@ class SlowStealthScraper:
 
         logger.info(f"Searching: {query}")
 
-        scraper = DuckDuckGoSearchScraper(delay_range=(1, 2), use_cloudscraper=True)
+        scraper = DuckDuckGoSearchScraper(delay_range=(2, 5), use_cloudscraper=True)
 
         try:
-            results = scraper.search_query(query)
+            # Fetch multiple pages of results
+            results = scraper.search_query(query, max_pages=max_pages)
 
             # Get existing URLs to filter
             existing = self._get_existing_urls()

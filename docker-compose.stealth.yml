@@ -1,0 +1,32 @@
+# Docker Compose for stealth scraper
+#
+# Usage:
+#   docker-compose -f docker-compose.stealth.yml up -d
+#   docker-compose -f docker-compose.stealth.yml logs -f
+#   docker-compose -f docker-compose.stealth.yml down
+#
+# View stats:
+#   docker exec stealth-scraper python run_stealth_scraper.py --stats
+
+version: '3.8'
+
+services:
+  stealth-scraper:
+    build:
+      context: .
+      dockerfile: Dockerfile.stealth
+    container_name: stealth-scraper
+    restart: unless-stopped
+    volumes:
+      # Persist database and state
+      - ./data:/app/data
+      - ./handelsregister.db:/app/handelsregister.db
+    environment:
+      - PYTHONUNBUFFERED=1
+    command: ["python", "run_stealth_scraper.py", "--slow"]
+    # Optional: limit resources
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.5'

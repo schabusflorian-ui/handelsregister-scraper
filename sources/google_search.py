@@ -372,20 +372,49 @@ class DuckDuckGoSearchScraper:
         delay = random.uniform(*self.delay_range)
         time.sleep(delay)
 
-    def _search_ddg(self, query: str, retries: int = 2) -> Optional[str]:
-        """Execute DuckDuckGo search."""
-        url = f"https://html.duckduckgo.com/html/?q={quote_plus(query)}"
+    def _search_ddg(self, query: str, retries: int = 2, page_data: dict = None) -> tuple:
+        """
+        Execute DuckDuckGo search.
+
+        Args:
+            query: Search query
+            retries: Number of retries on failure
+            page_data: Form data for pagination (None for first page)
+
+        Returns:
+            Tuple of (html_content, next_page_data) where next_page_data is None if no more pages
+        """
+        if page_data:
+            # Pagination request - POST with form data
+            url = "https://html.duckduckgo.com/html/"
+            method = 'POST'
+            request_kwargs = {'data': page_data}
+        else:
+            # First page - GET request
+            url = f"https://html.duckduckgo.com/html/?q={quote_plus(query)}"
+            method = 'GET'
+            request_kwargs = {}
 
         for attempt in range(retries + 1):
             try:
-                response = self.session.get(
-                    url,
-                    headers=self._get_headers(),
-                    timeout=30,
-                )
+                if method == 'POST':
+                    response = self.session.post(
+                        url,
+                        headers=self._get_headers(),
+                        timeout=30,
+                        **request_kwargs
+                    )
+                else:
+                    response = self.session.get(
+                        url,
+                        headers=self._get_headers(),
+                        timeout=30,
+                    )
 
                 if response.status_code == 200:
-                    return response.text
+                    # Extract next page form data if available
+                    next_data = self._extract_next_page_data(response.text)
+                    return response.text, next_data
 
                 if response.status_code == 202:
                     # Rate limited - wait and retry
@@ -395,16 +424,40 @@ class DuckDuckGoSearchScraper:
                     continue
 
                 logger.warning(f"DuckDuckGo returned {response.status_code}")
-                return None
+                return None, None
 
             except requests.RequestException as e:
                 logger.error(f"DuckDuckGo request failed: {e}")
                 if attempt < retries:
                     time.sleep(5)
                     continue
-                return None
+                return None, None
 
-        return None
+        return None, None
+
+    def _extract_next_page_data(self, html: str) -> Optional[dict]:
+        """Extract form data needed to fetch the next page of results."""
+        soup = BeautifulSoup(html, 'html.parser')
+
+        # Find the "Next" button form
+        next_form = soup.find('input', {'value': 'Next'})
+        if not next_form:
+            return None
+
+        # Get the parent form
+        form = next_form.find_parent('form')
+        if not form:
+            return None
+
+        # Extract all hidden inputs
+        form_data = {}
+        for inp in form.find_all('input'):
+            name = inp.get('name')
+            value = inp.get('value', '')
+            if name:
+                form_data[name] = value
+
+        return form_data if form_data else None
 
     def _parse_results(self, html: str, query: str) -> List[SearchResult]:
         """Parse DuckDuckGo search results."""
@@ -472,26 +525,57 @@ class DuckDuckGoSearchScraper:
 
         return None
 
-    def search_query(self, query: str) -> List[SearchResult]:
-        """Execute a search query."""
+    def search_query(self, query: str, max_pages: int = 3) -> List[SearchResult]:
+        """
+        Execute a search query with pagination.
+
+        Args:
+            query: Search query string
+            max_pages: Maximum pages to fetch (default 3, ~30 results per page)
+
+        Returns:
+            List of unique SearchResult objects
+        """
         logger.info(f"DDG Search: {query[:60]}...")
 
-        html = self._search_ddg(query)
-        if not html:
-            return []
+        all_results = []
+        page = 1
+        next_page_data = None
 
-        results = self._parse_results(html, query)
+        while page <= max_pages:
+            html, next_page_data = self._search_ddg(query, page_data=next_page_data)
 
-        # Deduplicate
-        new_results = []
-        for r in results:
-            if r.url not in self.found_urls:
-                self.found_urls.add(r.url)
-                new_results.append(r)
+            if not html:
+                break
 
-        logger.info(f"  Found {len(new_results)} new LinkedIn URLs")
+            results = self._parse_results(html, query)
 
-        return new_results
+            # Deduplicate
+            new_results = []
+            for r in results:
+                if r.url not in self.found_urls:
+                    self.found_urls.add(r.url)
+                    new_results.append(r)
+
+            all_results.extend(new_results)
+
+            if page == 1:
+                logger.info(f"  Page {page}: {len(new_results)} new URLs")
+            else:
+                logger.info(f"  Page {page}: +{len(new_results)} new URLs (total: {len(all_results)})")
+
+            # Stop if no more pages or no new results
+            if not next_page_data or len(new_results) == 0:
+                break
+
+            page += 1
+
+            # Delay between pages
+            if page <= max_pages:
+                self._delay()
+
+        logger.info(f"  Found {len(all_results)} total LinkedIn URLs")
+        return all_results
 
     def search_stealth_queries(self, queries: Optional[List[str]] = None) -> List[SearchResult]:
         """Run stealth founder queries."""
