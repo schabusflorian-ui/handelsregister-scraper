@@ -152,7 +152,7 @@ class WebsiteFinderJob:
             LIMIT ?
         ''', (cutoff, self.batch_size)).fetchall()
 
-        return rows
+        return [dict(row) for row in rows]
 
 
 def run_website_finder(db_path: str, batch_size: int = 50) -> Dict[str, Any]:
