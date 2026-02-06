@@ -10,6 +10,7 @@ import time
 import random
 import logging
 import requests
+import cloudscraper
 from typing import List, Set, Optional, Dict, Any
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -338,16 +339,24 @@ class DuckDuckGoSearchScraper:
     DuckDuckGo search scraper - more permissive than Google.
 
     Uses DuckDuckGo HTML search which is less likely to block scrapers.
+    Now uses cloudscraper for better bot detection bypass.
     """
 
     def __init__(
         self,
         delay_range: tuple = (3, 8),
         max_results_per_query: int = 30,
+        use_cloudscraper: bool = True,
     ):
         self.delay_range = delay_range
         self.max_results_per_query = max_results_per_query
-        self.session = requests.Session()
+        # Use cloudscraper for better bot bypass
+        if use_cloudscraper:
+            self.session = cloudscraper.create_scraper(
+                browser={'browser': 'chrome', 'platform': 'darwin', 'mobile': False}
+            )
+        else:
+            self.session = requests.Session()
         self.found_urls: Set[str] = set()
 
     def _get_headers(self) -> Dict[str, str]:

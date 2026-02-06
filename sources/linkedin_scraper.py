@@ -11,6 +11,7 @@ import random
 import logging
 import json
 import requests
+import cloudscraper
 from typing import Optional, List, Dict, Any
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -102,10 +103,17 @@ class LinkedInProfileScraper:
         self,
         delay_range: tuple = (5, 15),
         proxy: Optional[str] = None,
+        use_cloudscraper: bool = True,
     ):
         self.delay_range = delay_range
         self.proxy = proxy
-        self.session = requests.Session()
+        # Use cloudscraper for better bot bypass
+        if use_cloudscraper:
+            self.session = cloudscraper.create_scraper(
+                browser={'browser': 'chrome', 'platform': 'darwin', 'mobile': False}
+            )
+        else:
+            self.session = requests.Session()
 
     def _get_headers(self) -> Dict[str, str]:
         """Get randomized headers."""
