@@ -384,6 +384,39 @@ class Database:
             )
         ''')
 
+        # Stealth founders table (LinkedIn profiles of potential founders)
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS stealth_founders (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                linkedin_url TEXT UNIQUE,
+                name TEXT,
+                headline TEXT,
+                location TEXT,
+                summary TEXT,
+                current_company TEXT,
+                previous_companies TEXT,
+
+                detection_source TEXT,
+                search_query TEXT,
+                stealth_signals TEXT,
+                confidence_score REAL DEFAULT 0.0,
+
+                first_seen_at TEXT,
+                last_checked_at TEXT,
+                profile_changed INTEGER DEFAULT 0,
+
+                company_id INTEGER REFERENCES companies(id),
+                emerged_at TEXT,
+
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+
+        # Stealth founder indexes
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_stealth_founders_confidence ON stealth_founders(confidence_score DESC)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_stealth_founders_location ON stealth_founders(location)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_stealth_founders_company ON stealth_founders(company_id)')
+
         self.conn.commit()
 
         # Migration: add is_early_stage_related column if table exists without it
