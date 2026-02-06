@@ -225,6 +225,124 @@ class SlowStealthScraper:
         cursor.execute('SELECT linkedin_url FROM stealth_founders')
         return {row[0] for row in cursor.fetchall()}
 
+    def _parse_search_title(self, title: str) -> tuple:
+        """
+        Parse LinkedIn search result title to extract name and headline.
+
+        Examples:
+            "Kristina Lunz - Co-Founder/CEO STEALTH | LinkedIn" -> ("Kristina Lunz", "Co-Founder/CEO STEALTH")
+            "John Doe - Building something new | LinkedIn" -> ("John Doe", "Building something new")
+        """
+        # Remove common suffixes
+        title = title.replace(' | LinkedIn', '').replace(' - LinkedIn', '').strip()
+
+        # Split on first " - " to get name and headline
+        if ' - ' in title:
+            parts = title.split(' - ', 1)
+            name = parts[0].strip()
+            headline = parts[1].strip() if len(parts) > 1 else None
+        else:
+            name = title
+            headline = None
+
+        return name, headline
+
+    def _calculate_snippet_confidence(self, title: str, snippet: str) -> tuple:
+        """
+        Calculate confidence score from search snippet without scraping LinkedIn.
+
+        Returns: (confidence_score, detected_signals)
+        """
+        text = f"{title} {snippet}".lower()
+        signals = []
+        score = 0.0
+
+        # Stealth keywords (strong signal)
+        stealth_words = ['stealth', 'building something', 'something new', 'pre-launch', 'unannounced']
+        for word in stealth_words:
+            if word in text:
+                signals.append(word)
+                score += 0.15
+
+        # Founder keywords
+        founder_words = ['founder', 'co-founder', 'cofounder', 'gründer', 'ceo', 'entrepreneur']
+        for word in founder_words:
+            if word in text:
+                signals.append(word)
+                score += 0.1
+
+        # High-value background
+        companies = ['google', 'meta', 'facebook', 'amazon', 'stripe', 'microsoft', 'apple', 'n26', 'zalando']
+        for company in companies:
+            if f"ex-{company}" in text or f"ex {company}" in text or f"former {company}" in text:
+                signals.append(f"ex-{company}")
+                score += 0.1
+
+        # DACH location indicators
+        dach_indicators = ['germany', 'berlin', 'munich', 'hamburg', 'austria', 'vienna', 'switzerland', 'zurich']
+        for loc in dach_indicators:
+            if loc in text:
+                signals.append(f"loc:{loc}")
+                score += 0.05
+                break  # Only count location once
+
+        return min(score, 1.0), signals
+
+    def _store_from_search_result(self, result, search_query: str):
+        """
+        Store a founder directly from search snippet - NO LinkedIn scrape needed!
+
+        This avoids 999 blocks by extracting info from DuckDuckGo results.
+        """
+        from sources.linkedin_scraper import is_dach_location
+
+        name, headline = self._parse_search_title(result.title)
+        confidence, signals = self._calculate_snippet_confidence(result.title, result.snippet)
+
+        # Check if likely DACH based on search result
+        combined_text = f"{result.title} {result.snippet}"
+        is_dach = is_dach_location(combined_text, headline, result.snippet)
+
+        # Skip if not DACH or too low confidence
+        if not is_dach:
+            logger.debug(f"  Skipping non-DACH: {name}")
+            self.state['skipped_non_german'] = self.state.get('skipped_non_german', 0) + 1
+            return
+
+        if confidence < 0.1:
+            logger.debug(f"  Skipping low confidence: {name} ({confidence:.2f})")
+            self.state['skipped_low_confidence'] = self.state.get('skipped_low_confidence', 0) + 1
+            return
+
+        # Store in database
+        cursor = self.db.conn.cursor()
+        now = datetime.now().isoformat()
+
+        cursor.execute('''
+            INSERT OR IGNORE INTO stealth_founders (
+                linkedin_url, name, headline, summary,
+                detection_source, search_query, stealth_signals,
+                confidence_score, first_seen_at, last_checked_at, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (
+            result.url,
+            name,
+            headline,
+            result.snippet,  # Use snippet as summary
+            'search_snippet',
+            search_query,
+            json.dumps(signals) if signals else None,
+            confidence,
+            now,
+            now,
+            now,
+        ))
+
+        if cursor.rowcount > 0:
+            self.db.conn.commit()
+            self.state['total_founders_found'] = self.state.get('total_founders_found', 0) + 1
+            logger.info(f"  Stored from snippet: {name} (conf={confidence:.2f}, signals={signals})")
+
     def _store_founder(self, profile, search_query: str):
         """Store a founder in the database."""
         cursor = self.db.conn.cursor()
@@ -253,25 +371,32 @@ class SlowStealthScraper:
         self.db.conn.commit()
         logger.info(f"Stored founder: {profile.name} (conf={profile.confidence_score:.2f})")
 
-    def _do_search(self, max_pages: int = 2) -> List[str]:
+    def _do_search(self, max_pages: int = 2, use_multi_engine: bool = True) -> List[str]:
         """
         Perform one search query and return new URLs found.
 
         Args:
             max_pages: Number of result pages to fetch (default 2 = ~60 results)
+            use_multi_engine: Rotate between DuckDuckGo and Brave
         """
-        from sources.google_search import DuckDuckGoSearchScraper
+        from sources.google_search import DuckDuckGoSearchScraper, MultiSearchScraper
 
         # Get current query
         query = STEALTH_QUERIES[self.state['query_index']]
 
         logger.info(f"Searching: {query}")
 
-        scraper = DuckDuckGoSearchScraper(delay_range=(2, 5), use_cloudscraper=True)
+        if use_multi_engine:
+            scraper = MultiSearchScraper(delay_range=(2, 5))
+        else:
+            scraper = DuckDuckGoSearchScraper(delay_range=(2, 5), use_cloudscraper=True)
 
         try:
-            # Fetch multiple pages of results
-            results = scraper.search_query(query, max_pages=max_pages)
+            # Fetch results (multi-engine handles pagination internally)
+            if use_multi_engine:
+                results = scraper.search_query(query, max_pages=max_pages)
+            else:
+                results = scraper.search_query(query, max_pages=max_pages)
 
             # Get existing URLs to filter
             existing = self._get_existing_urls()
@@ -285,14 +410,18 @@ class SlowStealthScraper:
                     new_urls.append(r.url)
                     logger.info(f"  Found: {r.title[:50]}")
 
+                    # Store founder directly from search snippet (no LinkedIn scrape needed!)
+                    self._store_from_search_result(r, query)
+
             # Update state
             self.state['query_index'] = (self.state['query_index'] + 1) % len(STEALTH_QUERIES)
             self.state['last_search_at'] = datetime.now().isoformat()
             self.state['total_searches'] += 1
-            self.state['pending_urls'].extend(new_urls)
+            # Don't add to pending_urls since we already stored from snippet
+            # self.state['pending_urls'].extend(new_urls)
             self._save_state()
 
-            logger.info(f"  Found {len(new_urls)} new URLs, {len(self.state['pending_urls'])} pending")
+            logger.info(f"  Stored {len(new_urls)} founders from search snippets")
 
             return new_urls
 

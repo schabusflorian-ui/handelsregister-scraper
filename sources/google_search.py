@@ -652,6 +652,198 @@ def find_stealth_founders(
     return all_results
 
 
+class BraveSearchScraper:
+    """
+    Brave Search scraper - good alternative with less aggressive blocking.
+
+    Uses HTML scraping (no API key needed for basic use).
+    """
+
+    def __init__(self, delay_range: tuple = (3, 8), use_cloudscraper: bool = True):
+        self.delay_range = delay_range
+        if use_cloudscraper:
+            self.session = cloudscraper.create_scraper(
+                browser={'browser': 'chrome', 'platform': 'darwin', 'mobile': False}
+            )
+        else:
+            self.session = requests.Session()
+        self.found_urls: Set[str] = set()
+
+    def _get_headers(self) -> Dict[str, str]:
+        return {
+            'User-Agent': random.choice(USER_AGENTS),
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+            'Accept-Language': 'en-US,en;q=0.5',
+        }
+
+    def _delay(self):
+        time.sleep(random.uniform(*self.delay_range))
+
+    def _search_brave(self, query: str, retries: int = 2) -> Optional[str]:
+        """Execute Brave search."""
+        url = f"https://search.brave.com/search?q={quote_plus(query)}&source=web"
+
+        for attempt in range(retries + 1):
+            try:
+                response = self.session.get(url, headers=self._get_headers(), timeout=30)
+
+                if response.status_code == 200:
+                    return response.text
+
+                if response.status_code == 429:
+                    wait_time = (attempt + 1) * 20
+                    logger.warning(f"Brave rate limit (429), waiting {wait_time}s...")
+                    time.sleep(wait_time)
+                    continue
+
+                logger.warning(f"Brave returned {response.status_code}")
+                return None
+
+            except requests.RequestException as e:
+                logger.error(f"Brave request failed: {e}")
+                if attempt < retries:
+                    time.sleep(5)
+                    continue
+                return None
+
+        return None
+
+    def _parse_results(self, html: str, query: str) -> List[SearchResult]:
+        """Parse Brave search results."""
+        results = []
+        soup = BeautifulSoup(html, 'html.parser')
+
+        # Brave result links
+        for result in soup.find_all('a', class_='result-header'):
+            try:
+                href = result.get('href', '')
+
+                if 'linkedin.com/in/' not in href:
+                    continue
+
+                # Clean URL
+                url = self._clean_linkedin_url(href)
+                if not url:
+                    continue
+
+                title = result.get_text(strip=True)
+
+                # Get snippet
+                snippet = ''
+                parent = result.find_parent('div', class_='snippet')
+                if parent:
+                    desc = parent.find('p', class_='snippet-description')
+                    if desc:
+                        snippet = desc.get_text(strip=True)
+
+                results.append(SearchResult(url=url, title=title, snippet=snippet, query=query))
+
+            except Exception as e:
+                logger.debug(f"Error parsing Brave result: {e}")
+                continue
+
+        return results
+
+    def _clean_linkedin_url(self, url: str) -> Optional[str]:
+        """Clean LinkedIn URL."""
+        match = re.search(r'(https?://(?:[a-z]{2}\.)?(?:www\.)?linkedin\.com/in/[^/?&#]+)', url)
+        if match:
+            cleaned = match.group(1)
+            cleaned = re.sub(r'https?://[a-z]{2}\.linkedin\.com', 'https://www.linkedin.com', cleaned)
+            return cleaned
+        return None
+
+    def search_query(self, query: str) -> List[SearchResult]:
+        """Execute a search query."""
+        logger.info(f"Brave Search: {query[:60]}...")
+
+        html = self._search_brave(query)
+        if not html:
+            return []
+
+        results = self._parse_results(html, query)
+
+        # Deduplicate
+        new_results = []
+        for r in results:
+            if r.url not in self.found_urls:
+                self.found_urls.add(r.url)
+                new_results.append(r)
+
+        logger.info(f"  Found {len(new_results)} new LinkedIn URLs")
+        return new_results
+
+
+class MultiSearchScraper:
+    """
+    Combines multiple search engines for better coverage.
+
+    Rotates between engines to avoid rate limits.
+    """
+
+    def __init__(self, delay_range: tuple = (5, 10)):
+        self.delay_range = delay_range
+        self.ddg = DuckDuckGoSearchScraper(delay_range=delay_range)
+        self.brave = BraveSearchScraper(delay_range=delay_range)
+        self.found_urls: Set[str] = set()
+        self.engine_index = 0
+
+    def _get_next_engine(self):
+        """Rotate between search engines."""
+        engines = [self.ddg, self.brave]
+        engine = engines[self.engine_index % len(engines)]
+        self.engine_index += 1
+        return engine
+
+    def search_query(self, query: str, max_pages: int = 2) -> List[SearchResult]:
+        """Search using rotating engines."""
+        engine = self._get_next_engine()
+        engine_name = "DuckDuckGo" if isinstance(engine, DuckDuckGoSearchScraper) else "Brave"
+
+        logger.info(f"[{engine_name}] Searching: {query[:50]}...")
+
+        if isinstance(engine, DuckDuckGoSearchScraper):
+            results = engine.search_query(query, max_pages=max_pages)
+        else:
+            results = engine.search_query(query)
+
+        # Deduplicate across all engines
+        new_results = []
+        for r in results:
+            if r.url not in self.found_urls:
+                self.found_urls.add(r.url)
+                new_results.append(r)
+
+        return new_results
+
+    def search_all_engines(self, query: str) -> List[SearchResult]:
+        """Search all engines for the same query (more coverage)."""
+        all_results = []
+
+        # DuckDuckGo
+        try:
+            results = self.ddg.search_query(query, max_pages=2)
+            for r in results:
+                if r.url not in self.found_urls:
+                    self.found_urls.add(r.url)
+                    all_results.append(r)
+            time.sleep(random.uniform(*self.delay_range))
+        except Exception as e:
+            logger.warning(f"DuckDuckGo failed: {e}")
+
+        # Brave
+        try:
+            results = self.brave.search_query(query)
+            for r in results:
+                if r.url not in self.found_urls:
+                    self.found_urls.add(r.url)
+                    all_results.append(r)
+        except Exception as e:
+            logger.warning(f"Brave failed: {e}")
+
+        return all_results
+
+
 if __name__ == '__main__':
     logging.basicConfig(level=logging.INFO)
 
