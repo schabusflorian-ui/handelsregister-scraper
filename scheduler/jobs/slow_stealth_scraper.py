@@ -18,8 +18,9 @@ from pathlib import Path
 logger = logging.getLogger(__name__)
 
 
-# Search queries to cycle through
+# Search queries to cycle through (DACH region: Germany, Austria, Switzerland)
 STEALTH_QUERIES = [
+    # === GERMANY ===
     'linkedin.com/in stealth founder germany',
     'linkedin.com/in stealth founder berlin',
     'linkedin.com/in stealth mode founder germany',
@@ -45,6 +46,29 @@ STEALTH_QUERIES = [
     'linkedin.com/in "ex-celonis" founder',
     'linkedin.com/in "angel investor" building berlin',
     'linkedin.com/in "entrepreneur in residence" germany',
+
+    # === AUSTRIA ===
+    'linkedin.com/in stealth founder austria',
+    'linkedin.com/in stealth founder vienna',
+    'linkedin.com/in stealth founder wien',
+    'linkedin.com/in "building something new" founder austria',
+    'linkedin.com/in "ex-google" founder vienna',
+    'linkedin.com/in stealth co-founder graz',
+    'linkedin.com/in "serial entrepreneur" vienna',
+    'linkedin.com/in "serial entrepreneur" austria',
+    'linkedin.com/in stealth startup founder salzburg',
+
+    # === SWITZERLAND ===
+    'linkedin.com/in stealth founder switzerland',
+    'linkedin.com/in stealth founder zurich',
+    'linkedin.com/in stealth founder zürich',
+    'linkedin.com/in "building something new" founder switzerland',
+    'linkedin.com/in "ex-google" founder zurich',
+    'linkedin.com/in stealth co-founder geneva',
+    'linkedin.com/in "serial entrepreneur" zurich',
+    'linkedin.com/in "serial entrepreneur" switzerland',
+    'linkedin.com/in stealth startup founder basel',
+    'linkedin.com/in "crypto" founder zug',
 ]
 
 

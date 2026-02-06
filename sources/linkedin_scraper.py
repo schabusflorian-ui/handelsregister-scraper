@@ -55,8 +55,9 @@ FOUNDER_KEYWORDS = [
     'entrepreneur', 'serial entrepreneur', 'angel investor',
 ]
 
-# German location indicators for filtering
-GERMAN_LOCATIONS = [
+# DACH region location indicators for filtering (Germany, Austria, Switzerland)
+DACH_LOCATIONS = [
+    # === GERMANY ===
     # Country
     'germany', 'deutschland', 'german',
     # Major cities
@@ -71,7 +72,33 @@ GERMAN_LOCATIONS = [
     'lower saxony', 'niedersachsen', 'rhineland-palatinate', 'rheinland-pfalz',
     # Tech hubs
     'potsdam', 'freiburg', 'darmstadt', 'regensburg', 'wolfsburg',
+
+    # === AUSTRIA ===
+    # Country
+    'austria', 'österreich', 'austrian',
+    # Major cities
+    'vienna', 'wien', 'graz', 'linz', 'salzburg', 'innsbruck', 'klagenfurt',
+    'villach', 'wels', 'st. pölten', 'dornbirn', 'wiener neustadt', 'steyr',
+    # Regions
+    'tyrol', 'tirol', 'styria', 'steiermark', 'carinthia', 'kärnten',
+    'upper austria', 'oberösterreich', 'lower austria', 'niederösterreich',
+    'vorarlberg', 'burgenland',
+
+    # === SWITZERLAND ===
+    # Country
+    'switzerland', 'schweiz', 'suisse', 'svizzera', 'swiss',
+    # Major cities
+    'zurich', 'zürich', 'geneva', 'genève', 'genf', 'basel', 'bern', 'berne',
+    'lausanne', 'winterthur', 'lucerne', 'luzern', 'st. gallen', 'lugano',
+    'biel', 'thun', 'köniz', 'la chaux-de-fonds', 'fribourg', 'schaffhausen',
+    'chur', 'neuchâtel', 'zug',
+    # Regions/Cantons
+    'canton of zurich', 'kanton zürich', 'canton of bern', 'canton of geneva',
+    'canton of vaud', 'ticino', 'valais', 'wallis', 'graubünden', 'aargau',
 ]
+
+# Alias for backwards compatibility
+GERMAN_LOCATIONS = DACH_LOCATIONS
 
 
 @dataclass
@@ -436,9 +463,9 @@ class LinkedInProfileScraper:
         return profiles
 
 
-def is_german_location(location: Optional[str], headline: Optional[str] = None, summary: Optional[str] = None) -> bool:
+def is_dach_location(location: Optional[str], headline: Optional[str] = None, summary: Optional[str] = None) -> bool:
     """
-    Check if profile appears to be based in Germany.
+    Check if profile appears to be based in DACH region (Germany, Austria, Switzerland).
 
     Args:
         location: Profile location field
@@ -446,32 +473,37 @@ def is_german_location(location: Optional[str], headline: Optional[str] = None, 
         summary: Profile summary (may contain location hints)
 
     Returns:
-        True if profile appears to be Germany-based
+        True if profile appears to be DACH-based
     """
     # Combine all text to check
     texts = [location, headline, summary]
     combined = ' '.join(t.lower() for t in texts if t)
 
-    # Check for German location indicators
-    for loc in GERMAN_LOCATIONS:
+    # Check for DACH location indicators
+    for loc in DACH_LOCATIONS:
         if loc in combined:
             return True
 
     return False
 
 
+# Alias for backwards compatibility
+is_german_location = is_dach_location
+
+
 class StealthFounderDetector:
     """
     Analyzes LinkedIn profiles to detect potential stealth founders.
+    Filters by DACH region (Germany, Austria, Switzerland) by default.
     """
 
     def __init__(self, min_confidence: float = 0.3, require_german_location: bool = True):
         self.min_confidence = min_confidence
-        self.require_german_location = require_german_location
+        self.require_german_location = require_german_location  # Actually DACH region
 
     def is_german(self, profile: LinkedInProfile) -> bool:
-        """Check if profile is based in Germany."""
-        return is_german_location(profile.location, profile.headline, profile.summary)
+        """Check if profile is based in DACH region (Germany, Austria, Switzerland)."""
+        return is_dach_location(profile.location, profile.headline, profile.summary)
 
     def is_stealth_founder(self, profile: LinkedInProfile) -> bool:
         """Check if profile matches stealth founder criteria."""
