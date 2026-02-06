@@ -712,31 +712,54 @@ class BraveSearchScraper:
         """Parse Brave search results."""
         results = []
         soup = BeautifulSoup(html, 'html.parser')
+        seen_urls = set()
 
-        # Brave result links
-        for result in soup.find_all('a', class_='result-header'):
+        # Find all links containing linkedin.com/in
+        for link in soup.find_all('a', href=lambda h: h and 'linkedin.com/in/' in h):
             try:
-                href = result.get('href', '')
-
-                if 'linkedin.com/in/' not in href:
-                    continue
+                href = link.get('href', '')
 
                 # Clean URL
                 url = self._clean_linkedin_url(href)
-                if not url:
+                if not url or url in seen_urls:
                     continue
+                seen_urls.add(url)
 
-                title = result.get_text(strip=True)
+                # Get title from link text or parent
+                title = link.get_text(strip=True)
 
-                # Get snippet
+                # Clean up title - remove path cruft like "› in  › username"
+                if title.startswith('›') or 'linkedin.com' in title.lower():
+                    # Extract username from URL and try to find better title
+                    username = url.split('/in/')[-1].rstrip('/').replace('-', ' ').replace('%20', ' ')
+                    # Try to find a better title in parent elements
+                    parent = link.find_parent(['div', 'article'])
+                    if parent:
+                        # Look for heading or title element with actual name
+                        for elem in parent.find_all(['h2', 'h3', 'h4', 'a', 'span']):
+                            text = elem.get_text(strip=True)
+                            # Skip if it's just path or LinkedIn text
+                            if text and len(text) > 5 and not text.startswith('›') and 'linkedin.com' not in text.lower():
+                                title = text
+                                break
+                    # Fallback: use cleaned username
+                    if title.startswith('›'):
+                        title = username.title()
+
+                # Get snippet from nearby elements
                 snippet = ''
-                parent = result.find_parent('div', class_='snippet')
+                parent = link.find_parent(['div', 'article'])
                 if parent:
-                    desc = parent.find('p', class_='snippet-description')
-                    if desc:
-                        snippet = desc.get_text(strip=True)
+                    # Look for description/snippet text
+                    for desc in parent.find_all(['p', 'span', 'div']):
+                        text = desc.get_text(strip=True)
+                        if len(text) > 50 and 'linkedin.com' not in text.lower():
+                            snippet = text[:500]
+                            break
 
-                results.append(SearchResult(url=url, title=title, snippet=snippet, query=query))
+                # Only add if we have a reasonable title
+                if title and len(title) > 3:
+                    results.append(SearchResult(url=url, title=title, snippet=snippet, query=query))
 
             except Exception as e:
                 logger.debug(f"Error parsing Brave result: {e}")

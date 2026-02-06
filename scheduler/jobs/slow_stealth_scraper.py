@@ -225,25 +225,57 @@ class SlowStealthScraper:
         cursor.execute('SELECT linkedin_url FROM stealth_founders')
         return {row[0] for row in cursor.fetchall()}
 
-    def _parse_search_title(self, title: str) -> tuple:
+    def _parse_search_title(self, title: str, url: str = None, snippet: str = None) -> tuple:
         """
-        Parse LinkedIn search result title to extract name and headline.
+        Parse LinkedIn search result to extract name and headline.
 
-        Examples:
-            "Kristina Lunz - Co-Founder/CEO STEALTH | LinkedIn" -> ("Kristina Lunz", "Co-Founder/CEO STEALTH")
-            "John Doe - Building something new | LinkedIn" -> ("John Doe", "Building something new")
+        Strategy:
+        1. Try to parse clean "Name - Headline" format (DuckDuckGo)
+        2. For messy titles (Brave), extract name from URL
+        3. Extract headline from snippet if available
         """
+        import re
+        from urllib.parse import unquote
+
+        headline = None
+        name = None
+
         # Remove common suffixes
-        title = title.replace(' | LinkedIn', '').replace(' - LinkedIn', '').strip()
+        clean_title = title.replace(' | LinkedIn', '').replace(' - LinkedIn', '').strip()
 
-        # Split on first " - " to get name and headline
-        if ' - ' in title:
-            parts = title.split(' - ', 1)
+        # Check if title is messy (Brave-style with linkedin.com or ›)
+        is_messy = 'linkedin.com' in title.lower() or '›' in title
+
+        if not is_messy and ' - ' in clean_title:
+            # Clean format: "Name - Headline"
+            parts = clean_title.split(' - ', 1)
             name = parts[0].strip()
             headline = parts[1].strip() if len(parts) > 1 else None
         else:
-            name = title
-            headline = None
+            # Messy format - extract name from URL
+            if url and '/in/' in url:
+                username = unquote(url.split('/in/')[-1].rstrip('/'))
+                # Clean up username: replace hyphens, handle encoded chars
+                name = username.replace('-', ' ').title()
+                # Remove numbers at end (like "john-doe-123")
+                name = re.sub(r'\s+\d+$', '', name)
+
+        # Try to extract headline from snippet if we don't have one
+        if not headline and snippet:
+            # Common patterns in snippets
+            # "Name - Headline | LinkedIn" or "Experience: Title"
+            if ' - ' in snippet:
+                parts = snippet.split(' - ', 1)
+                if len(parts) > 1 and len(parts[1]) > 3:
+                    headline = parts[1].split('|')[0].split('·')[0].strip()[:100]
+            elif 'Experience:' in snippet:
+                match = re.search(r'Experience:\s*([^·|]+)', snippet)
+                if match:
+                    headline = match.group(1).strip()
+
+        # Fallback name from title if still empty
+        if not name:
+            name = clean_title[:50] if clean_title else "Unknown"
 
         return name, headline
 
@@ -296,7 +328,7 @@ class SlowStealthScraper:
         """
         from sources.linkedin_scraper import is_dach_location
 
-        name, headline = self._parse_search_title(result.title)
+        name, headline = self._parse_search_title(result.title, result.url, result.snippet)
         confidence, signals = self._calculate_snippet_confidence(result.title, result.snippet)
 
         # Check if likely DACH based on search result
