@@ -81,7 +81,13 @@ class SlowStealthScraper:
     - Random jitter on delays
     - Rotating through queries
     - Persisting state for resume
+    - Exponential backoff on rate limits
     """
+
+    # Backoff settings
+    MAX_CONSECUTIVE_FAILURES = 5
+    BACKOFF_MULTIPLIER = 2
+    MAX_BACKOFF_MINUTES = 60
 
     def __init__(
         self,
@@ -96,6 +102,7 @@ class SlowStealthScraper:
         self.search_delay = search_delay
         self.scrape_delay = scrape_delay
         self.jitter = jitter
+        self.consecutive_failures = 0
 
         self.state = self._load_state()
         self._ensure_schema()
@@ -127,6 +134,18 @@ class SlowStealthScraper:
         ''')
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_stealth_founders_confidence ON stealth_founders(confidence_score DESC)')
         self.db.conn.commit()
+
+    def _calculate_backoff(self) -> int:
+        """Calculate backoff delay based on consecutive failures."""
+        if self.consecutive_failures == 0:
+            return 0
+
+        # Exponential backoff: 2^failures minutes, capped at MAX_BACKOFF_MINUTES
+        backoff_minutes = min(
+            self.BACKOFF_MULTIPLIER ** self.consecutive_failures,
+            self.MAX_BACKOFF_MINUTES
+        )
+        return backoff_minutes * 60  # Return seconds
 
     def _load_state(self) -> Dict[str, Any]:
         """Load scraper state from file."""
@@ -170,6 +189,35 @@ class SlowStealthScraper:
         """Get delay with random jitter."""
         jitter_amount = base_delay * self.jitter
         return base_delay + random.uniform(-jitter_amount, jitter_amount)
+
+    def _get_founders_to_recheck(self, days_old: int = 7, limit: int = 1) -> List[Dict]:
+        """Get founders that haven't been checked in X days."""
+        cursor = self.db.conn.cursor()
+        cursor.execute('''
+            SELECT id, linkedin_url, name, headline
+            FROM stealth_founders
+            WHERE last_checked_at IS NULL
+               OR datetime(last_checked_at) < datetime('now', ?)
+            ORDER BY last_checked_at ASC NULLS FIRST
+            LIMIT ?
+        ''', (f'-{days_old} days', limit))
+
+        return [
+            {'id': row[0], 'url': row[1], 'name': row[2], 'headline': row[3]}
+            for row in cursor.fetchall()
+        ]
+
+    def _update_founder_check(self, founder_id: int, new_headline: str = None, changed: bool = False):
+        """Update last_checked_at and detect changes."""
+        cursor = self.db.conn.cursor()
+        cursor.execute('''
+            UPDATE stealth_founders
+            SET last_checked_at = ?,
+                profile_changed = CASE WHEN ? THEN 1 ELSE profile_changed END,
+                headline = CASE WHEN ? IS NOT NULL THEN ? ELSE headline END
+            WHERE id = ?
+        ''', (datetime.now().isoformat(), changed, new_headline, new_headline, founder_id))
+        self.db.conn.commit()
 
     def _get_existing_urls(self) -> set:
         """Get URLs already in database."""
@@ -322,11 +370,71 @@ class SlowStealthScraper:
             self._save_state()
             return {'url': url, 'success': False, 'error': str(e)}
 
-    def run_once(self) -> Dict[str, Any]:
-        """
-        Run one cycle: either search or scrape.
+    def _do_recheck(self) -> Optional[Dict[str, Any]]:
+        """Re-check an existing founder for profile changes."""
+        from sources.linkedin_scraper import LinkedInProfileScraper
 
-        Alternates between searching for new URLs and scraping pending URLs.
+        founders = self._get_founders_to_recheck(days_old=7, limit=1)
+        if not founders:
+            return None
+
+        founder = founders[0]
+        url = founder['url']
+        old_headline = founder['headline']
+
+        logger.info(f"Re-checking: {founder['name']} ({url})")
+
+        scraper = LinkedInProfileScraper(delay_range=(1, 2), use_cloudscraper=True)
+
+        try:
+            profile = scraper.scrape_profile(url)
+
+            result = {
+                'url': url,
+                'name': founder['name'],
+                'success': False,
+                'changed': False,
+            }
+
+            if profile and profile.name:
+                result['success'] = True
+                new_headline = profile.headline
+
+                # Detect if profile changed (headline different = may have emerged)
+                if old_headline and new_headline and old_headline != new_headline:
+                    result['changed'] = True
+                    logger.info(f"  CHANGED: '{old_headline[:40]}...' -> '{new_headline[:40]}...'")
+
+                    # Check if they emerged from stealth
+                    if 'stealth' in old_headline.lower() and 'stealth' not in new_headline.lower():
+                        logger.info(f"  EMERGED FROM STEALTH!")
+                        cursor = self.db.conn.cursor()
+                        cursor.execute('''
+                            UPDATE stealth_founders SET emerged_at = ? WHERE id = ?
+                        ''', (datetime.now().isoformat(), founder['id']))
+                        self.db.conn.commit()
+
+                self._update_founder_check(founder['id'], new_headline, result['changed'])
+            else:
+                logger.warning(f"  Could not fetch profile")
+                # Still update last_checked_at
+                self._update_founder_check(founder['id'])
+
+            return result
+
+        except Exception as e:
+            logger.error(f"Re-check failed: {e}")
+            return {'url': url, 'success': False, 'error': str(e)}
+
+    def run_once(self, iteration: int = 0) -> Dict[str, Any]:
+        """
+        Run one cycle: search, scrape, or re-check.
+
+        Alternates between:
+        - Scraping pending URLs (priority)
+        - Searching for new URLs
+        - Re-checking existing founders (every 10 iterations)
+
         Returns stats about what was done.
         """
         stats = {
@@ -334,6 +442,15 @@ class SlowStealthScraper:
             'success': False,
             'details': {},
         }
+
+        # Every 10 iterations, re-check an existing founder
+        if iteration > 0 and iteration % 10 == 0:
+            result = self._do_recheck()
+            if result:
+                stats['action'] = 'recheck'
+                stats['success'] = result.get('success', False)
+                stats['details'] = result
+                return stats
 
         # Decide whether to search or scrape
         # If we have pending URLs, scrape them first
@@ -353,7 +470,7 @@ class SlowStealthScraper:
 
     def run_continuous(self, max_iterations: int = None):
         """
-        Run continuously with proper delays.
+        Run continuously with proper delays and exponential backoff on failures.
 
         Args:
             max_iterations: Maximum iterations (None = run forever)
@@ -370,16 +487,33 @@ class SlowStealthScraper:
             while max_iterations is None or iteration < max_iterations:
                 iteration += 1
 
-                # Run one cycle
-                stats = self.run_once()
+                # Run one cycle (pass iteration for periodic re-checks)
+                stats = self.run_once(iteration=iteration)
 
                 logger.info(f"[{iteration}] {stats['action']}: {stats['details']}")
+
+                # Track consecutive failures for backoff
+                if stats['success']:
+                    self.consecutive_failures = 0
+                else:
+                    self.consecutive_failures += 1
+                    if self.consecutive_failures >= self.MAX_CONSECUTIVE_FAILURES:
+                        backoff = self._calculate_backoff()
+                        logger.warning(f"  {self.consecutive_failures} consecutive failures - backing off for {backoff/60:.0f} minutes")
+                        time.sleep(backoff)
+                        continue
 
                 # Choose delay based on action
                 if stats['action'] == 'search':
                     delay = self._get_delay(self.search_delay)
                 else:
                     delay = self._get_delay(self.scrape_delay)
+
+                # Add extra delay if we had a failure (but not yet at max)
+                if not stats['success'] and self.consecutive_failures > 0:
+                    extra_delay = self.consecutive_failures * 30  # 30s extra per failure
+                    delay += extra_delay
+                    logger.info(f"  Adding {extra_delay}s extra delay due to {self.consecutive_failures} failure(s)")
 
                 logger.info(f"  Sleeping {delay:.0f}s...")
                 time.sleep(delay)
@@ -397,9 +531,25 @@ class SlowStealthScraper:
         cursor.execute('SELECT COUNT(*) FROM stealth_founders WHERE confidence_score >= 0.5')
         high_confidence = cursor.fetchone()[0]
 
+        cursor.execute('SELECT COUNT(*) FROM stealth_founders WHERE emerged_at IS NOT NULL')
+        emerged_count = cursor.fetchone()[0]
+
+        cursor.execute('SELECT COUNT(*) FROM stealth_founders WHERE profile_changed = 1')
+        changed_count = cursor.fetchone()[0]
+
+        cursor.execute('''
+            SELECT COUNT(*) FROM stealth_founders
+            WHERE last_checked_at IS NULL
+               OR datetime(last_checked_at) < datetime('now', '-7 days')
+        ''')
+        needs_recheck = cursor.fetchone()[0]
+
         return {
             'total_in_db': total_in_db,
             'high_confidence': high_confidence,
+            'emerged': emerged_count,
+            'profile_changed': changed_count,
+            'needs_recheck': needs_recheck,
             'pending_urls': len(self.state['pending_urls']),
             'total_searches': self.state['total_searches'],
             'total_scrapes': self.state['total_scrapes'],

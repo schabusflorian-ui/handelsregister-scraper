@@ -14,6 +14,7 @@ Usage:
 
 import argparse
 import logging
+from logging.handlers import RotatingFileHandler
 import sys
 import os
 
@@ -25,17 +26,34 @@ from persistence.database import Database
 
 
 def setup_logging(verbose: bool = False):
-    """Configure logging."""
+    """Configure logging with rotation to prevent huge log files."""
     level = logging.DEBUG if verbose else logging.INFO
-    logging.basicConfig(
-        level=level,
-        format='%(asctime)s %(levelname)s %(message)s',
-        datefmt='%Y-%m-%d %H:%M:%S',
-        handlers=[
-            logging.StreamHandler(),
-            logging.FileHandler('data/stealth_scraper.log'),
-        ]
+
+    # Create formatter
+    formatter = logging.Formatter(
+        '%(asctime)s %(levelname)s %(message)s',
+        datefmt='%Y-%m-%d %H:%M:%S'
     )
+
+    # Console handler
+    console_handler = logging.StreamHandler()
+    console_handler.setFormatter(formatter)
+
+    # Rotating file handler - max 10MB per file, keep 5 backups (50MB total)
+    os.makedirs('data', exist_ok=True)
+    file_handler = RotatingFileHandler(
+        'data/stealth_scraper.log',
+        maxBytes=10*1024*1024,  # 10MB
+        backupCount=5,
+        encoding='utf-8'
+    )
+    file_handler.setFormatter(formatter)
+
+    # Configure root logger
+    root_logger = logging.getLogger()
+    root_logger.setLevel(level)
+    root_logger.addHandler(console_handler)
+    root_logger.addHandler(file_handler)
 
 
 def main():
@@ -76,16 +94,21 @@ def main():
         # Show stats only
         if args.stats:
             stats = scraper.get_stats()
-            print("\nStealth Scraper Stats:")
+            print("\nStealth Scraper Stats (DACH Region):")
             print("=" * 50)
             print(f"  Founders in DB:      {stats['total_in_db']}")
             print(f"  High confidence:     {stats['high_confidence']}")
+            print(f"  Emerged from stealth:{stats.get('emerged', 0)}")
+            print(f"  Profile changed:     {stats.get('profile_changed', 0)}")
+            print(f"  Needs re-check:      {stats.get('needs_recheck', 0)}")
+            print("-" * 50)
             print(f"  Pending URLs:        {stats['pending_urls']}")
             print(f"  Total searches:      {stats['total_searches']}")
             print(f"  Total scrapes:       {stats['total_scrapes']}")
             print(f"  Founders found:      {stats['total_founders_found']}")
             print(f"  Skipped (non-DACH):  {stats['skipped_non_german']}")
             print(f"  Skipped (low conf):  {stats['skipped_low_confidence']}")
+            print("-" * 50)
             print(f"  Current query:       {stats['current_query'][:50]}...")
             print(f"  Last search:         {stats['last_search_at']}")
             print(f"  Last scrape:         {stats['last_scrape_at']}")
