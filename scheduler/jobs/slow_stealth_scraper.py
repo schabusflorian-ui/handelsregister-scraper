@@ -632,7 +632,7 @@ class SlowStealthScraper:
             return {'url': url, 'success': False, 'error': str(e)}
 
     def _do_recheck(self) -> Optional[Dict[str, Any]]:
-        """Re-check an existing founder for profile changes."""
+        """Re-check an existing founder for profile changes using enhanced tracking."""
         from sources.linkedin_scraper import LinkedInProfileScraper
 
         founders = self._get_founders_to_recheck(days_old=7, limit=1)
@@ -655,27 +655,37 @@ class SlowStealthScraper:
                 'name': founder['name'],
                 'success': False,
                 'changed': False,
+                'changes': [],
             }
 
             if profile and profile.name:
                 result['success'] = True
-                new_headline = profile.headline
 
-                # Detect if profile changed (headline different = may have emerged)
-                if old_headline and new_headline and old_headline != new_headline:
+                # Use the new update_stealth_founder method for change tracking
+                changes = self.db.update_stealth_founder(
+                    founder_id=founder['id'],
+                    headline=profile.headline,
+                    summary=profile.summary,
+                    current_company=profile.current_company,
+                    location=profile.location,
+                    confidence_score=profile.confidence_score,
+                )
+
+                if changes:
                     result['changed'] = True
-                    logger.info(f"  CHANGED: '{old_headline[:40]}...' -> '{new_headline[:40]}...'")
+                    result['changes'] = changes
+                    logger.info(f"  CHANGED: {len(changes)} field(s) updated")
 
-                    # Check if they emerged from stealth
-                    if 'stealth' in old_headline.lower() and 'stealth' not in new_headline.lower():
-                        logger.info(f"  EMERGED FROM STEALTH!")
-                        cursor = self.db.conn.cursor()
-                        cursor.execute('''
-                            UPDATE stealth_founders SET emerged_at = ? WHERE id = ?
-                        ''', (datetime.now().isoformat(), founder['id']))
-                        self.db.conn.commit()
+                    for change in changes:
+                        logger.info(f"    {change['field']}: {change['change_type']}")
 
-                self._update_founder_check(founder['id'], new_headline, result['changed'])
+                        # Check for stealth emergence
+                        if change['change_type'] == 'went_stealth':
+                            logger.info(f"  WENT STEALTH! (may be starting something)")
+                        elif change['change_type'] == 'became_founder':
+                            logger.info(f"  BECAME FOUNDER! Checking for company match...")
+                            self._try_emergence_match(founder['id'])
+
             else:
                 logger.warning(f"  Could not fetch profile")
                 # Still update last_checked_at
@@ -686,6 +696,48 @@ class SlowStealthScraper:
         except Exception as e:
             logger.error(f"Re-check failed: {e}")
             return {'url': url, 'success': False, 'error': str(e)}
+
+    def _try_emergence_match(self, founder_id: int) -> Optional[Dict]:
+        """Try to match a founder to a newly registered company."""
+        try:
+            from processing.emergence_matcher import EmergenceMatcher
+
+            founder = self.db.get_stealth_founder(founder_id)
+            if not founder or founder.get('company_id'):
+                return None
+
+            matcher = EmergenceMatcher(self.db)
+            matches = matcher.find_matches_for_founder(founder, limit=3)
+
+            if matches:
+                best_match = matches[0]
+                if best_match['name_similarity'] >= 0.95:
+                    # Auto-link high confidence match
+                    self.db.mark_founder_emerged(founder_id, best_match['company_id'])
+                    logger.info(
+                        f"  AUTO-LINKED: {founder['name']} -> {best_match['company_name']} "
+                        f"(similarity: {best_match['name_similarity']:.2f})"
+                    )
+                    return best_match
+                else:
+                    logger.info(
+                        f"  CANDIDATE: {best_match['company_name']} "
+                        f"(similarity: {best_match['name_similarity']:.2f}) - needs review"
+                    )
+
+            return None
+        except Exception as e:
+            logger.warning(f"Emergence matching failed: {e}")
+            return None
+
+    def run_emergence_detection(self) -> Dict[str, Any]:
+        """Run full emergence detection for all unemerged founders."""
+        try:
+            from processing.emergence_matcher import run_emergence_detection
+            return run_emergence_detection(self.db, auto_link=True)
+        except Exception as e:
+            logger.error(f"Emergence detection failed: {e}")
+            return {'error': str(e)}
 
     def run_once(self, iteration: int = 0) -> Dict[str, Any]:
         """

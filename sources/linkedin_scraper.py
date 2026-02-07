@@ -35,6 +35,42 @@ STEALTH_KEYWORDS = [
     'something new', 'exciting news soon', 'coming soon',
     'new venture', 'working on', 'exploring opportunities',
     'next chapter', 'what\'s next', 'in transition',
+    'building in public', 'stay tuned', 'announcement soon',
+    'secret project', 'unannounced', 'pre-launch',
+]
+
+# Career transition signals (Specter-inspired)
+TRANSITION_KEYWORDS = [
+    'just left', 'recently left', 'former', 'ex-',
+    'taking time', 'on sabbatical', 'between roles',
+    'exploring', 'advising', 'angel investing',
+    'on a break', 'career break', 'recharging',
+    'left to', 'departed', 'moved on from',
+]
+
+# Urgency/traction signals
+URGENCY_KEYWORDS = [
+    'hiring', 'looking for', 'building team',
+    'raising', 'fundraising', 'backed by',
+    'launching soon', 'beta', 'early access',
+    'first customers', 'growing fast', 'scaling',
+    'just launched', 'now live', 'open for business',
+]
+
+# Traction/validation signals
+TRACTION_KEYWORDS = [
+    'customers', 'users', 'revenue', 'arr', 'mrr',
+    'growing', 'scaling', 'series a', 'series b',
+    'raised', 'funding', 'backed', 'invested',
+    'yc', 'y combinator', 'techstars', 'accelerator',
+]
+
+# Repeat founder signals
+REPEAT_FOUNDER_KEYWORDS = [
+    'serial entrepreneur', 'second time founder', '2x founder',
+    'exited', 'sold my', 'acquired by', 'previous exit',
+    'built and sold', 'founded and exited', 'serial founder',
+    '3x founder', 'multiple exits', 'prev founder',
 ]
 
 # High-value background companies
@@ -211,11 +247,29 @@ class LinkedInProfile:
     founder_signals: List[str] = field(default_factory=list)
     confidence_score: float = 0.0
 
+    # Enhanced signals (Specter/Harmonic-inspired)
+    transition_signals: List[str] = field(default_factory=list)
+    urgency_signals: List[str] = field(default_factory=list)
+    traction_signals: List[str] = field(default_factory=list)
+    is_repeat_founder: bool = False
+    company_tier: int = 0  # 0-4 scale based on background
+
     scraped_at: datetime = field(default_factory=datetime.now)
     raw_html: Optional[str] = None
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for database storage."""
+        # Combine all signals for storage
+        all_signals = {
+            'stealth': self.stealth_signals,
+            'founder': self.founder_signals,
+            'transition': self.transition_signals,
+            'urgency': self.urgency_signals,
+            'traction': self.traction_signals,
+            'cofounder': self.cofounder_signals,
+            'background': self.high_value_background,
+        }
+
         return {
             'linkedin_url': self.url,
             'name': self.name,
@@ -233,8 +287,10 @@ class LinkedInProfile:
             'looking_for_cofounder': self.looking_for_cofounder,
             'cofounder_signals': json.dumps(self.cofounder_signals) if self.cofounder_signals else None,
             'primary_function': self.primary_function,
-            'stealth_signals': json.dumps(self.stealth_signals) if self.stealth_signals else None,
+            'stealth_signals': json.dumps(all_signals),  # Store all signals as JSON
             'confidence_score': self.confidence_score,
+            'is_repeat_founder': self.is_repeat_founder,
+            'company_tier': self.company_tier,
         }
 
 
@@ -473,7 +529,7 @@ class LinkedInProfileScraper:
         return profile
 
     def _detect_signals(self, profile: LinkedInProfile) -> LinkedInProfile:
-        """Detect stealth signals and calculate confidence score."""
+        """Detect stealth signals and calculate confidence score (v2 - enhanced)."""
 
         text_to_check = ' '.join(filter(None, [
             profile.headline,
@@ -502,34 +558,126 @@ class LinkedInProfileScraper:
                 profile.cofounder_signals.append(keyword)
                 profile.looking_for_cofounder = True
 
+        # NEW: Check for transition signals (Specter-inspired)
+        for keyword in TRANSITION_KEYWORDS:
+            if keyword in text_to_check:
+                profile.transition_signals.append(keyword)
+
+        # NEW: Check for urgency signals
+        for keyword in URGENCY_KEYWORDS:
+            if keyword in text_to_check:
+                profile.urgency_signals.append(keyword)
+
+        # NEW: Check for traction signals
+        for keyword in TRACTION_KEYWORDS:
+            if keyword in text_to_check:
+                profile.traction_signals.append(keyword)
+
+        # NEW: Check for repeat founder signals
+        for keyword in REPEAT_FOUNDER_KEYWORDS:
+            if keyword in text_to_check:
+                profile.is_repeat_founder = True
+                break
+
         # Classify role/function
         profile = self._classify_role(profile, text_to_check)
 
         # Extract skills from text
         profile = self._extract_skills(profile, text_to_check)
 
-        # Calculate confidence score
-        score = 0.0
+        # NEW: Calculate company tier (0-4 scale)
+        profile.company_tier = self._calculate_company_tier(profile.high_value_background)
 
-        # Stealth signals are strong indicators
-        if profile.stealth_signals:
-            score += min(0.4, len(profile.stealth_signals) * 0.15)
-
-        # Founder keywords
-        if profile.founder_signals:
-            score += min(0.3, len(profile.founder_signals) * 0.1)
-
-        # High-value background
-        if profile.high_value_background:
-            score += min(0.2, len(profile.high_value_background) * 0.1)
-
-        # Location in Germany
-        if profile.location and any(x in profile.location.lower() for x in ['germany', 'deutschland', 'berlin', 'munich', 'münchen', 'hamburg', 'frankfurt']):
-            score += 0.1
-
-        profile.confidence_score = min(1.0, score)
+        # Calculate confidence score v2
+        profile.confidence_score = self._calculate_confidence_v2(profile)
 
         return profile
+
+    def _calculate_company_tier(self, companies: List[str]) -> int:
+        """
+        Calculate company tier based on background.
+        0 = unknown, 1 = known company, 2 = notable startup, 3 = unicorn, 4 = FAANG
+        """
+        if not companies:
+            return 0
+
+        tier = 0
+        faang = {'google', 'meta', 'facebook', 'amazon', 'apple', 'microsoft'}
+        unicorns = {'stripe', 'airbnb', 'uber', 'spotify', 'klarna', 'revolut', 'celonis'}
+        top_vcs = {'sequoia', 'andreessen', 'a16z', 'ycombinator', 'y combinator', 'index ventures', 'accel'}
+        consulting = {'mckinsey', 'bcg', 'bain'}
+
+        for company in companies:
+            company_lower = company.lower()
+            if company_lower in faang:
+                tier = max(tier, 4)
+            elif company_lower in unicorns or company_lower in top_vcs:
+                tier = max(tier, 3)
+            elif company_lower in consulting:
+                tier = max(tier, 3)
+            else:
+                tier = max(tier, 2)
+
+        return tier
+
+    def _calculate_confidence_v2(self, profile: 'LinkedInProfile') -> float:
+        """
+        Enhanced confidence scoring based on Specter/Harmonic signals.
+
+        Scoring tiers:
+        - Tier 1: Direct stealth signals (0.35 max)
+        - Tier 2: Career transition signals (0.20 max)
+        - Tier 3: Background/credibility (0.20 max)
+        - Tier 4: Activity/urgency signals (0.15 max)
+        - Tier 5: Location (0.10 max)
+        """
+        score = 0.0
+
+        # Tier 1: Direct stealth signals (0.35 max)
+        if profile.stealth_signals:
+            # Direct "stealth" keyword is very strong
+            if any('stealth' in s for s in profile.stealth_signals):
+                score += 0.25
+            else:
+                score += min(0.15, len(profile.stealth_signals) * 0.05)
+            score = min(score, 0.35)
+
+        # Tier 2: Career transition signals (0.20 max)
+        tier2_score = 0.0
+        if profile.transition_signals:
+            tier2_score += min(0.10, len(profile.transition_signals) * 0.04)
+        if profile.is_repeat_founder:
+            tier2_score += 0.10
+        if profile.founder_signals:
+            tier2_score += min(0.08, len(profile.founder_signals) * 0.03)
+        score += min(0.20, tier2_score)
+
+        # Tier 3: Background/credibility (0.20 max)
+        tier3_score = 0.0
+        tier3_score += profile.company_tier * 0.04  # 0-4 scale = 0-0.16
+        if profile.high_value_background:
+            tier3_score += 0.04
+        score += min(0.20, tier3_score)
+
+        # Tier 4: Activity/urgency signals (0.15 max)
+        tier4_score = 0.0
+        if profile.looking_for_cofounder:
+            tier4_score += 0.08
+        if profile.urgency_signals:
+            tier4_score += min(0.07, len(profile.urgency_signals) * 0.03)
+        if profile.traction_signals:
+            tier4_score += min(0.05, len(profile.traction_signals) * 0.02)
+        score += min(0.15, tier4_score)
+
+        # Tier 5: Location in DACH (0.10 max)
+        if profile.location:
+            loc_lower = profile.location.lower()
+            if any(x in loc_lower for x in ['germany', 'deutschland', 'austria', 'österreich', 'switzerland', 'schweiz']):
+                score += 0.08
+            elif any(x in loc_lower for x in ['berlin', 'munich', 'münchen', 'hamburg', 'frankfurt', 'vienna', 'wien', 'zurich', 'zürich']):
+                score += 0.10
+
+        return min(1.0, score)
 
     def _classify_role(self, profile: LinkedInProfile, text: str) -> LinkedInProfile:
         """Classify the person's primary role/function."""

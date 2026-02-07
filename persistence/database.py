@@ -417,6 +417,25 @@ class Database:
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_stealth_founders_location ON stealth_founders(location)')
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_stealth_founders_company ON stealth_founders(company_id)')
 
+        # Founder history table (track profile changes over time)
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS founder_history (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                founder_id INTEGER NOT NULL,
+                field_name TEXT NOT NULL,
+                old_value TEXT,
+                new_value TEXT,
+                change_type TEXT,
+                changed_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (founder_id) REFERENCES stealth_founders(id) ON DELETE CASCADE
+            )
+        ''')
+
+        # Founder history indexes
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_founder_history_founder ON founder_history(founder_id)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_founder_history_type ON founder_history(change_type)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_founder_history_date ON founder_history(changed_at)')
+
         self.conn.commit()
 
         # Migration: add is_early_stage_related column if table exists without it
@@ -1079,6 +1098,242 @@ class Database:
             "SELECT * FROM news_articles WHERE is_early_stage_related = 1 ORDER BY fetched_at DESC LIMIT ?",
             (limit,)
         )
+        return [dict(row) for row in cursor.fetchall()]
+
+    # =========================================================================
+    # Stealth Founder Operations
+    # =========================================================================
+
+    def get_stealth_founder(self, founder_id: int) -> Optional[Dict]:
+        """Get stealth founder by ID."""
+        cursor = self.conn.cursor()
+        cursor.execute('SELECT * FROM stealth_founders WHERE id = ?', (founder_id,))
+        row = cursor.fetchone()
+        return dict(row) if row else None
+
+    def get_stealth_founder_by_url(self, linkedin_url: str) -> Optional[Dict]:
+        """Get stealth founder by LinkedIn URL."""
+        cursor = self.conn.cursor()
+        cursor.execute('SELECT * FROM stealth_founders WHERE linkedin_url = ?', (linkedin_url,))
+        row = cursor.fetchone()
+        return dict(row) if row else None
+
+    def get_stealth_founders_for_recheck(self, days_since_check: int = 7, limit: int = 100) -> List[Dict]:
+        """Get high-confidence founders that need re-checking."""
+        cursor = self.conn.cursor()
+        cursor.execute('''
+            SELECT * FROM stealth_founders
+            WHERE confidence_score >= 0.4
+              AND company_id IS NULL
+              AND (last_checked_at IS NULL
+                   OR last_checked_at < datetime('now', '-' || ? || ' days'))
+            ORDER BY confidence_score DESC, last_checked_at ASC
+            LIMIT ?
+        ''', (days_since_check, limit))
+        return [dict(row) for row in cursor.fetchall()]
+
+    def get_unemerged_founders(self, min_confidence: float = 0.3, limit: int = 100) -> List[Dict]:
+        """Get stealth founders who haven't been linked to a company yet."""
+        cursor = self.conn.cursor()
+        cursor.execute('''
+            SELECT * FROM stealth_founders
+            WHERE company_id IS NULL
+              AND confidence_score >= ?
+            ORDER BY confidence_score DESC
+            LIMIT ?
+        ''', (min_confidence, limit))
+        return [dict(row) for row in cursor.fetchall()]
+
+    def log_founder_change(
+        self,
+        founder_id: int,
+        field_name: str,
+        old_value: Optional[str],
+        new_value: Optional[str],
+        change_type: Optional[str] = None,
+    ) -> int:
+        """Log a change to a founder's profile."""
+        cursor = self.conn.cursor()
+        cursor.execute('''
+            INSERT INTO founder_history (founder_id, field_name, old_value, new_value, change_type)
+            VALUES (?, ?, ?, ?, ?)
+        ''', (founder_id, field_name, old_value, new_value, change_type))
+        self.conn.commit()
+        return cursor.lastrowid
+
+    def get_founder_history(self, founder_id: int) -> List[Dict]:
+        """Get change history for a founder."""
+        cursor = self.conn.cursor()
+        cursor.execute('''
+            SELECT * FROM founder_history
+            WHERE founder_id = ?
+            ORDER BY changed_at DESC
+        ''', (founder_id,))
+        return [dict(row) for row in cursor.fetchall()]
+
+    def get_recent_founder_changes(self, days: int = 7, change_type: Optional[str] = None) -> List[Dict]:
+        """Get recent founder profile changes with founder info."""
+        cursor = self.conn.cursor()
+        if change_type:
+            cursor.execute('''
+                SELECT fh.*, sf.name, sf.linkedin_url, sf.confidence_score
+                FROM founder_history fh
+                JOIN stealth_founders sf ON fh.founder_id = sf.id
+                WHERE fh.changed_at >= datetime('now', '-' || ? || ' days')
+                  AND fh.change_type = ?
+                ORDER BY fh.changed_at DESC
+            ''', (days, change_type))
+        else:
+            cursor.execute('''
+                SELECT fh.*, sf.name, sf.linkedin_url, sf.confidence_score
+                FROM founder_history fh
+                JOIN stealth_founders sf ON fh.founder_id = sf.id
+                WHERE fh.changed_at >= datetime('now', '-' || ? || ' days')
+                ORDER BY fh.changed_at DESC
+            ''', (days,))
+        return [dict(row) for row in cursor.fetchall()]
+
+    def mark_founder_emerged(self, founder_id: int, company_id: int):
+        """Mark a stealth founder as emerged (linked to a company)."""
+        now = datetime.now().isoformat()
+        cursor = self.conn.cursor()
+        cursor.execute('''
+            UPDATE stealth_founders
+            SET company_id = ?, emerged_at = ?
+            WHERE id = ?
+        ''', (company_id, now, founder_id))
+        self.conn.commit()
+
+        # Log the emergence
+        self.log_founder_change(
+            founder_id=founder_id,
+            field_name='company_id',
+            old_value=None,
+            new_value=str(company_id),
+            change_type='emerged'
+        )
+
+    def update_stealth_founder(self, founder_id: int, **kwargs) -> List[Dict]:
+        """
+        Update stealth founder fields and track changes.
+
+        Returns list of changes detected.
+        """
+        if not kwargs:
+            return []
+
+        # Get current values
+        current = self.get_stealth_founder(founder_id)
+        if not current:
+            return []
+
+        changes = []
+        fields_to_update = {}
+
+        # Detect changes
+        for field, new_value in kwargs.items():
+            old_value = current.get(field)
+
+            # Convert to comparable strings
+            old_str = str(old_value) if old_value is not None else None
+            new_str = str(new_value) if new_value is not None else None
+
+            if old_str != new_str:
+                # Determine change type
+                change_type = self._classify_founder_change(field, old_value, new_value)
+
+                changes.append({
+                    'field': field,
+                    'old_value': old_str,
+                    'new_value': new_str,
+                    'change_type': change_type,
+                })
+
+                fields_to_update[field] = new_value
+
+        # Update fields
+        if fields_to_update:
+            fields_to_update['last_checked_at'] = datetime.now().isoformat()
+            if changes:
+                fields_to_update['profile_changed'] = 1
+
+            set_clause = ', '.join(f'{k} = ?' for k in fields_to_update.keys())
+            values = list(fields_to_update.values()) + [founder_id]
+
+            cursor = self.conn.cursor()
+            cursor.execute(f'UPDATE stealth_founders SET {set_clause} WHERE id = ?', values)
+            self.conn.commit()
+
+            # Log changes
+            for change in changes:
+                self.log_founder_change(
+                    founder_id=founder_id,
+                    field_name=change['field'],
+                    old_value=change['old_value'],
+                    new_value=change['new_value'],
+                    change_type=change['change_type'],
+                )
+
+        return changes
+
+    def _classify_founder_change(
+        self,
+        field: str,
+        old_value: Optional[str],
+        new_value: Optional[str]
+    ) -> str:
+        """Classify the type of change for a founder profile field."""
+        old_lower = (old_value or '').lower()
+        new_lower = (new_value or '').lower()
+
+        if field == 'headline':
+            # Detect stealth transitions
+            stealth_words = ['stealth', 'building', 'something new', 'next chapter', 'exploring']
+            founder_words = ['founder', 'co-founder', 'ceo', 'gründer']
+
+            went_stealth = any(w in new_lower for w in stealth_words) and not any(w in old_lower for w in stealth_words)
+            became_founder = any(w in new_lower for w in founder_words) and not any(w in old_lower for w in founder_words)
+
+            if went_stealth:
+                return 'went_stealth'
+            elif became_founder:
+                return 'became_founder'
+            else:
+                return 'headline_change'
+
+        elif field == 'current_company':
+            if old_value and not new_value:
+                return 'left_company'
+            elif not old_value and new_value:
+                return 'joined_company'
+            else:
+                return 'company_change'
+
+        elif field == 'confidence_score':
+            try:
+                old_score = float(old_value) if old_value else 0
+                new_score = float(new_value) if new_value else 0
+                if new_score > old_score:
+                    return 'confidence_increased'
+                else:
+                    return 'confidence_decreased'
+            except ValueError:
+                return 'score_change'
+
+        elif field == 'location':
+            return 'location_change'
+
+        return 'field_change'
+
+    def search_founders_by_name(self, name_pattern: str, limit: int = 10) -> List[Dict]:
+        """Search stealth founders by name pattern."""
+        cursor = self.conn.cursor()
+        cursor.execute('''
+            SELECT * FROM stealth_founders
+            WHERE name LIKE ?
+            ORDER BY confidence_score DESC
+            LIMIT ?
+        ''', (f'%{name_pattern}%', limit))
         return [dict(row) for row in cursor.fetchall()]
 
     def close(self):
