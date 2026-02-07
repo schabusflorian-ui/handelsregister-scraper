@@ -572,7 +572,7 @@ class SlowStealthScraper:
 
         scraper = LinkedInProfileScraper(delay_range=(1, 2), use_cloudscraper=True)
         # Require German location for filtering
-        detector = StealthFounderDetector(min_confidence=0.1, require_german_location=True)
+        detector = StealthFounderDetector(min_confidence=0.15, require_german_location=True)
 
         try:
             profile = scraper.scrape_profile(url)
