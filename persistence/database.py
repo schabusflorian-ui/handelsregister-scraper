@@ -1283,8 +1283,21 @@ class Database:
         new_value: Optional[str]
     ) -> str:
         """Classify the type of change for a founder profile field."""
-        old_lower = (old_value or '').lower()
-        new_lower = (new_value or '').lower()
+        # Handle confidence_score separately (it's a float)
+        if field == 'confidence_score':
+            try:
+                old_score = float(old_value) if old_value else 0
+                new_score = float(new_value) if new_value else 0
+                if new_score > old_score:
+                    return 'confidence_increased'
+                else:
+                    return 'confidence_decreased'
+            except (ValueError, TypeError):
+                return 'score_change'
+
+        # Convert to lowercase strings for text comparison
+        old_lower = (str(old_value) if old_value is not None else '').lower()
+        new_lower = (str(new_value) if new_value is not None else '').lower()
 
         if field == 'headline':
             # Detect stealth transitions
@@ -1308,17 +1321,6 @@ class Database:
                 return 'joined_company'
             else:
                 return 'company_change'
-
-        elif field == 'confidence_score':
-            try:
-                old_score = float(old_value) if old_value else 0
-                new_score = float(new_value) if new_value else 0
-                if new_score > old_score:
-                    return 'confidence_increased'
-                else:
-                    return 'confidence_decreased'
-            except ValueError:
-                return 'score_change'
 
         elif field == 'location':
             return 'location_change'
