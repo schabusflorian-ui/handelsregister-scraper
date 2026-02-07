@@ -1,17 +1,11 @@
 """
 VC Portfolio Scraper - Extract early-stage companies from investor portfolios.
 
-Sources:
-- Y Combinator (global, many DACH founders)
-- EWOR (European, DACH-focused)
-- Seedcamp (European)
-- Cherry Ventures (Berlin)
-- Point Nine (Berlin)
-- Earlybird (Berlin/Munich)
-- HV Capital (Munich)
-- Project A (Berlin)
-- Speedinvest (Vienna)
-- Lakestar (Zurich)
+50+ DACH-focused early-stage funds:
+- German VCs (Berlin, Munich, Hamburg)
+- Austrian VCs (Vienna)
+- Swiss VCs (Zurich, Geneva)
+- Pan-European funds with DACH focus
 """
 
 import logging
@@ -27,6 +21,87 @@ from bs4 import BeautifulSoup
 from urllib.parse import urljoin
 
 logger = logging.getLogger(__name__)
+
+
+# 50+ Early-stage DACH-focused funds with portfolio URLs
+DACH_FUNDS = [
+    # === GERMAN VCs - Berlin ===
+    {"name": "Cherry Ventures", "url": "https://www.cherry.vc/portfolio", "location": "Berlin", "stage": "Seed"},
+    {"name": "Point Nine", "url": "https://www.pointnine.com/portfolio", "location": "Berlin", "stage": "Seed"},
+    {"name": "Project A", "url": "https://www.project-a.com/portfolio", "location": "Berlin", "stage": "Seed/A"},
+    {"name": "HV Capital", "url": "https://www.hvcapital.com/portfolio", "location": "Berlin/Munich", "stage": "Seed/A"},
+    {"name": "Earlybird", "url": "https://earlybird.com/portfolio", "location": "Berlin", "stage": "Seed/A"},
+    {"name": "Cavalry Ventures", "url": "https://cavalry.vc/portfolio", "location": "Berlin", "stage": "Pre-Seed/Seed"},
+    {"name": "La Famiglia", "url": "https://www.lafamiglia.vc/portfolio", "location": "Berlin", "stage": "Seed"},
+    {"name": "signals Venture Capital", "url": "https://signals.vc/portfolio", "location": "Berlin", "stage": "Pre-Seed/Seed"},
+    {"name": "IBB Ventures", "url": "https://www.ibbventures.de/portfolio", "location": "Berlin", "stage": "Seed"},
+    {"name": "Atlantic Labs", "url": "https://atlanticlabs.de/portfolio", "location": "Berlin", "stage": "Pre-Seed"},
+    {"name": "Fly Ventures", "url": "https://fly.vc/portfolio", "location": "Berlin", "stage": "Pre-Seed/Seed"},
+    {"name": "FinLeap", "url": "https://www.finleap.com/companies", "location": "Berlin", "stage": "Seed"},
+    {"name": "Capnamic", "url": "https://capnamic.com/portfolio", "location": "Berlin/Cologne", "stage": "Seed/A"},
+    {"name": "Vorwerk Ventures", "url": "https://vorwerkventures.com/portfolio", "location": "Berlin", "stage": "Seed/A"},
+    {"name": "Redstone", "url": "https://www.redstone.vc/portfolio", "location": "Berlin", "stage": "Seed/A"},
+    {"name": "Target Global", "url": "https://www.targetglobal.vc/portfolio", "location": "Berlin", "stage": "Seed/A"},
+    {"name": "Heartcore Capital", "url": "https://heartcore.com/portfolio", "location": "Berlin", "stage": "Seed"},
+    {"name": "Visionaries Club", "url": "https://www.visionariesclub.com/portfolio", "location": "Berlin", "stage": "Seed/A"},
+
+    # === GERMAN VCs - Munich ===
+    {"name": "UVC Partners", "url": "https://www.uvcpartners.com/portfolio", "location": "Munich", "stage": "Seed/A"},
+    {"name": "Acton Capital", "url": "https://actoncapital.com/portfolio", "location": "Munich", "stage": "Seed/A"},
+    {"name": "10x Founders", "url": "https://10xfounders.com/portfolio", "location": "Munich", "stage": "Pre-Seed"},
+    {"name": "Bayern Kapital", "url": "https://www.bayernkapital.de/portfolio", "location": "Munich", "stage": "Seed"},
+    {"name": "Plug and Play Munich", "url": "https://www.plugandplaytechcenter.com/munich", "location": "Munich", "stage": "Pre-Seed"},
+    {"name": "TechFounders", "url": "https://www.techfounders.com/portfolio", "location": "Munich", "stage": "Pre-Seed"},
+    {"name": "High-Tech Gründerfonds", "url": "https://www.htgf.de/en/portfolio", "location": "Bonn", "stage": "Seed"},
+    {"name": "42CAP", "url": "https://www.42cap.com/portfolio", "location": "Munich", "stage": "Pre-Seed/Seed"},
+    {"name": "SevenVentures", "url": "https://www.sevenventures.com/portfolio", "location": "Munich", "stage": "Growth"},
+
+    # === GERMAN VCs - Hamburg ===
+    {"name": "Hanse Ventures", "url": "https://hanseventures.com/portfolio", "location": "Hamburg", "stage": "Seed"},
+    {"name": "Venture Stars", "url": "https://venturestars.com/portfolio", "location": "Hamburg", "stage": "Pre-Seed"},
+    {"name": "Neotas Ventures", "url": "https://www.neotas.ventures/portfolio", "location": "Hamburg", "stage": "Seed"},
+
+    # === AUSTRIAN VCs ===
+    {"name": "Speedinvest", "url": "https://www.speedinvest.com/portfolio", "location": "Vienna", "stage": "Pre-Seed/Seed"},
+    {"name": "AWS Gründerfonds", "url": "https://www.gruenderfonds.at/portfolio", "location": "Vienna", "stage": "Seed"},
+    {"name": "Calm/Storm", "url": "https://calmstorm.vc/portfolio", "location": "Vienna", "stage": "Seed"},
+    {"name": "Push Ventures", "url": "https://www.push.vc/portfolio", "location": "Vienna", "stage": "Pre-Seed"},
+    {"name": "Pioneers Ventures", "url": "https://pioneers.io/ventures", "location": "Vienna", "stage": "Seed"},
+    {"name": "Venionaire Capital", "url": "https://www.venionaire.com/portfolio", "location": "Vienna", "stage": "Seed"},
+    {"name": "IST Cube", "url": "https://www.ist-cube.com/portfolio", "location": "Vienna", "stage": "Pre-Seed"},
+    {"name": "Apex Ventures", "url": "https://www.apex.ventures/portfolio", "location": "Vienna", "stage": "Seed"},
+
+    # === SWISS VCs ===
+    {"name": "Lakestar", "url": "https://www.lakestar.com/portfolio", "location": "Zurich", "stage": "Seed/A"},
+    {"name": "btov Partners", "url": "https://www.btov.vc/portfolio", "location": "Zurich/Berlin", "stage": "Seed/A"},
+    {"name": "Wingman Ventures", "url": "https://www.wingman.vc/portfolio", "location": "Zurich", "stage": "Seed"},
+    {"name": "Redalpine", "url": "https://www.redalpine.com/portfolio", "location": "Zurich", "stage": "Seed/A"},
+    {"name": "Verve Ventures", "url": "https://www.verve.vc/portfolio", "location": "Zurich", "stage": "Seed"},
+    {"name": "Polytech Ventures", "url": "https://www.polytechventures.com/portfolio", "location": "Zurich", "stage": "Seed"},
+    {"name": "Serpentine Ventures", "url": "https://www.serpentine.vc/portfolio", "location": "Zurich", "stage": "Pre-Seed/Seed"},
+    {"name": "Founderful", "url": "https://www.founderful.com/portfolio", "location": "Zurich", "stage": "Pre-Seed"},
+    {"name": "VI Partners", "url": "https://www.vipartners.ch/portfolio", "location": "Zurich", "stage": "Seed/A"},
+    {"name": "investiere", "url": "https://www.investiere.ch/startups", "location": "Zurich", "stage": "Seed"},
+
+    # === ACCELERATORS ===
+    {"name": "Y Combinator", "url": "https://www.ycombinator.com/companies", "location": "Global", "stage": "Pre-Seed"},
+    {"name": "EWOR", "url": "https://ewor.io/portfolio", "location": "Munich/Vienna", "stage": "Pre-Seed"},
+    {"name": "Techstars Berlin", "url": "https://www.techstars.com/portfolio?location=berlin", "location": "Berlin", "stage": "Pre-Seed"},
+    {"name": "Entrepreneur First Berlin", "url": "https://www.joinef.com/companies", "location": "Berlin", "stage": "Pre-Seed"},
+    {"name": "APX", "url": "https://apx.vc/portfolio", "location": "Berlin", "stage": "Pre-Seed"},
+    {"name": "German Accelerator", "url": "https://www.germanaccelerator.com/portfolio", "location": "Berlin/Munich", "stage": "Seed"},
+    {"name": "Startup Wise Guys", "url": "https://startupwiseguys.com/portfolio", "location": "Berlin", "stage": "Pre-Seed"},
+    {"name": "Antler DACH", "url": "https://www.antler.co/portfolio", "location": "Berlin", "stage": "Pre-Seed"},
+
+    # === PAN-EUROPEAN with DACH focus ===
+    {"name": "Creandum", "url": "https://www.creandum.com/portfolio", "location": "Stockholm/Berlin", "stage": "Seed/A"},
+    {"name": "Northzone", "url": "https://www.northzone.com/portfolio", "location": "London/Stockholm", "stage": "Seed/A"},
+    {"name": "Index Ventures", "url": "https://www.indexventures.com/portfolio", "location": "London/SF", "stage": "Seed/A"},
+    {"name": "Balderton Capital", "url": "https://www.balderton.com/portfolio", "location": "London", "stage": "Seed/A"},
+    {"name": "Atomico", "url": "https://www.atomico.com/portfolio", "location": "London", "stage": "Seed/A"},
+    {"name": "Felix Capital", "url": "https://www.felixcap.com/portfolio", "location": "London", "stage": "Seed"},
+    {"name": "Notion Capital", "url": "https://notion.vc/portfolio", "location": "London", "stage": "Seed/A"},
+]
 
 
 @dataclass
@@ -289,30 +364,182 @@ class SpeedinvestScraper(PortfolioScraper):
         return unique
 
 
-class AllPortfoliosScraper:
-    """Scrape all VC portfolios."""
+class GenericPortfolioScraper(PortfolioScraper):
+    """
+    Generic scraper that works with most VC portfolio pages.
+    Uses heuristics to find company names in common HTML patterns.
+    """
 
-    def __init__(self, delay_between_sources: int = 5):
-        self.delay = delay_between_sources
-        self.scrapers = [
-            YCombinatorScraper(),
-            EWORScraper(),
-            CherryVenturesScraper(),
-            PointNineScraper(),
-            SpeedinvestScraper(),
+    def __init__(self, fund_info: Dict, delay_range: tuple = (2, 5)):
+        super().__init__(delay_range)
+        self.fund_name = fund_info['name']
+        self.fund_url = fund_info['url']
+        self.fund_location = fund_info.get('location', '')
+        self.fund_stage = fund_info.get('stage', '')
+
+    def scrape(self) -> List[PortfolioCompany]:
+        companies = []
+
+        logger.info(f"Scraping {self.fund_name}...")
+
+        html = self._fetch(self.fund_url)
+        if not html:
+            return companies
+
+        soup = BeautifulSoup(html, 'html.parser')
+
+        # Strategy 1: Look for portfolio/company sections
+        for selector in [
+            {'class': re.compile(r'portfolio|company|startup|card|grid-item|logo', re.I)},
+            {'class': re.compile(r'item|member|partner', re.I)},
+        ]:
+            items = soup.find_all(['div', 'a', 'article', 'li'], selector)
+            for item in items:
+                company = self._extract_company(item)
+                if company:
+                    companies.append(company)
+
+        # Strategy 2: Look for headings with links
+        for heading in soup.find_all(['h2', 'h3', 'h4']):
+            link = heading.find('a') or heading.find_parent('a')
+            if link:
+                name = heading.get_text(strip=True)
+                if self._is_valid_company_name(name):
+                    companies.append(PortfolioCompany(
+                        name=name,
+                        website=link.get('href') if link.get('href', '').startswith('http') else None,
+                        source=self.fund_name,
+                        source_url=self.fund_url,
+                        location=self.fund_location,
+                        stage=self.fund_stage,
+                    ))
+
+        # Strategy 3: Look for image alts (logos)
+        for img in soup.find_all('img', alt=True):
+            alt = img.get('alt', '')
+            if self._is_valid_company_name(alt) and 'logo' in str(img.get('class', [])).lower():
+                companies.append(PortfolioCompany(
+                    name=alt,
+                    source=self.fund_name,
+                    source_url=self.fund_url,
+                    location=self.fund_location,
+                    stage=self.fund_stage,
+                ))
+
+        # Dedupe by name
+        seen = set()
+        unique = []
+        for c in companies:
+            key = c.name.lower().strip()
+            if key not in seen and len(key) > 1:
+                seen.add(key)
+                unique.append(c)
+
+        logger.info(f"  Found {len(unique)} companies from {self.fund_name}")
+        return unique
+
+    def _extract_company(self, item) -> Optional[PortfolioCompany]:
+        """Extract company info from a portfolio item element."""
+        name = None
+        description = None
+        website = None
+
+        # Try to find name
+        for tag in ['h2', 'h3', 'h4', 'h5', 'strong', 'b']:
+            elem = item.find(tag)
+            if elem:
+                name = elem.get_text(strip=True)
+                break
+
+        # Fallback: link text or image alt
+        if not name:
+            link = item.find('a')
+            if link:
+                name = link.get_text(strip=True)
+                href = link.get('href', '')
+                if href.startswith('http'):
+                    website = href
+
+        if not name:
+            img = item.find('img', alt=True)
+            if img:
+                name = img.get('alt', '')
+
+        # Validate name
+        if not self._is_valid_company_name(name):
+            return None
+
+        # Try to find description
+        p = item.find('p')
+        if p:
+            description = p.get_text(strip=True)[:500]
+
+        return PortfolioCompany(
+            name=name,
+            description=description,
+            website=website,
+            source=self.fund_name,
+            source_url=self.fund_url,
+            location=self.fund_location,
+            stage=self.fund_stage,
+        )
+
+    def _is_valid_company_name(self, name: str) -> bool:
+        """Check if a string looks like a valid company name."""
+        if not name:
+            return False
+
+        name = name.strip()
+
+        # Length checks
+        if len(name) < 2 or len(name) > 100:
+            return False
+
+        # Skip common non-company strings
+        skip_words = [
+            'portfolio', 'companies', 'our companies', 'investments',
+            'learn more', 'read more', 'view all', 'see all',
+            'about', 'contact', 'home', 'menu', 'close',
+            'privacy', 'terms', 'cookie', 'newsletter',
+            'linkedin', 'twitter', 'facebook', 'instagram',
         ]
+        if name.lower() in skip_words:
+            return False
+
+        # Skip if starts with common nav words
+        if name.lower().startswith(('back to', 'go to', 'click', 'view')):
+            return False
+
+        return True
+
+
+class AllPortfoliosScraper:
+    """Scrape all 50+ VC portfolios from DACH_FUNDS list."""
+
+    def __init__(self, delay_between_sources: int = 3, max_funds: int = None):
+        self.delay = delay_between_sources
+        self.max_funds = max_funds  # Limit for testing
 
     def scrape_all(self) -> List[PortfolioCompany]:
         """Scrape all portfolios and return combined list."""
         all_companies = []
+        funds_to_scrape = DACH_FUNDS[:self.max_funds] if self.max_funds else DACH_FUNDS
 
-        for scraper in self.scrapers:
+        logger.info(f"Scraping {len(funds_to_scrape)} VC portfolios...")
+
+        for i, fund in enumerate(funds_to_scrape):
             try:
+                scraper = GenericPortfolioScraper(fund)
                 companies = scraper.scrape()
                 all_companies.extend(companies)
+
+                # Progress update every 10 funds
+                if (i + 1) % 10 == 0:
+                    logger.info(f"  Progress: {i + 1}/{len(funds_to_scrape)} funds, {len(all_companies)} companies found")
+
                 time.sleep(self.delay)
             except Exception as e:
-                logger.error(f"Error with {scraper.__class__.__name__}: {e}")
+                logger.warning(f"Error with {fund['name']}: {e}")
 
         # Dedupe across all sources
         seen = set()
@@ -379,26 +606,34 @@ def save_portfolio_companies(db, companies: List[PortfolioCompany]):
     return inserted
 
 
-def run_portfolio_scraper(db_path: str = 'handelsregister.db'):
+def run_portfolio_scraper(db_path: str = 'handelsregister.db', max_funds: int = None):
     """Run all portfolio scrapers and save results."""
     from persistence.database import Database
+
+    print(f"\n=== DACH VC Portfolio Scraper ===")
+    print(f"Total funds in database: {len(DACH_FUNDS)}")
+    print(f"Funds to scrape: {max_funds or 'all'}\n")
 
     db = Database(db_path)
 
     try:
-        scraper = AllPortfoliosScraper()
+        scraper = AllPortfoliosScraper(max_funds=max_funds)
         companies = scraper.scrape_all()
 
-        print(f"\n=== Portfolio Scraper Results ===")
+        print(f"\n=== Results ===")
         print(f"Found {len(companies)} unique companies\n")
 
-        # Show by source
+        # Show by source (top 20)
         by_source = {}
         for c in companies:
             by_source[c.source] = by_source.get(c.source, 0) + 1
 
-        for source, count in sorted(by_source.items()):
+        print("Companies by fund:")
+        for source, count in sorted(by_source.items(), key=lambda x: -x[1])[:20]:
             print(f"  {source}: {count}")
+
+        if len(by_source) > 20:
+            print(f"  ... and {len(by_source) - 20} more funds")
 
         # Save to database
         inserted = save_portfolio_companies(db, companies)
@@ -410,6 +645,39 @@ def run_portfolio_scraper(db_path: str = 'handelsregister.db'):
         db.close()
 
 
+def list_funds():
+    """List all funds in the database."""
+    print(f"\n=== {len(DACH_FUNDS)} DACH Early-Stage Funds ===\n")
+
+    by_location = {}
+    for fund in DACH_FUNDS:
+        loc = fund['location'].split('/')[0]  # Primary location
+        if loc not in by_location:
+            by_location[loc] = []
+        by_location[loc].append(fund)
+
+    for location, funds in sorted(by_location.items()):
+        print(f"\n{location} ({len(funds)} funds):")
+        for f in funds:
+            print(f"  - {f['name']} ({f['stage']})")
+
+
 if __name__ == '__main__':
-    logging.basicConfig(level=logging.INFO)
-    run_portfolio_scraper()
+    import argparse
+
+    parser = argparse.ArgumentParser(description='Scrape VC portfolio companies')
+    parser.add_argument('--list', action='store_true', help='List all funds')
+    parser.add_argument('--max', type=int, help='Max funds to scrape (for testing)')
+    parser.add_argument('--db', default='handelsregister.db', help='Database path')
+    args = parser.parse_args()
+
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s %(levelname)s %(message)s',
+        datefmt='%H:%M:%S'
+    )
+
+    if args.list:
+        list_funds()
+    else:
+        run_portfolio_scraper(db_path=args.db, max_funds=args.max)
