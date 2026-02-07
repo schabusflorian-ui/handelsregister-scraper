@@ -1,0 +1,24 @@
+<ul role="list" class="divide-y divide-gray-200">
+    {% for company in companies %}
+    <li class="py-3">
+        <a href="/companies/{{ company.id }}" class="block hover:bg-gray-50 -mx-2 px-2 rounded">
+            <div class="flex items-center justify-between">
+                <div class="min-w-0 flex-1">
+                    <p class="text-sm font-medium text-indigo-600 truncate">{{ company.name }}</p>
+                    <p class="text-xs text-gray-500">{{ company.city or 'Unknown' }}</p>
+                </div>
+                <div class="flex items-center space-x-2">
+                    <span class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium
+                        {% if company.ai_robotics_score >= 5 %}bg-green-100 text-green-800
+                        {% elif company.ai_robotics_score >= 3 %}bg-yellow-100 text-yellow-800
+                        {% else %}bg-gray-100 text-gray-800{% endif %}">
+                        {{ company.ai_robotics_score }}
+                    </span>
+                </div>
+            </div>
+        </a>
+    </li>
+    {% else %}
+    <li class="py-3 text-sm text-gray-500">No results found</li>
+    {% endfor %}
+</ul>

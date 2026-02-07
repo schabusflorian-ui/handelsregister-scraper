@@ -1,0 +1,183 @@
+{% extends "base.html" %}
+
+{% block title %}Companies - Handelsregister Scraper{% endblock %}
+
+{% block header %}
+<header class="bg-white shadow">
+    <div class="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+        <h1 class="text-3xl font-bold tracking-tight text-gray-900">Companies</h1>
+        <p class="mt-1 text-sm text-gray-500">{{ "{:,}".format(total) }} companies found</p>
+    </div>
+</header>
+{% endblock %}
+
+{% block content %}
+<!-- Search and Filters -->
+<div class="bg-white shadow rounded-lg mb-6">
+    <div class="px-4 py-5 sm:p-6">
+        <form method="GET" action="/companies" class="space-y-4">
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <!-- Search -->
+                <div class="md:col-span-2">
+                    <label for="q" class="block text-sm font-medium text-gray-700">Search</label>
+                    <input type="text" name="q" id="q" value="{{ q }}"
+                        class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                        placeholder="Company name or purpose...">
+                </div>
+
+                <!-- City Filter -->
+                <div>
+                    <label for="city" class="block text-sm font-medium text-gray-700">City</label>
+                    <select name="city" id="city"
+                        class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+                        <option value="">All cities</option>
+                        {% for c in cities %}
+                        <option value="{{ c.city }}" {% if city == c.city %}selected{% endif %}>
+                            {{ c.city }} ({{ c.count }})
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <!-- Min Score -->
+                <div>
+                    <label for="min_score" class="block text-sm font-medium text-gray-700">Min AI Score</label>
+                    <select name="min_score" id="min_score"
+                        class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+                        <option value="">Any</option>
+                        {% for score in range(1, 11) %}
+                        <option value="{{ score }}" {% if min_score == score %}selected{% endif %}>{{ score }}+</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <!-- Classification -->
+                <div>
+                    <label for="classification" class="block text-sm font-medium text-gray-700">Classification</label>
+                    <select name="classification" id="classification"
+                        class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+                        <option value="">All</option>
+                        <option value="startup" {% if classification == 'startup' %}selected{% endif %}>Startup</option>
+                        <option value="tech_company" {% if classification == 'tech_company' %}selected{% endif %}>Tech Company</option>
+                        <option value="traditional" {% if classification == 'traditional' %}selected{% endif %}>Traditional</option>
+                    </select>
+                </div>
+
+                <div class="md:col-span-3 flex items-end">
+                    <button type="submit"
+                        class="inline-flex items-center rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600">
+                        Search
+                    </button>
+                    <a href="/companies" class="ml-3 text-sm text-gray-500 hover:text-gray-700">Clear filters</a>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Results Table -->
+<div class="bg-white shadow rounded-lg overflow-hidden">
+    <div class="overflow-x-auto">
+        <table class="min-w-full divide-y divide-gray-200">
+            <thead class="bg-gray-50">
+                <tr>
+                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Company</th>
+                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">City</th>
+                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Registration</th>
+                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Capital</th>
+                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">AI Score</th>
+                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Classification</th>
+                </tr>
+            </thead>
+            <tbody class="bg-white divide-y divide-gray-200">
+                {% for company in companies %}
+                <tr class="hover:bg-gray-50">
+                    <td class="px-6 py-4">
+                        <div class="flex items-center">
+                            <div>
+                                <a href="/companies/{{ company.id }}" class="text-sm font-medium text-indigo-600 hover:text-indigo-900">
+                                    {{ company.name }}
+                                </a>
+                                {% if company.website %}
+                                <p class="text-xs text-gray-500">
+                                    <a href="{{ company.website }}" target="_blank" class="hover:text-indigo-600">{{ company.website[:40] }}{% if company.website|length > 40 %}...{% endif %}</a>
+                                </p>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {{ company.city or '-' }}
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {{ company.registration_date|date }}
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {{ company.capital_amount|currency(company.capital_currency or 'EUR') }}
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap">
+                        <span class="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium
+                            {% if company.ai_robotics_score >= 5 %}bg-green-100 text-green-800
+                            {% elif company.ai_robotics_score >= 3 %}bg-yellow-100 text-yellow-800
+                            {% else %}bg-gray-100 text-gray-800{% endif %}">
+                            {{ company.ai_robotics_score }}
+                        </span>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap">
+                        {% if company.startup_classification %}
+                        <span class="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium
+                            {% if company.startup_classification == 'startup' %}bg-purple-100 text-purple-800
+                            {% elif company.startup_classification == 'tech_company' %}bg-blue-100 text-blue-800
+                            {% else %}bg-gray-100 text-gray-800{% endif %}">
+                            {{ company.startup_classification }}
+                        </span>
+                        {% else %}
+                        <span class="text-gray-400">-</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="6" class="px-6 py-4 text-center text-sm text-gray-500">
+                        No companies found matching your criteria.
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Pagination -->
+    {% if total_pages > 1 %}
+    <div class="bg-white px-4 py-3 border-t border-gray-200 sm:px-6">
+        <div class="flex items-center justify-between">
+            <div class="text-sm text-gray-700">
+                Showing
+                <span class="font-medium">{{ (page - 1) * per_page + 1 }}</span>
+                to
+                <span class="font-medium">{{ [page * per_page, total]|min }}</span>
+                of
+                <span class="font-medium">{{ total }}</span>
+                results
+            </div>
+            <div class="flex space-x-2">
+                {% if page > 1 %}
+                <a href="?q={{ q }}&city={{ city }}&min_score={{ min_score or '' }}&classification={{ classification }}&page={{ page - 1 }}"
+                    class="relative inline-flex items-center rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 ring-1 ring-inset ring-gray-300 hover:bg-gray-50">
+                    Previous
+                </a>
+                {% endif %}
+                {% if page < total_pages %}
+                <a href="?q={{ q }}&city={{ city }}&min_score={{ min_score or '' }}&classification={{ classification }}&page={{ page + 1 }}"
+                    class="relative inline-flex items-center rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 ring-1 ring-inset ring-gray-300 hover:bg-gray-50">
+                    Next
+                </a>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
