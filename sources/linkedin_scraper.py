@@ -55,6 +55,71 @@ FOUNDER_KEYWORDS = [
     'entrepreneur', 'serial entrepreneur', 'angel investor',
 ]
 
+# Co-founder seeking signals
+COFOUNDER_SEEKING_KEYWORDS = [
+    'looking for co-founder', 'looking for cofounder', 'seeking co-founder',
+    'seeking cofounder', 'need a co-founder', 'need a cofounder',
+    'suche mitgründer', 'suche co-founder', 'looking for a technical',
+    'looking for a business', 'need technical co-founder', 'need business co-founder',
+    'open to co-founding', 'want to co-found', 'looking to co-found',
+    'seeking technical partner', 'seeking business partner',
+    'building with someone', 'looking for founding team',
+]
+
+# Technical role indicators
+TECHNICAL_KEYWORDS = [
+    'engineer', 'developer', 'programmer', 'software', 'backend', 'frontend',
+    'full stack', 'fullstack', 'devops', 'sre', 'data scientist', 'ml engineer',
+    'machine learning', 'ai engineer', 'cto', 'tech lead', 'architect',
+    'python', 'javascript', 'java', 'golang', 'rust', 'react', 'node',
+    'cloud', 'aws', 'infrastructure', 'platform', 'security engineer',
+    'mobile developer', 'ios', 'android', 'blockchain', 'web3',
+]
+
+# Business role indicators
+BUSINESS_KEYWORDS = [
+    'business', 'sales', 'marketing', 'growth', 'operations', 'strategy',
+    'coo', 'cfo', 'cmo', 'cro', 'head of sales', 'head of marketing',
+    'business development', 'bd', 'partnerships', 'account', 'customer success',
+    'general manager', 'managing director', 'investment', 'finance',
+    'consulting', 'consultant', 'mba', 'analyst', 'venture',
+]
+
+# Product role indicators
+PRODUCT_KEYWORDS = [
+    'product', 'product manager', 'pm', 'cpo', 'product lead',
+    'product owner', 'product director', 'head of product',
+    'ux', 'user experience', 'user research', 'product design',
+]
+
+# Design role indicators
+DESIGN_KEYWORDS = [
+    'design', 'designer', 'ux', 'ui', 'creative', 'art director',
+    'visual', 'brand', 'graphic', 'illustration', 'figma', 'sketch',
+]
+
+# Common skills to extract
+COMMON_SKILLS = [
+    # Programming languages
+    'python', 'javascript', 'typescript', 'java', 'golang', 'go', 'rust',
+    'c++', 'c#', 'ruby', 'php', 'swift', 'kotlin', 'scala', 'r',
+    # Frameworks
+    'react', 'angular', 'vue', 'node.js', 'django', 'flask', 'rails',
+    'spring', 'nextjs', 'express', 'fastapi',
+    # Cloud/Infra
+    'aws', 'gcp', 'azure', 'kubernetes', 'docker', 'terraform',
+    # Data
+    'sql', 'postgresql', 'mongodb', 'redis', 'elasticsearch',
+    'spark', 'kafka', 'airflow', 'dbt',
+    # ML/AI
+    'machine learning', 'deep learning', 'tensorflow', 'pytorch',
+    'nlp', 'computer vision', 'data science',
+    # Business skills
+    'fundraising', 'sales', 'marketing', 'growth hacking', 'seo',
+    'product management', 'strategy', 'operations', 'finance',
+    'business development', 'partnerships', 'negotiation',
+]
+
 # DACH region location indicators for filtering (Germany, Austria, Switzerland)
 DACH_LOCATIONS = [
     # === GERMANY ===
@@ -102,6 +167,17 @@ GERMAN_LOCATIONS = DACH_LOCATIONS
 
 
 @dataclass
+class WorkExperience:
+    """A single work experience entry."""
+    title: str
+    company: str
+    duration: Optional[str] = None
+    location: Optional[str] = None
+    description: Optional[str] = None
+    is_current: bool = False
+
+
+@dataclass
 class LinkedInProfile:
     """Extracted LinkedIn profile data."""
     url: str
@@ -111,6 +187,23 @@ class LinkedInProfile:
     summary: Optional[str] = None
     current_company: Optional[str] = None
     previous_companies: List[str] = field(default_factory=list)
+
+    # Enhanced profile data
+    skills: List[str] = field(default_factory=list)
+    experience: List[WorkExperience] = field(default_factory=list)
+    education: List[str] = field(default_factory=list)
+    languages: List[str] = field(default_factory=list)
+
+    # Co-founder matching signals
+    looking_for_cofounder: bool = False
+    cofounder_signals: List[str] = field(default_factory=list)
+
+    # Role/function classification
+    is_technical: bool = False
+    is_business: bool = False
+    is_product: bool = False
+    is_design: bool = False
+    primary_function: Optional[str] = None  # technical, business, product, design, other
 
     # Detection metadata
     stealth_signals: List[str] = field(default_factory=list)
@@ -131,6 +224,15 @@ class LinkedInProfile:
             'summary': self.summary,
             'current_company': self.current_company,
             'previous_companies': json.dumps(self.previous_companies) if self.previous_companies else None,
+            'skills': json.dumps(self.skills) if self.skills else None,
+            'experience': json.dumps([{
+                'title': e.title, 'company': e.company, 'duration': e.duration,
+                'location': e.location, 'is_current': e.is_current
+            } for e in self.experience]) if self.experience else None,
+            'education': json.dumps(self.education) if self.education else None,
+            'looking_for_cofounder': self.looking_for_cofounder,
+            'cofounder_signals': json.dumps(self.cofounder_signals) if self.cofounder_signals else None,
+            'primary_function': self.primary_function,
             'stealth_signals': json.dumps(self.stealth_signals) if self.stealth_signals else None,
             'confidence_score': self.confidence_score,
         }
@@ -244,6 +346,9 @@ class LinkedInProfileScraper:
 
         # Strategy 3: Parse from meta tags
         profile = self._extract_from_meta(soup, profile)
+
+        # Strategy 4: Extract work experience
+        profile = self._extract_experience(soup, profile)
 
         # Detect signals and calculate confidence
         profile = self._detect_signals(profile)
@@ -391,6 +496,18 @@ class LinkedInProfileScraper:
             if keyword in text_to_check:
                 profile.founder_signals.append(keyword)
 
+        # Check for co-founder seeking signals
+        for keyword in COFOUNDER_SEEKING_KEYWORDS:
+            if keyword in text_to_check:
+                profile.cofounder_signals.append(keyword)
+                profile.looking_for_cofounder = True
+
+        # Classify role/function
+        profile = self._classify_role(profile, text_to_check)
+
+        # Extract skills from text
+        profile = self._extract_skills(profile, text_to_check)
+
         # Calculate confidence score
         score = 0.0
 
@@ -412,6 +529,76 @@ class LinkedInProfileScraper:
 
         profile.confidence_score = min(1.0, score)
 
+        return profile
+
+    def _classify_role(self, profile: LinkedInProfile, text: str) -> LinkedInProfile:
+        """Classify the person's primary role/function."""
+        tech_score = sum(1 for k in TECHNICAL_KEYWORDS if k in text)
+        biz_score = sum(1 for k in BUSINESS_KEYWORDS if k in text)
+        product_score = sum(1 for k in PRODUCT_KEYWORDS if k in text)
+        design_score = sum(1 for k in DESIGN_KEYWORDS if k in text)
+
+        profile.is_technical = tech_score >= 2
+        profile.is_business = biz_score >= 2
+        profile.is_product = product_score >= 2
+        profile.is_design = design_score >= 2
+
+        # Determine primary function
+        scores = {
+            'technical': tech_score,
+            'business': biz_score,
+            'product': product_score,
+            'design': design_score,
+        }
+        if max(scores.values()) >= 2:
+            profile.primary_function = max(scores, key=scores.get)
+        else:
+            profile.primary_function = 'other'
+
+        return profile
+
+    def _extract_skills(self, profile: LinkedInProfile, text: str) -> LinkedInProfile:
+        """Extract skills mentioned in profile text."""
+        found_skills = []
+        for skill in COMMON_SKILLS:
+            # Use word boundary matching for short skills
+            if len(skill) <= 3:
+                if re.search(rf'\b{re.escape(skill)}\b', text, re.I):
+                    found_skills.append(skill)
+            else:
+                if skill in text:
+                    found_skills.append(skill)
+
+        profile.skills = list(set(found_skills))
+        return profile
+
+    def _extract_experience(self, soup: BeautifulSoup, profile: LinkedInProfile) -> LinkedInProfile:
+        """Extract work experience entries from profile."""
+        experiences = []
+
+        # Look for experience section
+        exp_section = soup.find('section', {'id': 'experience'}) or \
+                      soup.find('section', class_=re.compile(r'experience', re.I))
+
+        if exp_section:
+            for item in exp_section.find_all('li', class_=re.compile(r'position|experience', re.I)):
+                try:
+                    title_elem = item.find(['h3', 'span'], class_=re.compile(r'title', re.I))
+                    company_elem = item.find(['h4', 'span'], class_=re.compile(r'company|subtitle', re.I))
+                    duration_elem = item.find('span', class_=re.compile(r'date|duration', re.I))
+
+                    if title_elem and company_elem:
+                        exp = WorkExperience(
+                            title=title_elem.get_text(strip=True),
+                            company=company_elem.get_text(strip=True),
+                            duration=duration_elem.get_text(strip=True) if duration_elem else None,
+                            is_current='present' in (duration_elem.get_text(strip=True).lower() if duration_elem else '')
+                        )
+                        experiences.append(exp)
+                except Exception:
+                    continue
+
+        profile.experience = experiences
         return profile
 
     def scrape_profile(self, url: str) -> Optional[LinkedInProfile]:
