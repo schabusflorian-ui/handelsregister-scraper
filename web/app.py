@@ -74,6 +74,19 @@ templates.env.filters["currency"] = format_currency
 templates.env.filters["date"] = format_date
 
 
+@app.get("/health")
+async def health_check():
+    """Simple health check endpoint for Railway."""
+    try:
+        db = get_db()
+        # Quick DB check
+        db.conn.execute("SELECT 1").fetchone()
+        db.close()
+        return {"status": "healthy", "database": "connected"}
+    except Exception as e:
+        return {"status": "unhealthy", "error": str(e)}
+
+
 @app.get("/", response_class=HTMLResponse)
 async def dashboard(request: Request):
     """Main dashboard with statistics."""

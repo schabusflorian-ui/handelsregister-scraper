@@ -17,8 +17,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Install uvicorn for web UI
-RUN pip install --no-cache-dir uvicorn[standard]
+# Install uvicorn and additional web dependencies
+RUN pip install --no-cache-dir uvicorn[standard] python-multipart aiofiles
 
 # Copy application code
 COPY . .
@@ -38,9 +38,9 @@ ENV PORT=8000
 # Expose web UI port
 EXPOSE 8000
 
-# Health check via web UI
+# Health check via dedicated endpoint
 HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
-    CMD curl -f http://localhost:${PORT:-8000}/ || exit 1
+    CMD curl -f http://localhost:${PORT:-8000}/health || exit 1
 
 # Run both web UI and scheduler
 CMD ["./deployment/start.sh"]
