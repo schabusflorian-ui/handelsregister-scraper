@@ -1,14 +1,19 @@
 #!/usr/bin/env python3
 """
-Simple wrapper to run the stealth founder job.
-Run from anywhere: python3 run_stealth.py
+Stealth founder discovery - runs 24/7 extracting founders from search snippets.
 
-Uses the slow scraper which extracts data from search snippets
-(no LinkedIn scraping needed - avoids 999 blocks).
+Run with caffeinate to prevent sleep:
+    caffeinate -i python3 run_stealth.py
+
+Or in background:
+    caffeinate -i python3 run_stealth.py &> stealth.log &
+
+State is saved to data/stealth_scraper_state.json - survives restarts.
 """
 
 import sys
 import logging
+import argparse
 from pathlib import Path
 
 # Add project root to path
@@ -17,6 +22,21 @@ sys.path.insert(0, str(project_root))
 
 
 def main():
+    parser = argparse.ArgumentParser(description="Stealth founder discovery")
+    parser.add_argument(
+        "--iterations", "-n", type=int, default=None,
+        help="Max iterations (default: unlimited)"
+    )
+    parser.add_argument(
+        "--delay", "-d", type=int, default=45,
+        help="Seconds between searches (default: 45)"
+    )
+    parser.add_argument(
+        "--reset-state", action="store_true",
+        help="Clear state and start fresh"
+    )
+    args = parser.parse_args()
+
     logging.basicConfig(
         level=logging.INFO,
         format='%(asctime)s %(levelname)s %(message)s',
@@ -24,17 +44,29 @@ def main():
     )
 
     db_path = project_root / "handelsregister.db"
+    state_file = project_root / "data" / "stealth_scraper_state.json"
+
+    # Ensure data directory exists
+    state_file.parent.mkdir(exist_ok=True)
+
+    # Reset state if requested
+    if args.reset_state and state_file.exists():
+        state_file.unlink()
+        print("State reset - starting fresh")
 
     print("=" * 60)
-    print("STEALTH FOUNDER DISCOVERY (Snippet-based)")
+    print("STEALTH FOUNDER DISCOVERY")
     print("=" * 60)
     print()
     print(f"Database: {db_path}")
+    print(f"State file: {state_file}")
+    print(f"Search delay: {args.delay}s")
+    print(f"Iterations: {'unlimited' if args.iterations is None else args.iterations}")
     print()
-    print("This extracts founders from DuckDuckGo search snippets.")
-    print("No LinkedIn scraping = no 999 blocks!")
+    print("Extracts founders from DuckDuckGo search snippets.")
+    print("98 search queries, rotates through all of them.")
     print()
-    print("Running 5 iterations (press Ctrl+C to stop)...")
+    print("Press Ctrl+C to stop (state is auto-saved)")
     print()
 
     from scheduler.jobs.slow_stealth_scraper import SlowStealthScraper
@@ -44,26 +76,35 @@ def main():
     try:
         scraper = SlowStealthScraper(
             db=db,
-            search_delay=30,   # 30 seconds between searches
-            scrape_delay=60,   # Skip LinkedIn scraping mostly
+            state_file=str(state_file),
+            search_delay=args.delay,
+            scrape_delay=120,  # LinkedIn scraping mostly disabled
         )
 
-        # Run 5 iterations (quick test)
-        scraper.run_continuous(max_iterations=5)
-
-        # Print final stats
+        # Show current state
         stats = scraper.get_stats()
-        print("\n" + "="*50)
-        print("FINAL STATS")
-        print("="*50)
-        print(f"  Queries run: {stats.get('queries_run', 0)}")
-        print(f"  URLs found: {stats.get('urls_found', 0)}")
-        print(f"  Founders stored: {stats.get('founders_stored', 0)}")
-        print("="*50)
+        print(f"Resuming from query #{stats.get('query_index', 0) + 1}/98")
+        print(f"Total founders so far: {stats.get('total_founders_found', 0)}")
+        print()
+
+        # Run continuously
+        scraper.run_continuous(max_iterations=args.iterations)
 
     except KeyboardInterrupt:
-        print("\nStopped by user")
+        print("\n\nStopped by user")
     finally:
+        # Print final stats
+        try:
+            stats = scraper.get_stats()
+            print("\n" + "="*50)
+            print("SESSION STATS")
+            print("="*50)
+            print(f"  Queries run: {stats.get('total_searches', 0)}")
+            print(f"  Founders found: {stats.get('total_founders_found', 0)}")
+            print(f"  Next query: #{stats.get('query_index', 0) + 1}/98")
+            print("="*50)
+        except:
+            pass
         db.close()
 
 
