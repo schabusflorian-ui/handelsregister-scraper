@@ -7,8 +7,8 @@ builder = "dockerfile"
 dockerfilePath = "deployment/Dockerfile"
 
 [deploy]
-# Simple uvicorn command - scheduler runs separately or not at all on Railway
-startCommand = "cd /app && uvicorn web.app:app --host 0.0.0.0 --port ${PORT:-8000}"
+# Use bash to run the start script
+startCommand = "bash /app/deployment/start.sh"
 restartPolicyType = "on-failure"
 restartPolicyMaxRetries = 3
 numReplicas = 1
