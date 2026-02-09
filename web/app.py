@@ -454,6 +454,12 @@ async def jobs_list(request: Request):
         db.close()
 
 
+@app.get("/stealth-founders")
+async def stealth_founders_redirect():
+    """Redirect to founders page."""
+    return RedirectResponse(url="/founders", status_code=302)
+
+
 @app.get("/founders", response_class=HTMLResponse)
 async def founders_list(request: Request, page: int = 1, per_page: int = 25):
     """Stealth founders page."""
@@ -617,6 +623,237 @@ async def admin_restore_db():
         }
     except Exception as e:
         return {"error": str(e)}
+
+
+# =============================================================================
+# Background Stealth Founder Job Scheduler
+# =============================================================================
+
+import threading
+import logging
+from contextlib import asynccontextmanager
+
+# Job status tracking (in-memory, resets on restart)
+stealth_job_status = {
+    "running": False,
+    "last_run": None,
+    "last_result": None,
+    "scheduled": False,
+    "interval_hours": 6,
+    "error": None,
+}
+
+scheduler = None
+job_lock = threading.Lock()
+logger = logging.getLogger(__name__)
+
+
+def run_stealth_job_sync():
+    """Run the stealth founder job synchronously (for background thread)."""
+    global stealth_job_status
+
+    with job_lock:
+        if stealth_job_status["running"]:
+            logger.warning("Stealth job already running, skipping")
+            return
+
+        stealth_job_status["running"] = True
+        stealth_job_status["error"] = None
+
+    try:
+        logger.info("Starting stealth founder discovery job...")
+
+        from scheduler.jobs.stealth_founder_job import StealthFounderJob
+        from persistence.database import Database
+
+        db = Database(DB_PATH)
+        try:
+            job = StealthFounderJob(
+                db=db,
+                max_queries=3,  # Conservative for cloud
+                max_profiles_to_scrape=10,
+                min_confidence=0.3,
+                google_delay=(20, 60),  # Longer delays for cloud IPs
+                linkedin_delay=(10, 30),
+            )
+            result = job.run()
+
+            stealth_job_status["last_result"] = result
+            stealth_job_status["last_run"] = datetime.now().isoformat()
+            logger.info(f"Stealth job completed: {result}")
+
+        finally:
+            db.close()
+
+    except Exception as e:
+        logger.error(f"Stealth job failed: {e}")
+        stealth_job_status["error"] = str(e)
+        stealth_job_status["last_run"] = datetime.now().isoformat()
+
+    finally:
+        stealth_job_status["running"] = False
+
+
+def start_scheduler():
+    """Start the APScheduler background scheduler."""
+    global scheduler
+
+    if scheduler is not None:
+        return
+
+    try:
+        from apscheduler.schedulers.background import BackgroundScheduler
+        from apscheduler.triggers.interval import IntervalTrigger
+
+        scheduler = BackgroundScheduler()
+
+        # Add stealth job on schedule (default: every 6 hours)
+        if os.environ.get('ENABLE_STEALTH_SCHEDULER', 'false').lower() == 'true':
+            interval_hours = int(os.environ.get('STEALTH_INTERVAL_HOURS', '6'))
+            scheduler.add_job(
+                run_stealth_job_sync,
+                trigger=IntervalTrigger(hours=interval_hours),
+                id='stealth_founder_job',
+                name='Stealth Founder Discovery',
+                replace_existing=True,
+            )
+            stealth_job_status["scheduled"] = True
+            stealth_job_status["interval_hours"] = interval_hours
+            logger.info(f"Stealth job scheduled every {interval_hours} hours")
+
+        scheduler.start()
+        logger.info("Background scheduler started")
+
+    except Exception as e:
+        logger.error(f"Failed to start scheduler: {e}")
+
+
+@app.on_event("startup")
+async def startup_event():
+    """Start background scheduler on app startup."""
+    start_scheduler()
+
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    """Shutdown scheduler on app shutdown."""
+    global scheduler
+    if scheduler:
+        scheduler.shutdown(wait=False)
+        scheduler = None
+
+
+@app.get("/admin/stealth-job", response_class=HTMLResponse)
+async def admin_stealth_job_page(request: Request):
+    """Stealth job management page."""
+    db = get_db()
+    try:
+        # Get stealth founder stats
+        try:
+            founder_count = db.conn.execute(
+                "SELECT COUNT(*) FROM stealth_founders"
+            ).fetchone()[0]
+            high_conf_count = db.conn.execute(
+                "SELECT COUNT(*) FROM stealth_founders WHERE confidence_score >= 0.6"
+            ).fetchone()[0]
+            recent_founders = db.conn.execute("""
+                SELECT name, headline, location, confidence_score, first_seen_at
+                FROM stealth_founders
+                ORDER BY first_seen_at DESC
+                LIMIT 5
+            """).fetchall()
+            recent_founders = [dict(r) for r in recent_founders]
+        except:
+            founder_count = 0
+            high_conf_count = 0
+            recent_founders = []
+
+        return templates.TemplateResponse("admin_stealth_job.html", {
+            "request": request,
+            "status": stealth_job_status,
+            "founder_count": founder_count,
+            "high_conf_count": high_conf_count,
+            "recent_founders": recent_founders,
+            "env_enabled": os.environ.get('ENABLE_STEALTH_SCHEDULER', 'false'),
+        })
+    finally:
+        db.close()
+
+
+@app.get("/admin/stealth-job/status")
+async def admin_stealth_job_status():
+    """Get stealth job status (API)."""
+    return stealth_job_status
+
+
+@app.post("/admin/stealth-job/run")
+async def admin_stealth_job_run():
+    """Trigger a manual stealth job run."""
+    if stealth_job_status["running"]:
+        return {"error": "Job already running", "status": stealth_job_status}
+
+    # Run in background thread
+    thread = threading.Thread(target=run_stealth_job_sync, daemon=True)
+    thread.start()
+
+    return {
+        "message": "Stealth job started in background",
+        "status": stealth_job_status,
+    }
+
+
+@app.post("/admin/stealth-job/schedule")
+async def admin_stealth_job_schedule(hours: int = 6):
+    """Enable/update scheduled stealth job."""
+    global scheduler
+
+    if scheduler is None:
+        start_scheduler()
+
+    try:
+        from apscheduler.triggers.interval import IntervalTrigger
+
+        # Remove existing job if any
+        try:
+            scheduler.remove_job('stealth_founder_job')
+        except:
+            pass
+
+        # Add new scheduled job
+        scheduler.add_job(
+            run_stealth_job_sync,
+            trigger=IntervalTrigger(hours=hours),
+            id='stealth_founder_job',
+            name='Stealth Founder Discovery',
+            replace_existing=True,
+        )
+
+        stealth_job_status["scheduled"] = True
+        stealth_job_status["interval_hours"] = hours
+
+        return {
+            "message": f"Stealth job scheduled every {hours} hours",
+            "status": stealth_job_status,
+        }
+
+    except Exception as e:
+        return {"error": str(e)}
+
+
+@app.post("/admin/stealth-job/stop")
+async def admin_stealth_job_stop():
+    """Stop scheduled stealth job."""
+    global scheduler
+
+    if scheduler:
+        try:
+            scheduler.remove_job('stealth_founder_job')
+            stealth_job_status["scheduled"] = False
+            return {"message": "Scheduled job stopped", "status": stealth_job_status}
+        except:
+            pass
+
+    return {"message": "No scheduled job to stop", "status": stealth_job_status}
 
 
 if __name__ == "__main__":
