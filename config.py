@@ -49,6 +49,37 @@ SEARCH_KEYWORDS = [
     "chatbot",
     "automation",
     "predictive analytics",
+
+    # Climate Tech / Cleantech
+    "cleantech",
+    "greentech",
+    "wasserstoff",
+    "hydrogen",
+    "brennstoffzelle",
+    "photovoltaik",
+    "solarenergie",
+    "windenergie",
+    "energiespeicher",
+    "elektromobilität",
+    "ladeinfrastruktur",
+    "dekarbonisierung",
+    "kreislaufwirtschaft",
+    "nachhaltigkeit",
+    "klimaneutral",
+    "wärmepumpe",
+    "geothermie",
+    "agritech",
+    "carbon capture",
+
+    # Deeptech / Research Spinoffs
+    "quantum",
+    "quanten",
+    "photonics",
+    "photonik",
+    "nanotechnologie",
+    "synthetische biologie",
+    "genomics",
+    "neue materialien",
 ]
 
 # Maximum results to fetch per keyword

@@ -54,7 +54,7 @@ class InvestorDetectionJob:
 
     def _ensure_investors_seeded(self):
         """Ensure investor data is in the database."""
-        conn = self.db._get_connection()
+        conn = self.db.conn
         count = conn.execute("SELECT COUNT(*) FROM investors").fetchone()[0]
 
         if count == 0:
@@ -77,6 +77,7 @@ class InvestorDetectionJob:
             'capital_events_scanned': 0,
             'officers_scanned': 0,
             'announcements_scanned': 0,
+            'news_alerts_scanned': 0,
             'investments_found': 0,
             'investments_new': 0,
             'errors': 0,
@@ -101,6 +102,12 @@ class InvestorDetectionJob:
             stats['investments_found'] += announcement_stats['found']
             stats['investments_new'] += announcement_stats['new']
 
+            # Scan news alerts (funding + early-stage)
+            news_stats = self._scan_news_alerts()
+            stats['news_alerts_scanned'] = news_stats['scanned']
+            stats['investments_found'] += news_stats['found']
+            stats['investments_new'] += news_stats['new']
+
         except Exception as e:
             logger.exception("Investor detection failed: %s", e)
             stats['errors'] += 1
@@ -119,7 +126,7 @@ class InvestorDetectionJob:
         """Scan capital events for investor mentions."""
         stats = {'scanned': 0, 'found': 0, 'new': 0}
 
-        conn = self.db._get_connection()
+        conn = self.db.conn
 
         # Get capital events with publication text
         rows = conn.execute("""
@@ -161,12 +168,12 @@ class InvestorDetectionJob:
         """Scan officers for VC partner names."""
         stats = {'scanned': 0, 'found': 0, 'new': 0}
 
-        conn = self.db._get_connection()
+        conn = self.db.conn
 
-        # Get officers (board members)
+        # Get officers (board members) with company startup classification
         rows = conn.execute("""
             SELECT o.id, o.company_id, o.name, o.role, o.start_date,
-                   c.name as company_name
+                   c.name as company_name, c.startup_classification, c.ai_robotics_score
             FROM officers o
             JOIN companies c ON o.company_id = c.id
             WHERE o.is_current = 1
@@ -182,6 +189,21 @@ class InvestorDetectionJob:
             partner_matches = [m for m in matches if m.match_type == 'partner']
 
             for match in partner_matches:
+                # Reduce false positives from common names:
+                # Only record if company has startup indicators
+                # Common German names like "Johannes Weber" match too often
+                is_startup = row['startup_classification'] in ('startup', 'tech_company')
+                has_ai_score = (row['ai_robotics_score'] or 0) >= 3
+
+                # Require startup/tech classification OR high AI score for partner matches
+                # This filters out traditional companies with coincidentally named officers
+                if not (is_startup or has_ai_score):
+                    logger.debug(
+                        "Skipping partner match: %s at %s (not a startup/tech company)",
+                        row['name'], row['company_name']
+                    )
+                    continue
+
                 stats['found'] += 1
                 new = self._record_investment(
                     company_id=row['company_id'],
@@ -202,7 +224,7 @@ class InvestorDetectionJob:
         """Scan announcements for investor mentions."""
         stats = {'scanned': 0, 'found': 0, 'new': 0}
 
-        conn = self.db._get_connection()
+        conn = self.db.conn
 
         # Get announcements with text
         rows = conn.execute("""
@@ -241,6 +263,101 @@ class InvestorDetectionJob:
 
         return stats
 
+    def _scan_news_alerts(self) -> Dict[str, int]:
+        """Scan news alerts for investor/grant/incubator mentions."""
+        stats = {'scanned': 0, 'found': 0, 'new': 0}
+
+        conn = self.db.conn
+
+        # Check if news_alerts table exists
+        table_check = conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='news_alerts'"
+        ).fetchone()
+        if not table_check:
+            return stats
+
+        # Get news alerts with investors or early-stage signals
+        rows = conn.execute("""
+            SELECT na.id, na.company_id, na.alert_type, na.investors,
+                   na.early_stage_signals, na.round_type, na.amount,
+                   na.article_title, na.created_at
+            FROM news_alerts na
+            WHERE na.company_id IS NOT NULL
+        """).fetchall()
+
+        for row in rows:
+            stats['scanned'] += 1
+
+            # Scan investor names from funding alerts
+            if row['investors']:
+                for inv_name in row['investors'].split(','):
+                    inv_name = inv_name.strip()
+                    if not inv_name:
+                        continue
+
+                    matches = self.matcher.match(inv_name, min_confidence=self.min_confidence)
+                    for match in matches:
+                        stats['found'] += 1
+                        new = self._record_investment(
+                            company_id=row['company_id'],
+                            investor_id=match.investor_id,
+                            round_type=row['round_type'],
+                            amount=row['amount'],
+                            investment_date=row['created_at'],
+                            source='news_funding',
+                            confidence=match.confidence,
+                            notes=f"Matched '{match.matched_text}' in news: {row['article_title']}"
+                        )
+                        if new:
+                            stats['new'] += 1
+
+            # Scan early-stage signals for grant/incubator/accelerator matches
+            if row['early_stage_signals']:
+                for signal in row['early_stage_signals'].split(','):
+                    signal = signal.strip()
+                    if not signal:
+                        continue
+
+                    matches = self.matcher.match(signal, min_confidence=0.7)
+                    for match in matches:
+                        stats['found'] += 1
+                        new = self._record_investment(
+                            company_id=row['company_id'],
+                            investor_id=match.investor_id,
+                            round_type='grant' if 'grant' in match.investor_name.lower() or 'förder' in signal.lower() else 'pre_seed',
+                            amount=row['amount'],
+                            investment_date=row['created_at'],
+                            source='news_early_stage',
+                            confidence=match.confidence,
+                            notes=f"Early-stage signal '{signal}' in: {row['article_title']}"
+                        )
+                        if new:
+                            stats['new'] += 1
+
+            # Also search article title for investor mentions
+            if row['article_title']:
+                text_matches = self.matcher.search_in_text(
+                    row['article_title'],
+                    min_confidence=self.min_confidence
+                )
+                for match in text_matches:
+                    stats['found'] += 1
+                    source = 'news_early_stage' if row['alert_type'] == 'early_stage' else 'news_funding'
+                    new = self._record_investment(
+                        company_id=row['company_id'],
+                        investor_id=match.investor_id,
+                        round_type=row['round_type'],
+                        amount=row['amount'],
+                        investment_date=row['created_at'],
+                        source=source,
+                        confidence=match.confidence,
+                        notes=f"Matched '{match.matched_text}' in news title"
+                    )
+                    if new:
+                        stats['new'] += 1
+
+        return stats
+
     def _record_investment(
         self,
         company_id: int,
@@ -258,7 +375,7 @@ class InvestorDetectionJob:
         Returns:
             True if new record created, False if already exists
         """
-        conn = self.db._get_connection()
+        conn = self.db.conn
 
         try:
             # Check if already exists

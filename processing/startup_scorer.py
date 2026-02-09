@@ -53,11 +53,17 @@ TECH_CITIES = {
     'Dresden': 1,        # Silicon Saxony
     'Darmstadt': 1,      # TU Darmstadt
     'Heidelberg': 1,     # BioTech hub
-    'Tübingen': 1,       # AI hub (Cyber Valley)
-    'Leipzig': 1,        # Growing startup scene
+    'Tübingen': 2,       # AI hub (Cyber Valley)
+    'Leipzig': 1,        # Growing startup scene / SpinLab
     'Nürnberg': 1,       # Digital hub
     'Bonn': 1,           # AI / Cyber Security
     'Potsdam': 1,        # Digital / Media hub
+    'Garching': 2,       # TUM / UnternehmerTUM
+    'Jülich': 1,         # Forschungszentrum Jülich
+    'Kaiserslautern': 1, # DFKI / AI research
+    'Erlangen': 1,       # FAU / Fraunhofer
+    'Jena': 1,           # Optics / photonics hub
+    'Greifswald': 1,     # Helmholtz / plasma research
 }
 
 # Name patterns that indicate startups/tech companies
@@ -67,6 +73,8 @@ STARTUP_NAME_PATTERNS = [
     (r'\bLabs?\b', 3, 'Labs'),
     (r'\b\.io\b', 2, '.io domain hint'),
     (r'\b\.ai\b', 3, '.ai domain hint'),
+    (r'\b\.co\b', 1, '.co domain hint'),
+    (r'\b\.dev\b', 2, '.dev domain hint'),
 
     # English tech terms (medium signal)
     (r'\bTech\b', 2, 'Tech'),
@@ -80,19 +88,74 @@ STARTUP_NAME_PATTERNS = [
     (r'\bPlatform\b', 2, 'Platform'),
     (r'\bAnalytics\b', 2, 'Analytics'),
     (r'\bVentures?\b', 2, 'Ventures'),
+    (r'\bAPI\b', 2, 'API'),
+    (r'\bSaaS\b', 3, 'SaaS'),
+    (r'\bFintech\b', 3, 'Fintech'),
+    (r'\bHealthtech\b', 3, 'Healthtech'),
+    (r'\bEdtech\b', 3, 'Edtech'),
+    (r'\bInsurtech\b', 3, 'Insurtech'),
+    (r'\bProptech\b', 3, 'Proptech'),
+    (r'\bDeeptech\b', 3, 'Deeptech'),
+    (r'\bCleantech\b', 3, 'Cleantech'),
+    (r'\bGreentech\b', 3, 'Greentech'),
+    (r'\bClimatech\b', 3, 'Climatech'),
+    (r'\bClimate\b', 2, 'Climate'),
+    (r'\bBiotech\b', 2, 'Biotech'),
+    (r'\bMedtech\b', 2, 'Medtech'),
+    (r'\bAgritech\b', 3, 'Agritech'),
+    (r'\bFoodtech\b', 3, 'Foodtech'),
+    (r'\bEnergytech\b', 3, 'Energytech'),
+    (r'\bMobility\b', 2, 'Mobility'),
+    (r'\bSolar\b', 2, 'Solar'),
+    (r'\bHydrogen\b', 2, 'Hydrogen'),
+    (r'\bWasserstoff\b', 2, 'Wasserstoff'),
+    (r'\bEnergy\b', 1, 'Energy'),
+    (r'\bEnergie\b', 1, 'Energie'),
+    (r'\bSustainab', 2, 'Sustainable'),
+    (r'\bNachhaltig', 2, 'Nachhaltig'),
+    (r'\bCircular\b', 2, 'Circular'),
+    (r'\bCarbon\b', 2, 'Carbon'),
+    (r'\bBattery\b', 2, 'Battery'),
+    (r'\bBatterie\b', 2, 'Batterie'),
+    (r'\bCharging\b', 1, 'Charging'),
+    (r'\bRecycling\b', 1, 'Recycling'),
 
     # Trendy startup naming patterns
-    (r'\bly$', 1, '-ly suffix'),          # e.g., Spotify, Shopify
-    (r'\bify$', 1, '-ify suffix'),
-    (r'\bia$', 1, '-ia suffix'),          # e.g., Nvidia
-    (r'\bio$', 1, '-io suffix'),          # e.g., Twilio
+    (r'ly$', 1, '-ly suffix'),          # e.g., Spotify, Shopify
+    (r'ify$', 2, '-ify suffix'),        # e.g., Shopify, Spotify
+    (r'ia$', 1, '-ia suffix'),          # e.g., Nvidia
+    (r'io$', 1, '-io suffix'),          # e.g., Twilio
     (r'^[A-Z][a-z]+[A-Z]', 1, 'CamelCase'),  # e.g., GitHub, YouTube
+    (r'^[a-z]+\.[a-z]+$', 2, 'domain style name'),  # e.g., scout24
+
+    # Modern startup naming (single word, no GmbH suffix in brand)
+    (r'^[A-Z][a-z]{3,8} (?:GmbH|UG)', 1, 'Short modern name'),
 
     # Innovation/Growth terms
     (r'\bInnovation\b', 1, 'Innovation'),
     (r'\bNext\b', 1, 'Next'),
     (r'\bFuture\b', 1, 'Future'),
     (r'\bSmart\b', 0, 'Smart'),  # 0 because it's also in traditional names
+    (r'\bAgile\b', 1, 'Agile'),
+    (r'\bScale\b', 1, 'Scale'),
+    (r'\bGrowth\b', 1, 'Growth'),
+    (r'\bDisrupt\b', 2, 'Disrupt'),
+    (r'\bAccelerator\b', 2, 'Accelerator'),
+    (r'\bIncubator\b', 2, 'Incubator'),
+
+    # University spinoff / research-based patterns
+    (r'\bAusgründung\b', 3, 'Ausgründung (spinoff)'),
+    (r'\bSpin-?off\b', 2, 'Spinoff'),
+    (r'\bTransfer\b', 1, 'Transfer'),
+    (r'\bForschung\b', 1, 'Forschung (research)'),
+    (r'\bResearch\b', 1, 'Research'),
+    (r'\bScience\b', 1, 'Science'),
+    (r'\bBio\b', 1, 'Bio'),
+    (r'\bNano\b', 2, 'Nano'),
+    (r'\bQuantum\b', 3, 'Quantum'),
+    (r'\bQuanten\b', 3, 'Quanten'),
+    (r'\bPhoton\b', 2, 'Photon'),
+    (r'\bGenomics?\b', 2, 'Genomics'),
 ]
 
 # Traditional SME name patterns (negative signals)

@@ -1,0 +1,174 @@
+{% extends "base.html" %}
+
+{% block title %}{{ investor.canonical_name }} - Handelsregister Scraper{% endblock %}
+
+{% block header %}
+<header class="bg-white shadow">
+    <div class="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+        <div class="md:flex md:items-center md:justify-between">
+            <div class="min-w-0 flex-1">
+                <h1 class="text-2xl font-bold leading-7 text-gray-900 sm:truncate sm:text-3xl sm:tracking-tight">
+                    {{ investor.canonical_name }}
+                </h1>
+                <div class="mt-1 flex flex-col sm:mt-0 sm:flex-row sm:flex-wrap sm:space-x-6">
+                    {% if investor.type %}
+                    <div class="mt-2 flex items-center text-sm text-gray-500">
+                        {{ investor.type }}
+                    </div>
+                    {% endif %}
+                    {% if investor.headquarters_city %}
+                    <div class="mt-2 flex items-center text-sm text-gray-500">
+                        <svg class="mr-1.5 h-5 w-5 flex-shrink-0 text-gray-400" viewBox="0 0 20 20" fill="currentColor">
+                            <path fill-rule="evenodd" d="M9.69 18.933l.003.001C9.89 19.02 10 19 10 19s.11.02.308-.066l.002-.001.006-.003.018-.008a5.741 5.741 0 00.281-.14c.186-.096.446-.24.757-.433.62-.384 1.445-.966 2.274-1.765C15.302 14.988 17 12.493 17 9A7 7 0 103 9c0 3.492 1.698 5.988 3.355 7.584a13.731 13.731 0 002.273 1.765 11.842 11.842 0 00.976.544l.062.029.018.008.006.003zM10 11.25a2.25 2.25 0 100-4.5 2.25 2.25 0 000 4.5z" clip-rule="evenodd" />
+                        </svg>
+                        {{ investor.headquarters_city }}
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+            {% if investor.website %}
+            <div class="mt-4 flex md:ml-4 md:mt-0">
+                <a href="{{ investor.website }}" target="_blank"
+                    class="inline-flex items-center rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500">
+                    Visit Website
+                </a>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</header>
+{% endblock %}
+
+{% block content %}
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+    <!-- Portfolio Companies -->
+    <div class="lg:col-span-2">
+        <div class="bg-white shadow rounded-lg">
+            <div class="px-4 py-5 sm:px-6 border-b border-gray-200">
+                <h3 class="text-lg font-medium leading-6 text-gray-900">Portfolio Companies ({{ portfolio|length }})</h3>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Company</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">City</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">AI Score</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Round</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Confidence</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-gray-200">
+                        {% for company in portfolio %}
+                        <tr class="hover:bg-gray-50">
+                            <td class="px-6 py-4">
+                                <a href="/companies/{{ company.id }}" class="text-sm font-medium text-indigo-600 hover:text-indigo-900">
+                                    {{ company.name }}
+                                </a>
+                            </td>
+                            <td class="px-6 py-4 text-sm text-gray-500">{{ company.city or '-' }}</td>
+                            <td class="px-6 py-4">
+                                <span class="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium
+                                    {% if company.ai_robotics_score >= 5 %}bg-green-100 text-green-800
+                                    {% elif company.ai_robotics_score >= 3 %}bg-yellow-100 text-yellow-800
+                                    {% else %}bg-gray-100 text-gray-800{% endif %}">
+                                    {{ company.ai_robotics_score }}
+                                </span>
+                            </td>
+                            <td class="px-6 py-4 text-sm text-gray-500">{{ company.round_type or '-' }}</td>
+                            <td class="px-6 py-4">
+                                <span class="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium
+                                    {% if company.confidence >= 0.9 %}bg-green-100 text-green-800
+                                    {% elif company.confidence >= 0.7 %}bg-yellow-100 text-yellow-800
+                                    {% else %}bg-gray-100 text-gray-800{% endif %}">
+                                    {{ (company.confidence * 100)|int }}%
+                                </span>
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="5" class="px-6 py-4 text-center text-sm text-gray-500">
+                                No portfolio companies detected yet.
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Sidebar -->
+    <div class="space-y-6">
+        <!-- Investor Info -->
+        <div class="bg-white shadow rounded-lg">
+            <div class="px-4 py-5 sm:px-6 border-b border-gray-200">
+                <h3 class="text-lg font-medium leading-6 text-gray-900">Investor Details</h3>
+            </div>
+            <div class="px-4 py-5 sm:p-6">
+                <dl class="space-y-4">
+                    {% if investor.stage_focus %}
+                    <div>
+                        <dt class="text-sm font-medium text-gray-500">Stage Focus</dt>
+                        <dd class="mt-1 text-sm text-gray-900">{{ investor.stage_focus }}</dd>
+                    </div>
+                    {% endif %}
+                    {% if investor.sector_focus %}
+                    <div>
+                        <dt class="text-sm font-medium text-gray-500">Sector Focus</dt>
+                        <dd class="mt-1 text-sm text-gray-900">{{ investor.sector_focus }}</dd>
+                    </div>
+                    {% endif %}
+                    {% if investor.linkedin %}
+                    <div>
+                        <dt class="text-sm font-medium text-gray-500">LinkedIn</dt>
+                        <dd class="mt-1 text-sm">
+                            <a href="{{ investor.linkedin }}" target="_blank" class="text-indigo-600 hover:text-indigo-900">
+                                View Profile
+                            </a>
+                        </dd>
+                    </div>
+                    {% endif %}
+                </dl>
+            </div>
+        </div>
+
+        <!-- Aliases -->
+        {% if aliases %}
+        <div class="bg-white shadow rounded-lg">
+            <div class="px-4 py-5 sm:px-6 border-b border-gray-200">
+                <h3 class="text-lg font-medium leading-6 text-gray-900">Known Aliases</h3>
+            </div>
+            <div class="px-4 py-5 sm:p-6">
+                <ul class="space-y-2">
+                    {% for alias in aliases %}
+                    <li class="text-sm text-gray-700">{{ alias.alias }}</li>
+                    {% endfor %}
+                </ul>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Legal Entities -->
+        {% if entities %}
+        <div class="bg-white shadow rounded-lg">
+            <div class="px-4 py-5 sm:px-6 border-b border-gray-200">
+                <h3 class="text-lg font-medium leading-6 text-gray-900">Legal Entities</h3>
+            </div>
+            <div class="px-4 py-5 sm:p-6">
+                <ul class="space-y-2">
+                    {% for entity in entities %}
+                    <li class="text-sm">
+                        <span class="text-gray-900">{{ entity.entity_name }}</span>
+                        {% if entity.entity_type %}
+                        <span class="text-gray-500">({{ entity.entity_type }})</span>
+                        {% endif %}
+                    </li>
+                    {% endfor %}
+                </ul>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

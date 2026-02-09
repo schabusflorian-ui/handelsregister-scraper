@@ -4,7 +4,7 @@
 
 [build]
 builder = "dockerfile"
-dockerfilePath = "deployment/Dockerfile"
+dockerfilePath = "Dockerfile"
 
 [deploy]
 # Use bash to run the start script

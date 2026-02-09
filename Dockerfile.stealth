@@ -1,0 +1,29 @@
+# Dockerfile for continuous stealth scraper
+# Build: docker build -f Dockerfile.stealth -t stealth-scraper .
+# Run: docker run -d --name stealth-scraper -v $(pwd)/data:/app/data stealth-scraper
+
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Install dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy requirements and install
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy application code
+COPY . .
+
+# Create data directory
+RUN mkdir -p /app/data
+
+# Set environment variables
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONDONTWRITEBYTECODE=1
+
+# Default to slow mode for production
+CMD ["python", "run_stealth_scraper.py", "--slow"]

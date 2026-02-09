@@ -1,0 +1,222 @@
+{% extends "base.html" %}
+
+{% block title %}Jobs - Handelsregister Scraper{% endblock %}
+
+{% block header %}
+<header class="bg-white shadow">
+    <div class="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+        <h1 class="text-3xl font-bold tracking-tight text-gray-900">Job Management</h1>
+    </div>
+</header>
+{% endblock %}
+
+{% block content %}
+<!-- Rate Limiter Status -->
+{% if rate_state %}
+<div class="bg-white shadow rounded-lg mb-6">
+    <div class="px-4 py-5 sm:px-6 border-b border-gray-200">
+        <h3 class="text-lg font-medium leading-6 text-gray-900">Rate Limiter Status</h3>
+    </div>
+    <div class="px-4 py-5 sm:p-6">
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div>
+                <dt class="text-sm font-medium text-gray-500">Tokens Available</dt>
+                <dd class="mt-1 text-2xl font-semibold text-gray-900">{{ "%.1f"|format(rate_state.tokens_available) }} / 60</dd>
+            </div>
+            <div>
+                <dt class="text-sm font-medium text-gray-500">Requests This Hour</dt>
+                <dd class="mt-1 text-2xl font-semibold text-gray-900">{{ rate_state.requests_this_hour }}</dd>
+            </div>
+            <div>
+                <dt class="text-sm font-medium text-gray-500">Can Make Request</dt>
+                <dd class="mt-1">
+                    {% if rate_state.can_request %}
+                    <span class="inline-flex items-center rounded-full bg-green-100 px-3 py-1 text-sm font-medium text-green-800">Yes</span>
+                    {% else %}
+                    <span class="inline-flex items-center rounded-full bg-red-100 px-3 py-1 text-sm font-medium text-red-800">No - Wait {{ rate_state.wait_seconds|int }}s</span>
+                    {% endif %}
+                </dd>
+            </div>
+            <div>
+                <dt class="text-sm font-medium text-gray-500">Enrichment Queue</dt>
+                <dd class="mt-1 text-2xl font-semibold text-gray-900">{{ "{:,}".format(queue_size) }}</dd>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Quick Actions -->
+<div class="bg-white shadow rounded-lg mb-6">
+    <div class="px-4 py-5 sm:px-6 border-b border-gray-200">
+        <h3 class="text-lg font-medium leading-6 text-gray-900">Quick Actions</h3>
+        <p class="mt-1 text-sm text-gray-500">Run these commands in your terminal</p>
+    </div>
+    <div class="px-4 py-5 sm:p-6">
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div class="border rounded-lg p-4">
+                <h4 class="font-medium text-gray-900">Discovery Job</h4>
+                <p class="text-sm text-gray-500 mt-1">Scan for new companies</p>
+                <code class="block mt-2 text-xs bg-gray-100 p-2 rounded">python main.py scheduler discovery</code>
+            </div>
+            <div class="border rounded-lg p-4">
+                <h4 class="font-medium text-gray-900">Investor Detection</h4>
+                <p class="text-sm text-gray-500 mt-1">Match VCs to companies</p>
+                <code class="block mt-2 text-xs bg-gray-100 p-2 rounded">python main.py scheduler investor-detect</code>
+            </div>
+            <div class="border rounded-lg p-4">
+                <h4 class="font-medium text-gray-900">Enrichment Job</h4>
+                <p class="text-sm text-gray-500 mt-1">Detect capital raises</p>
+                <code class="block mt-2 text-xs bg-gray-100 p-2 rounded">python main.py scheduler enrichment</code>
+            </div>
+            <div class="border rounded-lg p-4">
+                <h4 class="font-medium text-gray-900">Announcement Monitor</h4>
+                <p class="text-sm text-gray-500 mt-1">Fetch register announcements</p>
+                <code class="block mt-2 text-xs bg-gray-100 p-2 rounded">python main.py scheduler announcements</code>
+            </div>
+            <div class="border rounded-lg p-4">
+                <h4 class="font-medium text-gray-900">Backfill Job</h4>
+                <p class="text-sm text-gray-500 mt-1">Catch up missed data</p>
+                <code class="block mt-2 text-xs bg-gray-100 p-2 rounded">python main.py scheduler backfill</code>
+            </div>
+            <div class="border rounded-lg p-4">
+                <h4 class="font-medium text-gray-900">Full Scheduler</h4>
+                <p class="text-sm text-gray-500 mt-1">Run continuous monitoring</p>
+                <code class="block mt-2 text-xs bg-gray-100 p-2 rounded">python main.py scheduler run --run-now</code>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Recent Job Runs -->
+<div class="bg-white shadow rounded-lg mb-6">
+    <div class="px-4 py-5 sm:px-6 border-b border-gray-200">
+        <h3 class="text-lg font-medium leading-6 text-gray-900">Recent Job Runs</h3>
+    </div>
+    <div class="overflow-x-auto">
+        <table class="min-w-full divide-y divide-gray-200">
+            <thead class="bg-gray-50">
+                <tr>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Job Type</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Started</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Completed</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Found</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">New</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Requests</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-200">
+                {% for job in job_runs %}
+                <tr class="hover:bg-gray-50">
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                        {{ job.job_type }}
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {{ job.started_at|date }}
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {{ job.completed_at|date if job.completed_at else '-' }}
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap">
+                        <span class="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium
+                            {% if job.status == 'completed' %}bg-green-100 text-green-800
+                            {% elif job.status == 'running' %}bg-yellow-100 text-yellow-800
+                            {% elif job.status == 'failed' %}bg-red-100 text-red-800
+                            {% else %}bg-gray-100 text-gray-800{% endif %}">
+                            {{ job.status }}
+                        </span>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {{ job.companies_found or 0 }}
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {% if job.companies_new and job.companies_new > 0 %}
+                        <span class="text-green-600 font-medium">+{{ job.companies_new }}</span>
+                        {% else %}
+                        0
+                        {% endif %}
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {{ job.requests_used or 0 }}
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="7" class="px-6 py-4 text-center text-sm text-gray-500">
+                        No job runs recorded yet.
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Recent Scrape Runs -->
+<div class="bg-white shadow rounded-lg">
+    <div class="px-4 py-5 sm:px-6 border-b border-gray-200">
+        <h3 class="text-lg font-medium leading-6 text-gray-900">Recent Scrape Runs</h3>
+    </div>
+    <div class="overflow-x-auto">
+        <table class="min-w-full divide-y divide-gray-200">
+            <thead class="bg-gray-50">
+                <tr>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Run Type</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Source</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Started</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Completed</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Processed</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">New</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Capital Events</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Errors</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-200">
+                {% for run in scrape_runs %}
+                <tr class="hover:bg-gray-50">
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                        {{ run.run_type }}
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {{ run.source or '-' }}
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {{ run.started_at|date }}
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {{ run.completed_at|date if run.completed_at else '-' }}
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {{ "{:,}".format(run.records_processed or 0) }}
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm">
+                        {% if run.records_new and run.records_new > 0 %}
+                        <span class="text-green-600 font-medium">+{{ run.records_new }}</span>
+                        {% else %}
+                        <span class="text-gray-500">0</span>
+                        {% endif %}
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {{ run.capital_raises_detected or 0 }}
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm">
+                        {% if run.errors_count and run.errors_count > 0 %}
+                        <span class="text-red-600">{{ run.errors_count }}</span>
+                        {% else %}
+                        <span class="text-gray-500">0</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="8" class="px-6 py-4 text-center text-sm text-gray-500">
+                        No scrape runs recorded yet.
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

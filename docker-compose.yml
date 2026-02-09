@@ -1,0 +1,47 @@
+# Docker Compose for local development
+# Mirrors Railway deployment (web UI + scheduler)
+# Stealth scraper runs separately: python run_stealth_scraper.py --slow
+
+version: '3.8'
+
+services:
+  # Main app: Web UI + Scheduler
+  app:
+    build:
+      context: .
+      dockerfile: deployment/Dockerfile
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/data
+    environment:
+      - DATABASE_PATH=/data/handelsregister.db
+      - DB_PATH=/data/handelsregister.db
+      - PORT=8000
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # Optional: Run just the web UI (for development)
+  web:
+    build:
+      context: .
+      dockerfile: deployment/Dockerfile
+    command: uvicorn web.app:app --host 0.0.0.0 --port 8000 --reload
+    ports:
+      - "8001:8000"
+    volumes:
+      - .:/app
+      - ./data:/data
+    environment:
+      - DATABASE_PATH=/data/handelsregister.db
+      - DB_PATH=/data/handelsregister.db
+    profiles:
+      - dev
+
+# Note: Stealth scraper runs locally (not in Docker) due to IP blocking
+# Run with: python run_stealth_scraper.py --slow

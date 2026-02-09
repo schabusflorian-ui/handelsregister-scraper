@@ -11,6 +11,7 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     curl \
+    bash \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements first for caching

@@ -373,6 +373,89 @@ def init(ctx):
     db.close()
 
 
+@cli.command('enrich-officers')
+@click.option('--limit', default=None, type=int, help='Limit records to process (for testing)')
+@click.pass_context
+def enrich_officers(ctx, limit):
+    """
+    Enrich existing companies with officer data from OffeneRegister bulk file.
+
+    Re-processes the bulk data to add officers for companies that already
+    exist in the database. This enables VC partner matching.
+    """
+    db_path = ctx.obj['db_path']
+
+    console.print("\n[bold blue]Officer Data Enrichment[/bold blue]")
+    console.print("=" * 50)
+
+    db = Database(db_path)
+    source = OffeneRegisterSource()
+
+    # Check current state
+    total_companies = db.conn.execute("SELECT COUNT(*) FROM companies").fetchone()[0]
+    current_officers = db.conn.execute("SELECT COUNT(*) FROM officers").fetchone()[0]
+
+    console.print(f"Companies in database: {total_companies:,}")
+    console.print(f"Current officers: {current_officers:,}")
+
+    if current_officers > 0:
+        if not click.confirm(f"\nDatabase already has {current_officers:,} officers. Continue anyway?"):
+            db.close()
+            return
+
+    # Check if bulk file exists
+    file_info = source.get_file_info()
+    if not file_info['exists']:
+        console.print("\n[yellow]Bulk data file not found. Downloading...[/yellow]")
+        source.download()
+    else:
+        console.print(f"\nUsing cached file: {file_info['path']}")
+        console.print(f"Size: {file_info['size_mb']:.1f} MB")
+
+    console.print("\n[bold]Processing bulk data to extract officers...[/bold]")
+    console.print("[dim]This will scan ~5M records to find matches...[/dim]\n")
+
+    with Progress(
+        SpinnerColumn(),
+        TextColumn("[progress.description]{task.description}"),
+        BarColumn(),
+        TextColumn("{task.fields[matched]:,} matched"),
+        console=console,
+    ) as progress:
+        task = progress.add_task("Processing...", total=None, matched=0)
+
+        def progress_callback(processed, matched):
+            progress.update(task, description=f"Processed {processed:,} records", matched=matched)
+
+        stats = source.enrich_officers(
+            db=db,
+            limit=limit,
+            progress_callback=progress_callback,
+        )
+
+    # Summary
+    console.print("\n[bold green]Officer Enrichment Complete![/bold green]")
+    console.print("-" * 50)
+
+    table = Table(show_header=False)
+    table.add_column("Metric", style="cyan")
+    table.add_column("Value", style="green")
+
+    table.add_row("Total records processed", f"{stats['total_processed']:,}")
+    table.add_row("Companies matched", f"{stats['companies_matched']:,}")
+    table.add_row("Officers added", f"{stats['officers_added']:,}")
+    table.add_row("Already had officers", f"{stats['companies_already_enriched']:,}")
+    table.add_row("No officers in source", f"{stats['no_officers_in_source']:,}")
+
+    console.print(table)
+
+    # Show new officer count
+    new_officer_count = db.conn.execute("SELECT COUNT(*) FROM officers").fetchone()[0]
+    console.print(f"\n[bold]Total officers now: {new_officer_count:,}[/bold]")
+
+    db.close()
+
+
 @cli.command()
 @click.option('--days', default=7, help='Number of days to look back')
 @click.pass_context
@@ -669,6 +752,60 @@ def scheduler_announcements(ctx, lookback_days, max_results, dry_run):
         console.print(f"\n[bold cyan]💰 Detected {stats['capital_events']} capital events![/bold cyan]")
 
 
+@scheduler.command('investor-detect')
+@click.option('--min-confidence', default=0.8, help='Minimum match confidence (0.0-1.0)')
+@click.option('--batch-size', default=100, help='Number of records to process per batch')
+@click.pass_context
+def scheduler_investor_detect(ctx, min_confidence, batch_size):
+    """
+    Run investor detection job.
+
+    Scans capital events, officers, and announcements for known VCs/investors.
+    Creates investment records linking companies to their investors.
+
+    This helps discover relevant companies through their investor connections.
+    """
+    from scheduler.jobs.investor_detection_job import InvestorDetectionJob
+
+    db_path = ctx.obj['db_path']
+    db = Database(db_path)
+
+    console.print("\n[bold blue]Running Investor Detection Job[/bold blue]")
+    console.print("=" * 50)
+    console.print(f"Min confidence: {min_confidence}")
+    console.print(f"Batch size: {batch_size}")
+
+    try:
+        job = InvestorDetectionJob(
+            db=db,
+            batch_size=batch_size,
+            min_confidence=min_confidence,
+        )
+        stats = job.run()
+
+        console.print("\n[bold green]Investor Detection Complete![/bold green]")
+
+        table = Table(show_header=False)
+        table.add_column("Metric", style="cyan")
+        table.add_column("Value", style="green")
+
+        table.add_row("Capital events scanned", f"{stats['capital_events_scanned']:,}")
+        table.add_row("Officers scanned", f"{stats['officers_scanned']:,}")
+        table.add_row("Announcements scanned", f"{stats['announcements_scanned']:,}")
+        table.add_row("Investments found", f"{stats['investments_found']:,}")
+        table.add_row("New investments", f"{stats['investments_new']:,}")
+        table.add_row("Duration", f"{stats['duration_seconds']:.1f}s")
+        table.add_row("Errors", f"{stats['errors']:,}")
+
+        console.print(table)
+
+        if stats['investments_new'] > 0:
+            console.print(f"\n[bold green]Found {stats['investments_new']} new investor-company connections![/bold green]")
+
+    finally:
+        db.close()
+
+
 # ============================================================================
 # CAPITAL EVENTS COMMANDS
 # ============================================================================
@@ -733,6 +870,313 @@ def capital_events(ctx, days, company_id):
 
     console.print(table)
     db.close()
+
+
+# ============================================================================
+# INVESTOR COMMANDS
+# ============================================================================
+
+@cli.group()
+def investors():
+    """View investor/VC tracking data."""
+    pass
+
+
+@investors.command('list')
+@click.option('--limit', default=20, help='Number of investors to show')
+@click.pass_context
+def investors_list(ctx, limit):
+    """List known investors/VCs in the database."""
+    db_path = ctx.obj['db_path']
+    db = Database(db_path)
+
+    try:
+        rows = db.conn.execute("""
+            SELECT i.id, i.canonical_name, i.type, i.headquarters_city,
+                   COUNT(inv.id) as investment_count
+            FROM investors i
+            LEFT JOIN investments inv ON i.id = inv.investor_id
+            GROUP BY i.id
+            ORDER BY investment_count DESC, i.canonical_name
+            LIMIT ?
+        """, (limit,)).fetchall()
+
+        if not rows:
+            console.print("[yellow]No investors found. Run 'scheduler investor-detect' to seed and scan.[/yellow]")
+            return
+
+        table = Table(title=f"Investors ({len(rows)} shown)")
+        table.add_column("Name", style="green")
+        table.add_column("Type", style="cyan")
+        table.add_column("HQ", style="dim")
+        table.add_column("Investments", style="yellow")
+
+        for row in rows:
+            table.add_row(
+                row['canonical_name'][:40],
+                row['type'] or '-',
+                row['headquarters_city'] or '-',
+                str(row['investment_count'])
+            )
+
+        console.print(table)
+
+    finally:
+        db.close()
+
+
+@investors.command('portfolio')
+@click.argument('investor_name')
+@click.pass_context
+def investors_portfolio(ctx, investor_name):
+    """Show companies in an investor's portfolio."""
+    db_path = ctx.obj['db_path']
+    db = Database(db_path)
+
+    try:
+        # Find investor by partial name match
+        investor = db.conn.execute("""
+            SELECT id, canonical_name, type, headquarters_city
+            FROM investors
+            WHERE canonical_name LIKE ? COLLATE NOCASE
+            LIMIT 1
+        """, (f"%{investor_name}%",)).fetchone()
+
+        if not investor:
+            console.print(f"[red]Investor '{investor_name}' not found[/red]")
+            return
+
+        console.print(f"\n[bold blue]{investor['canonical_name']}[/bold blue]")
+        console.print(f"Type: {investor['type'] or 'Unknown'} | HQ: {investor['headquarters_city'] or 'Unknown'}")
+        console.print("=" * 50)
+
+        # Get portfolio companies
+        companies = db.conn.execute("""
+            SELECT c.name, c.city, c.ai_robotics_score, c.startup_classification,
+                   inv.round_type, inv.amount, inv.confidence, inv.detection_source,
+                   inv.investment_date
+            FROM investments inv
+            JOIN companies c ON inv.company_id = c.id
+            WHERE inv.investor_id = ?
+            ORDER BY inv.confidence DESC, c.ai_robotics_score DESC
+        """, (investor['id'],)).fetchall()
+
+        if not companies:
+            console.print("[yellow]No portfolio companies detected yet.[/yellow]")
+            return
+
+        table = Table(title=f"Portfolio ({len(companies)} companies)")
+        table.add_column("Company", style="green")
+        table.add_column("City", style="dim")
+        table.add_column("AI Score", style="cyan")
+        table.add_column("Round", style="yellow")
+        table.add_column("Confidence", style="blue")
+        table.add_column("Source", style="dim")
+
+        for company in companies:
+            table.add_row(
+                company['name'][:35],
+                company['city'] or '-',
+                str(company['ai_robotics_score'] or 0),
+                company['round_type'] or '-',
+                f"{company['confidence']:.0%}",
+                company['detection_source'] or '-'
+            )
+
+        console.print(table)
+
+    finally:
+        db.close()
+
+
+@investors.command('investments')
+@click.option('--min-confidence', default=0.8, help='Minimum confidence threshold')
+@click.option('--limit', default=50, help='Maximum investments to show')
+@click.pass_context
+def investors_investments(ctx, min_confidence, limit):
+    """Show all detected investments."""
+    db_path = ctx.obj['db_path']
+    db = Database(db_path)
+
+    try:
+        investments = db.conn.execute("""
+            SELECT c.name as company_name, c.city, c.ai_robotics_score,
+                   i.canonical_name as investor_name, i.type as investor_type,
+                   inv.round_type, inv.amount, inv.confidence,
+                   inv.detection_source, inv.investment_date
+            FROM investments inv
+            JOIN companies c ON inv.company_id = c.id
+            JOIN investors i ON inv.investor_id = i.id
+            WHERE inv.confidence >= ?
+            ORDER BY inv.confidence DESC, inv.detected_at DESC
+            LIMIT ?
+        """, (min_confidence, limit)).fetchall()
+
+        if not investments:
+            console.print("[yellow]No investments found. Run 'scheduler investor-detect' first.[/yellow]")
+            return
+
+        table = Table(title=f"Detected Investments ({len(investments)} shown)")
+        table.add_column("Company", style="green")
+        table.add_column("Investor", style="cyan")
+        table.add_column("Type", style="dim")
+        table.add_column("Round", style="yellow")
+        table.add_column("Confidence", style="blue")
+
+        for inv in investments:
+            table.add_row(
+                inv['company_name'][:30],
+                inv['investor_name'][:25],
+                inv['investor_type'] or '-',
+                inv['round_type'] or '-',
+                f"{inv['confidence']:.0%}"
+            )
+
+        console.print(table)
+
+        # Summary
+        console.print(f"\n[bold]Summary:[/bold] {len(investments)} investor-company connections detected")
+
+    finally:
+        db.close()
+
+
+@investors.command('stats')
+@click.pass_context
+def investors_stats(ctx):
+    """Show investor detection statistics."""
+    db_path = ctx.obj['db_path']
+    db = Database(db_path)
+
+    try:
+        # Total investors and investments
+        total_investors = db.conn.execute("SELECT COUNT(*) FROM investors").fetchone()[0]
+        total_investments = db.conn.execute("SELECT COUNT(*) FROM investments").fetchone()[0]
+
+        # Investors with detected investments
+        active_investors = db.conn.execute("""
+            SELECT COUNT(DISTINCT investor_id) FROM investments
+        """).fetchone()[0]
+
+        # Companies with investor connections
+        funded_companies = db.conn.execute("""
+            SELECT COUNT(DISTINCT company_id) FROM investments
+        """).fetchone()[0]
+
+        # By detection source
+        by_source = db.conn.execute("""
+            SELECT detection_source, COUNT(*) as count
+            FROM investments
+            GROUP BY detection_source
+            ORDER BY count DESC
+        """).fetchall()
+
+        # By investor type
+        by_type = db.conn.execute("""
+            SELECT i.type, COUNT(inv.id) as count
+            FROM investments inv
+            JOIN investors i ON inv.investor_id = i.id
+            GROUP BY i.type
+            ORDER BY count DESC
+        """).fetchall()
+
+        # Average confidence
+        avg_conf = db.conn.execute("""
+            SELECT AVG(confidence) FROM investments
+        """).fetchone()[0] or 0
+
+        console.print("\n[bold blue]Investor Detection Statistics[/bold blue]")
+        console.print("=" * 50)
+
+        table = Table(show_header=False)
+        table.add_column("Metric", style="cyan")
+        table.add_column("Value", style="green")
+
+        table.add_row("Total investors in database", f"{total_investors:,}")
+        table.add_row("Investors with detected investments", f"{active_investors:,}")
+        table.add_row("Total investments detected", f"{total_investments:,}")
+        table.add_row("Companies with investor connections", f"{funded_companies:,}")
+        table.add_row("Average detection confidence", f"{avg_conf:.1%}")
+
+        console.print(table)
+
+        if by_source:
+            console.print("\n[bold]By Detection Source:[/bold]")
+            for row in by_source:
+                console.print(f"  {row['detection_source'] or 'unknown'}: {row['count']:,}")
+
+        if by_type:
+            console.print("\n[bold]By Investor Type:[/bold]")
+            for row in by_type:
+                console.print(f"  {row['type'] or 'unknown'}: {row['count']:,}")
+
+    finally:
+        db.close()
+
+
+@investors.command('search')
+@click.argument('investor_name')
+@click.option('--max-results', default=50, help='Maximum results to fetch')
+@click.pass_context
+def investors_search(ctx, investor_name, max_results):
+    """
+    Search Handelsregister for companies where an investor is a shareholder.
+
+    This searches the "Name des Beteiligten" field to find all companies
+    where the specified investor appears as a participant/shareholder.
+
+    Example:
+        python main.py investors search "Sequoia Capital"
+        python main.py investors search "Index Ventures"
+    """
+    from sources.bundesapi import BundesAPISource
+
+    console.print(f"\n[bold blue]Searching Handelsregister for: {investor_name}[/bold blue]")
+    console.print("=" * 50)
+    console.print(f"[dim]Searching by shareholder name (Name des Beteiligten)[/dim]\n")
+
+    source = BundesAPISource()
+    results = list(source.search(
+        keywords=[],  # No company name keywords
+        shareholder_name=investor_name,
+        max_results=max_results,
+    ))
+
+    if not results:
+        console.print(f"[yellow]No companies found with '{investor_name}' as shareholder[/yellow]")
+        console.print("\n[dim]Note: The investor may use different legal entity names in Germany.[/dim]")
+        console.print("[dim]Try searching for specific fund names like 'Sequoia Capital Global Growth Fund'[/dim]")
+        return
+
+    console.print(f"[green]Found {len(results)} companies![/green]\n")
+
+    table = Table(title=f"Companies with {investor_name} as Shareholder")
+    table.add_column("Company", style="cyan")
+    table.add_column("Registry", style="dim")
+    table.add_column("Court", style="dim")
+    table.add_column("Status", style="green")
+
+    db_path = ctx.obj['db_path']
+    db = Database(db_path)
+
+    try:
+        for result in results:
+            table.add_row(
+                result.name,
+                f"{result.registry_type} {result.native_company_number}",
+                result.registry_court or "",
+                result.status or "",
+            )
+
+            # Optionally add to database
+            existing = db.get_company_by_native_number(result.native_company_number)
+            if not existing:
+                console.print(f"  [dim]→ New company discovered: {result.name}[/dim]")
+
+        console.print(table)
+
+    finally:
+        db.close()
 
 
 # ============================================================================
@@ -1114,6 +1558,176 @@ def announcements_stats(ctx):
         console.print(table)
 
     db.close()
+
+
+# ============================================================================
+# NEWS MONITORING COMMANDS
+# ============================================================================
+
+@cli.group()
+def news():
+    """News monitoring for startup funding announcements."""
+    pass
+
+
+@news.command('scan')
+@click.option('--funding-only', is_flag=True, help='Only show funding-related articles')
+@click.option('--ai-only', is_flag=True, help='Only show AI/robotics-related articles')
+@click.pass_context
+def news_scan(ctx, funding_only, ai_only):
+    """Scan RSS feeds for startup news."""
+    from sources.news_monitor import NewsMonitor
+
+    console.print("\n[bold blue]Scanning Startup News Feeds[/bold blue]")
+    console.print("=" * 50)
+
+    monitor = NewsMonitor()
+
+    with Progress(
+        SpinnerColumn(),
+        TextColumn("[progress.description]{task.description}"),
+        console=console,
+    ) as progress:
+        task = progress.add_task("Fetching feeds...", total=None)
+        articles = monitor.fetch_all_articles()
+        progress.update(task, description=f"Found {len(articles)} articles")
+
+    if funding_only:
+        articles = [a for a in articles if monitor.is_funding_related(a)]
+        console.print(f"\n[bold]Funding-related articles: {len(articles)}[/bold]\n")
+    elif ai_only:
+        articles = [a for a in articles if monitor.is_ai_robotics_related(a)]
+        console.print(f"\n[bold]AI/Robotics-related articles: {len(articles)}[/bold]\n")
+    else:
+        console.print(f"\n[bold]Total articles: {len(articles)}[/bold]\n")
+
+    # Show articles
+    table = Table(title="Recent Articles")
+    table.add_column("Source", style="cyan", width=15)
+    table.add_column("Title", style="white", width=60)
+    table.add_column("Funding?", style="green", width=8)
+    table.add_column("AI?", style="yellow", width=5)
+
+    for article in articles[:30]:
+        is_funding = "Yes" if monitor.is_funding_related(article) else ""
+        is_ai = "Yes" if monitor.is_ai_robotics_related(article) else ""
+
+        table.add_row(
+            article.source,
+            article.title[:58] + "..." if len(article.title) > 60 else article.title,
+            is_funding,
+            is_ai,
+        )
+
+    console.print(table)
+
+
+@news.command('funding')
+@click.pass_context
+def news_funding(ctx):
+    """Extract funding announcements from news."""
+    from sources.news_monitor import NewsMonitor
+
+    console.print("\n[bold blue]Extracting Funding Announcements[/bold blue]")
+    console.print("=" * 50)
+
+    monitor = NewsMonitor()
+
+    with Progress(
+        SpinnerColumn(),
+        TextColumn("[progress.description]{task.description}"),
+        console=console,
+    ) as progress:
+        task = progress.add_task("Scanning feeds...", total=None)
+        funding_mentions = monitor.scan_for_funding()
+
+    if not funding_mentions:
+        console.print("[yellow]No funding announcements found in recent news.[/yellow]")
+        return
+
+    console.print(f"\n[bold green]Found {len(funding_mentions)} funding mentions![/bold green]\n")
+
+    table = Table(title="Funding Announcements")
+    table.add_column("Company", style="green", width=22)
+    table.add_column("Amount", style="cyan", width=12)
+    table.add_column("Round", style="yellow", width=10)
+    table.add_column("Investors", style="white", width=25)
+    table.add_column("Conf", style="dim", width=5)
+    table.add_column("Source", style="dim", width=12)
+
+    for mention in funding_mentions:
+        amount_str = ""
+        if mention.amount:
+            if mention.amount >= 1_000_000_000:
+                amount_str = f"{mention.amount / 1_000_000_000:.1f}B {mention.currency or ''}"
+            elif mention.amount >= 1_000_000:
+                amount_str = f"{mention.amount / 1_000_000:.1f}M {mention.currency or ''}"
+            else:
+                amount_str = f"{mention.amount:,.0f} {mention.currency or ''}"
+
+        investors_str = ", ".join(mention.investors[:3])
+        if len(mention.investors) > 3:
+            investors_str += f" +{len(mention.investors) - 3}"
+
+        conf_str = f"{mention.confidence:.0%}" if hasattr(mention, 'confidence') else "-"
+
+        table.add_row(
+            mention.company_name[:20] if mention.company_name else "-",
+            amount_str or "-",
+            mention.round_type or "-",
+            investors_str or "-",
+            conf_str,
+            mention.source,
+        )
+
+    console.print(table)
+
+    # Show article titles
+    console.print("\n[bold]Article Sources:[/bold]")
+    for mention in funding_mentions[:10]:
+        console.print(f"  [dim]{mention.article_title[:70]}...[/dim]")
+        console.print(f"    {mention.article_url}")
+
+
+@news.command('early-stage')
+@click.pass_context
+def news_early_stage(ctx):
+    """Scan for early-stage signals: grants, stipends, spinoffs, accelerators."""
+    from sources.news_monitor import NewsMonitor
+
+    console.print("\n[bold blue]Scanning for Early-Stage Signals[/bold blue]")
+    console.print("=" * 50)
+
+    monitor = NewsMonitor()
+
+    with Progress(
+        SpinnerColumn(),
+        TextColumn("[progress.description]{task.description}"),
+        console=console,
+    ) as progress:
+        task = progress.add_task("Scanning feeds...", total=None)
+        articles = monitor.scan_for_early_stage()
+
+    if not articles:
+        console.print("[yellow]No early-stage signals found in recent news.[/yellow]")
+        return
+
+    console.print(f"\n[bold green]Found {len(articles)} articles with early-stage signals![/bold green]\n")
+
+    table = Table(title="Early-Stage / Grant / Spinoff Signals")
+    table.add_column("Source", style="cyan", width=18)
+    table.add_column("Title", style="white", width=60)
+    table.add_column("Funding?", style="green", width=8)
+
+    for article in articles[:30]:
+        is_funding = "Yes" if monitor.is_funding_related(article) else ""
+        table.add_row(
+            article.source,
+            article.title[:58] + "..." if len(article.title) > 60 else article.title,
+            is_funding,
+        )
+
+    console.print(table)
 
 
 if __name__ == '__main__':

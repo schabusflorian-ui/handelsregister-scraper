@@ -255,6 +255,7 @@ class BundesAPISource:
         registry_types: Optional[List[str]] = None,
         include_deleted: bool = False,
         max_results: int = 100,
+        shareholder_name: Optional[str] = None,  # NEW: Search by shareholder/participant name
     ) -> Iterator[SearchResult]:
         """
         Search for companies matching criteria.
@@ -266,6 +267,7 @@ class BundesAPISource:
             registry_types: List of registry types (HRA, HRB, GnR, PR, VR, GsR)
             include_deleted: Include deleted/dissolved companies
             max_results: Maximum results to return
+            shareholder_name: Search by shareholder/participant name (Name des Beteiligten)
 
         Yields:
             SearchResult objects
@@ -321,11 +323,16 @@ class BundesAPISource:
         form_data = {
             'form': 'form',
             'suchTyp': 'e',  # Extended search type
-            'form:schlagwoerter': ' '.join(keywords),
+            'form:schlagwoerter': ' '.join(keywords) if keywords else '',
             'form:schlagwortOptionen': keyword_mode_value,
             'javax.faces.ViewState': viewstate_value,
             'form:btnSuche': '',  # Submit button (empty value triggers the button)
         }
+
+        # Add shareholder/participant name search if specified
+        # This searches the "Name des Beteiligten" field
+        if shareholder_name:
+            form_data['form:beteiligter'] = shareholder_name
 
         # Registry type - use select dropdown value
         # For 'all' mode, we can leave it empty (all types)
