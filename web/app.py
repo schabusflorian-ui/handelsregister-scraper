@@ -72,6 +72,7 @@ def format_date(date_str: Optional[str]) -> str:
 # Add template filters
 templates.env.filters["currency"] = format_currency
 templates.env.filters["date"] = format_date
+templates.env.filters["split"] = lambda s, sep=",": s.split(sep) if s else []
 
 
 @app.get("/health")
