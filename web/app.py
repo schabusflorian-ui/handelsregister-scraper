@@ -127,8 +127,12 @@ async def companies_list(
     request: Request,
     q: Optional[str] = None,
     city: Optional[str] = None,
+    state: Optional[str] = None,
+    legal_form: Optional[str] = None,
+    year: Optional[int] = None,
     min_score: Optional[int] = None,
     classification: Optional[str] = None,
+    has_website: Optional[bool] = None,
     page: int = 1,
     per_page: int = 25,
 ):
@@ -147,12 +151,23 @@ async def companies_list(
         if city:
             conditions.append("city = ?")
             params.append(city)
+        if state:
+            conditions.append("state = ?")
+            params.append(state)
+        if legal_form:
+            conditions.append("legal_form = ?")
+            params.append(legal_form)
+        if year:
+            conditions.append("substr(first_seen_date, 1, 4) = ?")
+            params.append(str(year))
         if min_score is not None:
             conditions.append("ai_robotics_score >= ?")
             params.append(min_score)
         if classification:
             conditions.append("startup_classification = ?")
             params.append(classification)
+        if has_website:
+            conditions.append("website IS NOT NULL")
 
         where_clause = " AND ".join(conditions) if conditions else "1=1"
 
@@ -164,13 +179,13 @@ async def companies_list(
         query = f"""
             SELECT * FROM companies
             WHERE {where_clause}
-            ORDER BY ai_robotics_score DESC, startup_score DESC, name
+            ORDER BY first_seen_date DESC, ai_robotics_score DESC, name
             LIMIT ? OFFSET ?
         """
         companies = db.conn.execute(query, params + [per_page, offset]).fetchall()
         companies = [dict(row) for row in companies]
 
-        # Get cities for filter
+        # Get filter options
         cities = db.conn.execute("""
             SELECT city, COUNT(*) as count
             FROM companies
@@ -178,6 +193,31 @@ async def companies_list(
             GROUP BY city
             ORDER BY count DESC
             LIMIT 20
+        """).fetchall()
+
+        states = db.conn.execute("""
+            SELECT state, COUNT(*) as count
+            FROM companies
+            WHERE state IS NOT NULL AND state != ''
+            GROUP BY state
+            ORDER BY count DESC
+        """).fetchall()
+
+        legal_forms = db.conn.execute("""
+            SELECT legal_form, COUNT(*) as count
+            FROM companies
+            WHERE legal_form IS NOT NULL AND legal_form != ''
+            GROUP BY legal_form
+            ORDER BY count DESC
+            LIMIT 15
+        """).fetchall()
+
+        years = db.conn.execute("""
+            SELECT substr(first_seen_date, 1, 4) as year, COUNT(*) as count
+            FROM companies
+            WHERE first_seen_date IS NOT NULL
+            GROUP BY year
+            ORDER BY year DESC
         """).fetchall()
 
         total_pages = (total + per_page - 1) // per_page
@@ -191,9 +231,16 @@ async def companies_list(
             "total_pages": total_pages,
             "q": q or "",
             "city": city or "",
+            "state": state or "",
+            "legal_form": legal_form or "",
+            "year": year,
             "min_score": min_score,
             "classification": classification or "",
+            "has_website": has_website,
             "cities": cities,
+            "states": states,
+            "legal_forms": legal_forms,
+            "years": years,
         })
     finally:
         db.close()

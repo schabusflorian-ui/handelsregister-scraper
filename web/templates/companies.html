@@ -16,13 +16,27 @@
 <div class="bg-white shadow rounded-lg mb-6">
     <div class="px-4 py-5 sm:p-6">
         <form method="GET" action="/companies" class="space-y-4">
-            <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div class="grid grid-cols-1 md:grid-cols-6 gap-4">
                 <!-- Search -->
                 <div class="md:col-span-2">
                     <label for="q" class="block text-sm font-medium text-gray-700">Search</label>
                     <input type="text" name="q" id="q" value="{{ q }}"
                         class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
                         placeholder="Company name or purpose...">
+                </div>
+
+                <!-- Year Filter -->
+                <div>
+                    <label for="year" class="block text-sm font-medium text-gray-700">Year</label>
+                    <select name="year" id="year"
+                        class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+                        <option value="">All years</option>
+                        {% for y in years %}
+                        <option value="{{ y.year }}" {% if year == y.year|int %}selected{% endif %}>
+                            {{ y.year }} ({{ y.count }})
+                        </option>
+                        {% endfor %}
+                    </select>
                 </div>
 
                 <!-- City Filter -->
@@ -39,6 +53,36 @@
                     </select>
                 </div>
 
+                <!-- State Filter -->
+                <div>
+                    <label for="state" class="block text-sm font-medium text-gray-700">State</label>
+                    <select name="state" id="state"
+                        class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+                        <option value="">All states</option>
+                        {% for s in states %}
+                        <option value="{{ s.state }}" {% if state == s.state %}selected{% endif %}>
+                            {{ s.state }} ({{ s.count }})
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <!-- Legal Form Filter -->
+                <div>
+                    <label for="legal_form" class="block text-sm font-medium text-gray-700">Legal Form</label>
+                    <select name="legal_form" id="legal_form"
+                        class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+                        <option value="">All forms</option>
+                        {% for lf in legal_forms %}
+                        <option value="{{ lf.legal_form }}" {% if legal_form == lf.legal_form %}selected{% endif %}>
+                            {{ lf.legal_form }} ({{ lf.count }})
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-6 gap-4">
                 <!-- Min Score -->
                 <div>
                     <label for="min_score" class="block text-sm font-medium text-gray-700">Min AI Score</label>
@@ -50,9 +94,7 @@
                         {% endfor %}
                     </select>
                 </div>
-            </div>
 
-            <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <!-- Classification -->
                 <div>
                     <label for="classification" class="block text-sm font-medium text-gray-700">Classification</label>
@@ -63,6 +105,15 @@
                         <option value="tech_company" {% if classification == 'tech_company' %}selected{% endif %}>Tech Company</option>
                         <option value="traditional" {% if classification == 'traditional' %}selected{% endif %}>Traditional</option>
                     </select>
+                </div>
+
+                <!-- Has Website -->
+                <div class="flex items-end">
+                    <label class="inline-flex items-center">
+                        <input type="checkbox" name="has_website" value="true" {% if has_website %}checked{% endif %}
+                            class="rounded border-gray-300 text-indigo-600 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                        <span class="ml-2 text-sm text-gray-700">Has Website</span>
+                    </label>
                 </div>
 
                 <div class="md:col-span-3 flex items-end">
@@ -84,8 +135,9 @@
             <thead class="bg-gray-50">
                 <tr>
                     <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Company</th>
+                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Legal Form</th>
                     <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">City</th>
-                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Registration</th>
+                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">First Seen</th>
                     <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Capital</th>
                     <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">AI Score</th>
                     <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Classification</th>
@@ -109,10 +161,13 @@
                         </div>
                     </td>
                     <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {{ company.legal_form or '-' }}
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                         {{ company.city or '-' }}
                     </td>
                     <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {{ company.registration_date|date }}
+                        {{ company.first_seen_date|date }}
                     </td>
                     <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                         {{ company.capital_amount|currency(company.capital_currency or 'EUR') }}
@@ -140,7 +195,7 @@
                 </tr>
                 {% else %}
                 <tr>
-                    <td colspan="6" class="px-6 py-4 text-center text-sm text-gray-500">
+                    <td colspan="7" class="px-6 py-4 text-center text-sm text-gray-500">
                         No companies found matching your criteria.
                     </td>
                 </tr>
@@ -164,13 +219,13 @@
             </div>
             <div class="flex space-x-2">
                 {% if page > 1 %}
-                <a href="?q={{ q }}&city={{ city }}&min_score={{ min_score or '' }}&classification={{ classification }}&page={{ page - 1 }}"
+                <a href="?q={{ q }}&year={{ year or '' }}&city={{ city }}&state={{ state }}&legal_form={{ legal_form }}&min_score={{ min_score or '' }}&classification={{ classification }}&has_website={{ 'true' if has_website else '' }}&page={{ page - 1 }}"
                     class="relative inline-flex items-center rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 ring-1 ring-inset ring-gray-300 hover:bg-gray-50">
                     Previous
                 </a>
                 {% endif %}
                 {% if page < total_pages %}
-                <a href="?q={{ q }}&city={{ city }}&min_score={{ min_score or '' }}&classification={{ classification }}&page={{ page + 1 }}"
+                <a href="?q={{ q }}&year={{ year or '' }}&city={{ city }}&state={{ state }}&legal_form={{ legal_form }}&min_score={{ min_score or '' }}&classification={{ classification }}&has_website={{ 'true' if has_website else '' }}&page={{ page + 1 }}"
                     class="relative inline-flex items-center rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 ring-1 ring-inset ring-gray-300 hover:bg-gray-50">
                     Next
                 </a>
