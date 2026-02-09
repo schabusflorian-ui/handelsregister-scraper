@@ -9,12 +9,20 @@ echo "=== Handelsregister Scraper - Railway Deployment ==="
 echo "Database: ${DATABASE_PATH:-/data/handelsregister.db}"
 echo "Port: ${PORT:-8000}"
 echo "Working directory: $(pwd)"
+echo "Python version: $(python3 --version)"
+
+# Change to app directory (in case we're not there)
+cd /app
 
 # Export database path for web app
 export DB_PATH="${DATABASE_PATH:-/data/handelsregister.db}"
 
 # Ensure data directory exists
 mkdir -p /data
+
+# Test imports before starting
+echo "Testing imports..."
+python3 -c "from web.app import app; print('Web app import OK')" || echo "Web app import FAILED"
 
 # Start scheduler in background (non-LinkedIn jobs only)
 echo "Starting scheduler (background)..."
@@ -25,19 +33,9 @@ python3 -m scheduler.main \
 SCHEDULER_PID=$!
 echo "Scheduler started with PID: $SCHEDULER_PID"
 
-# Give scheduler time to initialize
-sleep 2
-
-# Check if scheduler is still running
-if kill -0 $SCHEDULER_PID 2>/dev/null; then
-    echo "Scheduler is running"
-else
-    echo "WARNING: Scheduler may have failed to start, continuing with web UI only"
-fi
-
-# Start web UI in foreground (this is the main process)
+# Don't wait - start web UI immediately
 echo "Starting web UI on port ${PORT:-8000}..."
-exec uvicorn web.app:app \
+exec python3 -m uvicorn web.app:app \
     --host 0.0.0.0 \
     --port "${PORT:-8000}" \
     --log-level info
