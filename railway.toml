@@ -1,5 +1,4 @@
 # Railway.app Configuration
-# Hybrid deployment: Web UI + Scheduler (stealth scraper runs locally)
 # https://docs.railway.app/deploy/config-as-code
 
 [build]
@@ -7,17 +6,10 @@ builder = "dockerfile"
 dockerfilePath = "Dockerfile"
 
 [deploy]
-# Use bash to run the start script
 startCommand = "bash /app/deployment/start.sh"
-restartPolicyType = "on-failure"
-restartPolicyMaxRetries = 3
-numReplicas = 1
-
-# Health check endpoint
 healthcheckPath = "/health"
 healthcheckTimeout = 30
 
-# Volume for persistent SQLite database
-[[volumes]]
-name = "handelsregister-data"
+[[mounts]]
+source = "handelsregister-data"
 mountPath = "/data"
