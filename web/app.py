@@ -540,6 +540,38 @@ async def api_stats_refresh(request: Request):
         db.close()
 
 
+@app.get("/admin/restore-db")
+async def admin_restore_db():
+    """Restore database from backup file."""
+    import base64
+    import os
+
+    backup_path = "/app/data/db_backup.b64"
+    db_path = os.environ.get('DATABASE_PATH', '/data/handelsregister.db')
+
+    if not os.path.exists(backup_path):
+        return {"error": "Backup file not found", "path": backup_path}
+
+    try:
+        with open(backup_path, 'r') as f:
+            encoded = f.read().strip()
+
+        data = base64.b64decode(encoded)
+
+        # Write to database
+        with open(db_path, 'wb') as f:
+            f.write(data)
+
+        return {
+            "success": True,
+            "bytes_restored": len(data),
+            "db_path": db_path,
+            "message": "Database restored! Refresh the dashboard to see changes."
+        }
+    except Exception as e:
+        return {"error": str(e)}
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
