@@ -1,0 +1,165 @@
+{% extends "base.html" %}
+
+{% block title %}Sync Founders - Handelsregister Scraper{% endblock %}
+
+{% block header %}
+<header class="bg-white shadow">
+    <div class="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+        <h1 class="text-3xl font-bold tracking-tight text-gray-900">Sync Stealth Founders</h1>
+        <p class="mt-1 text-sm text-gray-500">Upload stealth founders discovered on your local machine</p>
+    </div>
+</header>
+{% endblock %}
+
+{% block content %}
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+    <!-- Upload Form -->
+    <div class="bg-white shadow rounded-lg">
+        <div class="px-4 py-5 sm:px-6 border-b border-gray-200">
+            <h3 class="text-lg font-medium leading-6 text-gray-900">Upload Founders Data</h3>
+        </div>
+        <div class="px-4 py-5 sm:p-6">
+            <form id="sync-form" method="POST" action="/admin/sync-founders">
+                <div class="mb-4">
+                    <label for="data" class="block text-sm font-medium text-gray-700 mb-2">
+                        Paste JSON or Base64-encoded data
+                    </label>
+                    <textarea
+                        id="data"
+                        name="data"
+                        rows="12"
+                        class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm font-mono text-xs"
+                        placeholder='[{"linkedin_url": "https://linkedin.com/in/...", "name": "...", ...}]'
+                    ></textarea>
+                </div>
+                <div class="flex items-center justify-between">
+                    <button type="submit"
+                        class="inline-flex items-center rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500">
+                        <svg class="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
+                        </svg>
+                        Sync Founders
+                    </button>
+                    <span class="text-sm text-gray-500">
+                        Current count: <strong>{{ founder_count }}</strong>
+                    </span>
+                </div>
+            </form>
+
+            <div id="result" class="mt-4 hidden">
+                <div id="result-success" class="hidden p-4 bg-green-50 border border-green-200 rounded text-sm text-green-700">
+                </div>
+                <div id="result-error" class="hidden p-4 bg-red-50 border border-red-200 rounded text-sm text-red-700">
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Instructions -->
+    <div class="bg-white shadow rounded-lg">
+        <div class="px-4 py-5 sm:px-6 border-b border-gray-200">
+            <h3 class="text-lg font-medium leading-6 text-gray-900">How to Sync</h3>
+        </div>
+        <div class="px-4 py-5 sm:p-6 text-sm text-gray-600 space-y-4">
+            <div>
+                <h4 class="font-medium text-gray-900">Step 1: Run stealth scraper locally</h4>
+                <pre class="mt-2 p-3 bg-gray-100 rounded text-xs overflow-x-auto">python -m scheduler.jobs.stealth_founder_job</pre>
+            </div>
+
+            <div>
+                <h4 class="font-medium text-gray-900">Step 2: Export founders to JSON</h4>
+                <pre class="mt-2 p-3 bg-gray-100 rounded text-xs overflow-x-auto">python scripts/export_founders.py --output founders.json</pre>
+                <p class="mt-1 text-xs text-gray-500">Or for base64 (easier to paste):</p>
+                <pre class="mt-1 p-3 bg-gray-100 rounded text-xs overflow-x-auto">python scripts/export_founders.py --base64</pre>
+            </div>
+
+            <div>
+                <h4 class="font-medium text-gray-900">Step 3: Copy and paste</h4>
+                <p>Copy the output and paste it in the text area on the left.</p>
+            </div>
+
+            <div class="border-t pt-4">
+                <h4 class="font-medium text-gray-900">Expected JSON format</h4>
+                <pre class="mt-2 p-3 bg-gray-100 rounded text-xs overflow-x-auto">[
+  {
+    "linkedin_url": "https://linkedin.com/in/example",
+    "name": "John Doe",
+    "headline": "Building something new",
+    "location": "Berlin, Germany",
+    "summary": "Former Google...",
+    "current_company": null,
+    "previous_companies": "[\"Google\", \"Meta\"]",
+    "stealth_signals": "{\"stealth\": [...]}",
+    "confidence_score": 0.65,
+    "first_seen_at": "2024-01-15T10:30:00",
+    "detection_source": "duckduckgo"
+  }
+]</pre>
+            </div>
+
+            <div class="border-t pt-4">
+                <h4 class="font-medium text-gray-900">Behavior</h4>
+                <ul class="mt-2 list-disc list-inside space-y-1 text-xs">
+                    <li><strong>New founders</strong> (by linkedin_url) are inserted</li>
+                    <li><strong>Existing founders</strong> are updated with new data</li>
+                    <li>Null values in update don't overwrite existing data</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Navigation -->
+<div class="mt-6">
+    <a href="/admin/stealth-job" class="text-indigo-600 hover:text-indigo-500 text-sm">
+        &larr; Back to Stealth Job Admin
+    </a>
+</div>
+
+<script>
+document.getElementById('sync-form').addEventListener('submit', async function(e) {
+    e.preventDefault();
+
+    const data = document.getElementById('data').value;
+    const resultDiv = document.getElementById('result');
+    const successDiv = document.getElementById('result-success');
+    const errorDiv = document.getElementById('result-error');
+
+    // Hide previous results
+    resultDiv.classList.add('hidden');
+    successDiv.classList.add('hidden');
+    errorDiv.classList.add('hidden');
+
+    try {
+        const formData = new FormData();
+        formData.append('data', data);
+
+        const resp = await fetch('/admin/sync-founders', {
+            method: 'POST',
+            body: formData,
+        });
+
+        const result = await resp.json();
+        resultDiv.classList.remove('hidden');
+
+        if (result.success) {
+            successDiv.classList.remove('hidden');
+            successDiv.innerHTML = `
+                <strong>Sync completed!</strong><br>
+                Inserted: ${result.inserted}<br>
+                Updated: ${result.updated}<br>
+                Total: ${result.total}
+                ${result.errors ? '<br><br>Errors: ' + result.errors.join(', ') : ''}
+            `;
+        } else {
+            errorDiv.classList.remove('hidden');
+            errorDiv.textContent = 'Error: ' + (result.error || 'Unknown error');
+        }
+    } catch (e) {
+        resultDiv.classList.remove('hidden');
+        errorDiv.classList.remove('hidden');
+        errorDiv.textContent = 'Request failed: ' + e;
+    }
+});
+</script>
+{% endblock %}

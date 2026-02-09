@@ -856,6 +856,161 @@ async def admin_stealth_job_stop():
     return {"message": "No scheduled job to stop", "status": stealth_job_status}
 
 
+# =============================================================================
+# Sync Founders from Local
+# =============================================================================
+
+@app.get("/admin/sync-founders", response_class=HTMLResponse)
+async def admin_sync_founders_page(request: Request):
+    """Page to sync stealth founders from local machine."""
+    db = get_db()
+    try:
+        try:
+            founder_count = db.conn.execute(
+                "SELECT COUNT(*) FROM stealth_founders"
+            ).fetchone()[0]
+        except:
+            founder_count = 0
+
+        return templates.TemplateResponse("admin_sync_founders.html", {
+            "request": request,
+            "founder_count": founder_count,
+        })
+    finally:
+        db.close()
+
+
+@app.post("/admin/sync-founders")
+async def admin_sync_founders_post(request: Request):
+    """
+    Receive stealth founders data from local machine.
+    Accepts JSON array of founder objects or base64-encoded JSON.
+    """
+    import json
+    import base64
+
+    db = get_db()
+    try:
+        # Try to parse form data
+        form = await request.form()
+        data_str = form.get("data", "")
+
+        if not data_str:
+            # Try JSON body
+            try:
+                body = await request.json()
+                founders = body if isinstance(body, list) else body.get("founders", [])
+            except:
+                return {"error": "No data provided"}
+        else:
+            # Check if base64 encoded
+            try:
+                if data_str.startswith("eyJ") or data_str.startswith("W3si"):
+                    # Looks like base64
+                    decoded = base64.b64decode(data_str).decode('utf-8')
+                    founders = json.loads(decoded)
+                else:
+                    founders = json.loads(data_str)
+            except Exception as e:
+                return {"error": f"Failed to parse data: {e}"}
+
+        if not isinstance(founders, list):
+            founders = [founders]
+
+        # Insert/update founders
+        inserted = 0
+        updated = 0
+        errors = []
+
+        for founder in founders:
+            try:
+                linkedin_url = founder.get("linkedin_url")
+                if not linkedin_url:
+                    errors.append("Missing linkedin_url")
+                    continue
+
+                # Check if exists
+                existing = db.conn.execute(
+                    "SELECT id FROM stealth_founders WHERE linkedin_url = ?",
+                    (linkedin_url,)
+                ).fetchone()
+
+                if existing:
+                    # Update
+                    db.conn.execute("""
+                        UPDATE stealth_founders SET
+                            name = COALESCE(?, name),
+                            headline = COALESCE(?, headline),
+                            location = COALESCE(?, location),
+                            summary = COALESCE(?, summary),
+                            current_company = COALESCE(?, current_company),
+                            previous_companies = COALESCE(?, previous_companies),
+                            detection_source = COALESCE(?, detection_source),
+                            search_query = COALESCE(?, search_query),
+                            stealth_signals = COALESCE(?, stealth_signals),
+                            confidence_score = COALESCE(?, confidence_score),
+                            last_checked_at = COALESCE(?, last_checked_at)
+                        WHERE linkedin_url = ?
+                    """, (
+                        founder.get("name"),
+                        founder.get("headline"),
+                        founder.get("location"),
+                        founder.get("summary"),
+                        founder.get("current_company"),
+                        founder.get("previous_companies"),
+                        founder.get("detection_source"),
+                        founder.get("search_query"),
+                        founder.get("stealth_signals"),
+                        founder.get("confidence_score"),
+                        founder.get("last_checked_at"),
+                        linkedin_url,
+                    ))
+                    updated += 1
+                else:
+                    # Insert
+                    db.conn.execute("""
+                        INSERT INTO stealth_founders (
+                            linkedin_url, name, headline, location, summary,
+                            current_company, previous_companies, detection_source,
+                            search_query, stealth_signals, confidence_score,
+                            first_seen_at, last_checked_at
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """, (
+                        linkedin_url,
+                        founder.get("name"),
+                        founder.get("headline"),
+                        founder.get("location"),
+                        founder.get("summary"),
+                        founder.get("current_company"),
+                        founder.get("previous_companies"),
+                        founder.get("detection_source", "local_sync"),
+                        founder.get("search_query"),
+                        founder.get("stealth_signals"),
+                        founder.get("confidence_score", 0.0),
+                        founder.get("first_seen_at", datetime.now().isoformat()),
+                        founder.get("last_checked_at"),
+                    ))
+                    inserted += 1
+
+            except Exception as e:
+                errors.append(f"{founder.get('linkedin_url', 'unknown')}: {e}")
+
+        db.conn.commit()
+
+        return {
+            "success": True,
+            "inserted": inserted,
+            "updated": updated,
+            "total": inserted + updated,
+            "errors": errors[:10] if errors else None,  # Limit error output
+        }
+
+    except Exception as e:
+        return {"error": str(e)}
+    finally:
+        db.close()
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
