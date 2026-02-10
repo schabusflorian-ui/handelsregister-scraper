@@ -28,8 +28,8 @@ def main():
         help="Max iterations (default: unlimited)"
     )
     parser.add_argument(
-        "--delay", "-d", type=int, default=45,
-        help="Seconds between searches (default: 45)"
+        "--delay", "-d", type=int, default=90,
+        help="Seconds between searches (default: 90)"
     )
     parser.add_argument(
         "--reset-state", action="store_true",

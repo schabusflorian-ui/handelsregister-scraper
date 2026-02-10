@@ -417,8 +417,8 @@ class DuckDuckGoSearchScraper:
                     return response.text, next_data
 
                 if response.status_code == 202:
-                    # Rate limited - wait and retry
-                    wait_time = (attempt + 1) * 15
+                    # Rate limited - wait longer with exponential backoff
+                    wait_time = 30 * (2 ** attempt)  # 30s, 60s, 120s, 240s
                     logger.warning(f"DDG rate limit (202), waiting {wait_time}s...")
                     time.sleep(wait_time)
                     continue
