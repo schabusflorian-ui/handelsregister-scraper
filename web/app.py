@@ -111,12 +111,42 @@ async def dashboard(request: Request):
         except:
             job_runs = []
 
+        # Get new (unviewed) companies with high AI score
+        try:
+            new_companies = db.conn.execute("""
+                SELECT id, name, city, ai_robotics_score, startup_classification, first_seen_date
+                FROM companies
+                WHERE (viewed = 0 OR viewed IS NULL)
+                  AND ai_robotics_score >= 3
+                ORDER BY first_seen_date DESC, ai_robotics_score DESC
+                LIMIT 10
+            """).fetchall()
+            new_companies = [dict(row) for row in new_companies]
+            new_count = db.conn.execute("""
+                SELECT COUNT(*) FROM companies
+                WHERE (viewed = 0 OR viewed IS NULL) AND ai_robotics_score >= 3
+            """).fetchone()[0]
+        except:
+            new_companies = []
+            new_count = 0
+
+        # Get contacted count
+        try:
+            contacted_count = db.conn.execute(
+                "SELECT COUNT(*) FROM companies WHERE contacted = 1"
+            ).fetchone()[0]
+        except:
+            contacted_count = 0
+
         return templates.TemplateResponse("dashboard.html", {
             "request": request,
             "stats": stats,
             "recent_companies": recent,
             "capital_events": capital_events,
             "job_runs": job_runs,
+            "new_companies": new_companies,
+            "new_count": new_count,
+            "contacted_count": contacted_count,
         })
     finally:
         db.close()
@@ -133,6 +163,8 @@ async def companies_list(
     min_score: Optional[int] = None,
     classification: Optional[str] = None,
     has_website: Optional[bool] = None,
+    contacted: Optional[str] = None,  # 'yes', 'no', or None for all
+    viewed: Optional[str] = None,     # 'yes', 'no', or None for all
     page: int = 1,
     per_page: int = 25,
 ):
@@ -168,6 +200,14 @@ async def companies_list(
             params.append(classification)
         if has_website:
             conditions.append("website IS NOT NULL")
+        if contacted == 'yes':
+            conditions.append("contacted = 1")
+        elif contacted == 'no':
+            conditions.append("(contacted = 0 OR contacted IS NULL)")
+        if viewed == 'yes':
+            conditions.append("viewed = 1")
+        elif viewed == 'no':
+            conditions.append("(viewed = 0 OR viewed IS NULL)")
 
         where_clause = " AND ".join(conditions) if conditions else "1=1"
 
@@ -237,6 +277,8 @@ async def companies_list(
             "min_score": min_score,
             "classification": classification or "",
             "has_website": has_website,
+            "contacted": contacted or "",
+            "viewed": viewed or "",
             "cities": cities,
             "states": states,
             "legal_forms": legal_forms,
@@ -286,6 +328,17 @@ async def company_detail(request: Request, company_id: int):
         except:
             announcements = []
 
+        # Mark as viewed
+        try:
+            db.conn.execute("""
+                UPDATE companies SET viewed = 1, viewed_at = COALESCE(viewed_at, datetime('now'))
+                WHERE id = ?
+            """, (company_id,))
+            db.conn.commit()
+            company['viewed'] = 1
+        except:
+            pass
+
         return templates.TemplateResponse("company_detail.html", {
             "request": request,
             "company": company,
@@ -294,6 +347,51 @@ async def company_detail(request: Request, company_id: int):
             "investments": investments,
             "announcements": announcements,
         })
+    finally:
+        db.close()
+
+
+@app.post("/companies/{company_id}/toggle-contacted")
+async def toggle_contacted(company_id: int):
+    """Toggle contacted status for a company."""
+    db = get_db()
+    try:
+        # Get current status
+        current = db.conn.execute(
+            "SELECT contacted FROM companies WHERE id = ?", (company_id,)
+        ).fetchone()
+        if not current:
+            raise HTTPException(status_code=404, detail="Company not found")
+
+        new_status = 0 if current[0] else 1
+        contacted_at = datetime.now().isoformat() if new_status else None
+
+        db.conn.execute("""
+            UPDATE companies SET contacted = ?, contacted_at = ?
+            WHERE id = ?
+        """, (new_status, contacted_at, company_id))
+        db.conn.commit()
+
+        return {"success": True, "contacted": new_status}
+    finally:
+        db.close()
+
+
+@app.post("/companies/{company_id}/notes")
+async def update_notes(company_id: int, request: Request):
+    """Update notes for a company."""
+    db = get_db()
+    try:
+        body = await request.json()
+        notes = body.get("notes", "")
+
+        db.conn.execute(
+            "UPDATE companies SET notes = ? WHERE id = ?",
+            (notes, company_id)
+        )
+        db.conn.commit()
+
+        return {"success": True}
     finally:
         db.close()
 
