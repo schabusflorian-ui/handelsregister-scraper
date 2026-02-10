@@ -475,6 +475,11 @@ class Database:
             for col, col_type in [
                 ('website_confidence', 'REAL'),
                 ('website_lookup_at', 'TEXT'),
+                ('contacted', 'INTEGER DEFAULT 0'),
+                ('contacted_at', 'TEXT'),
+                ('viewed', 'INTEGER DEFAULT 0'),
+                ('viewed_at', 'TEXT'),
+                ('notes', 'TEXT'),
             ]:
                 if col not in columns and columns:
                     cursor.execute(f"ALTER TABLE companies ADD COLUMN {col} {col_type}")

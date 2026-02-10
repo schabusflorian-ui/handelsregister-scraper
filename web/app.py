@@ -111,12 +111,42 @@ async def dashboard(request: Request):
         except:
             job_runs = []
 
+        # Get new (unviewed) companies with high AI score
+        try:
+            new_companies = db.conn.execute("""
+                SELECT id, name, city, ai_robotics_score, startup_classification, first_seen_date
+                FROM companies
+                WHERE (viewed = 0 OR viewed IS NULL)
+                  AND ai_robotics_score >= 3
+                ORDER BY first_seen_date DESC, ai_robotics_score DESC
+                LIMIT 10
+            """).fetchall()
+            new_companies = [dict(row) for row in new_companies]
+            new_count = db.conn.execute("""
+                SELECT COUNT(*) FROM companies
+                WHERE (viewed = 0 OR viewed IS NULL) AND ai_robotics_score >= 3
+            """).fetchone()[0]
+        except:
+            new_companies = []
+            new_count = 0
+
+        # Get contacted count
+        try:
+            contacted_count = db.conn.execute(
+                "SELECT COUNT(*) FROM companies WHERE contacted = 1"
+            ).fetchone()[0]
+        except:
+            contacted_count = 0
+
         return templates.TemplateResponse("dashboard.html", {
             "request": request,
             "stats": stats,
             "recent_companies": recent,
             "capital_events": capital_events,
             "job_runs": job_runs,
+            "new_companies": new_companies,
+            "new_count": new_count,
+            "contacted_count": contacted_count,
         })
     finally:
         db.close()
@@ -127,8 +157,14 @@ async def companies_list(
     request: Request,
     q: Optional[str] = None,
     city: Optional[str] = None,
+    state: Optional[str] = None,
+    legal_form: Optional[str] = None,
+    year: Optional[int] = None,
     min_score: Optional[int] = None,
     classification: Optional[str] = None,
+    has_website: Optional[bool] = None,
+    contacted: Optional[str] = None,  # 'yes', 'no', or None for all
+    viewed: Optional[str] = None,     # 'yes', 'no', or None for all
     page: int = 1,
     per_page: int = 25,
 ):
@@ -147,12 +183,31 @@ async def companies_list(
         if city:
             conditions.append("city = ?")
             params.append(city)
+        if state:
+            conditions.append("state = ?")
+            params.append(state)
+        if legal_form:
+            conditions.append("legal_form = ?")
+            params.append(legal_form)
+        if year:
+            conditions.append("substr(first_seen_date, 1, 4) = ?")
+            params.append(str(year))
         if min_score is not None:
             conditions.append("ai_robotics_score >= ?")
             params.append(min_score)
         if classification:
             conditions.append("startup_classification = ?")
             params.append(classification)
+        if has_website:
+            conditions.append("website IS NOT NULL")
+        if contacted == 'yes':
+            conditions.append("contacted = 1")
+        elif contacted == 'no':
+            conditions.append("(contacted = 0 OR contacted IS NULL)")
+        if viewed == 'yes':
+            conditions.append("viewed = 1")
+        elif viewed == 'no':
+            conditions.append("(viewed = 0 OR viewed IS NULL)")
 
         where_clause = " AND ".join(conditions) if conditions else "1=1"
 
@@ -164,13 +219,13 @@ async def companies_list(
         query = f"""
             SELECT * FROM companies
             WHERE {where_clause}
-            ORDER BY ai_robotics_score DESC, startup_score DESC, name
+            ORDER BY first_seen_date DESC, ai_robotics_score DESC, name
             LIMIT ? OFFSET ?
         """
         companies = db.conn.execute(query, params + [per_page, offset]).fetchall()
         companies = [dict(row) for row in companies]
 
-        # Get cities for filter
+        # Get filter options
         cities = db.conn.execute("""
             SELECT city, COUNT(*) as count
             FROM companies
@@ -178,6 +233,31 @@ async def companies_list(
             GROUP BY city
             ORDER BY count DESC
             LIMIT 20
+        """).fetchall()
+
+        states = db.conn.execute("""
+            SELECT state, COUNT(*) as count
+            FROM companies
+            WHERE state IS NOT NULL AND state != ''
+            GROUP BY state
+            ORDER BY count DESC
+        """).fetchall()
+
+        legal_forms = db.conn.execute("""
+            SELECT legal_form, COUNT(*) as count
+            FROM companies
+            WHERE legal_form IS NOT NULL AND legal_form != ''
+            GROUP BY legal_form
+            ORDER BY count DESC
+            LIMIT 15
+        """).fetchall()
+
+        years = db.conn.execute("""
+            SELECT substr(first_seen_date, 1, 4) as year, COUNT(*) as count
+            FROM companies
+            WHERE first_seen_date IS NOT NULL
+            GROUP BY year
+            ORDER BY year DESC
         """).fetchall()
 
         total_pages = (total + per_page - 1) // per_page
@@ -191,9 +271,18 @@ async def companies_list(
             "total_pages": total_pages,
             "q": q or "",
             "city": city or "",
+            "state": state or "",
+            "legal_form": legal_form or "",
+            "year": year,
             "min_score": min_score,
             "classification": classification or "",
+            "has_website": has_website,
+            "contacted": contacted or "",
+            "viewed": viewed or "",
             "cities": cities,
+            "states": states,
+            "legal_forms": legal_forms,
+            "years": years,
         })
     finally:
         db.close()
@@ -239,6 +328,17 @@ async def company_detail(request: Request, company_id: int):
         except:
             announcements = []
 
+        # Mark as viewed
+        try:
+            db.conn.execute("""
+                UPDATE companies SET viewed = 1, viewed_at = COALESCE(viewed_at, datetime('now'))
+                WHERE id = ?
+            """, (company_id,))
+            db.conn.commit()
+            company['viewed'] = 1
+        except:
+            pass
+
         return templates.TemplateResponse("company_detail.html", {
             "request": request,
             "company": company,
@@ -247,6 +347,51 @@ async def company_detail(request: Request, company_id: int):
             "investments": investments,
             "announcements": announcements,
         })
+    finally:
+        db.close()
+
+
+@app.post("/companies/{company_id}/toggle-contacted")
+async def toggle_contacted(company_id: int):
+    """Toggle contacted status for a company."""
+    db = get_db()
+    try:
+        # Get current status
+        current = db.conn.execute(
+            "SELECT contacted FROM companies WHERE id = ?", (company_id,)
+        ).fetchone()
+        if not current:
+            raise HTTPException(status_code=404, detail="Company not found")
+
+        new_status = 0 if current[0] else 1
+        contacted_at = datetime.now().isoformat() if new_status else None
+
+        db.conn.execute("""
+            UPDATE companies SET contacted = ?, contacted_at = ?
+            WHERE id = ?
+        """, (new_status, contacted_at, company_id))
+        db.conn.commit()
+
+        return {"success": True, "contacted": new_status}
+    finally:
+        db.close()
+
+
+@app.post("/companies/{company_id}/notes")
+async def update_notes(company_id: int, request: Request):
+    """Update notes for a company."""
+    db = get_db()
+    try:
+        body = await request.json()
+        notes = body.get("notes", "")
+
+        db.conn.execute(
+            "UPDATE companies SET notes = ? WHERE id = ?",
+            (notes, company_id)
+        )
+        db.conn.commit()
+
+        return {"success": True}
     finally:
         db.close()
 
@@ -405,6 +550,12 @@ async def jobs_list(request: Request):
         })
     finally:
         db.close()
+
+
+@app.get("/stealth-founders")
+async def stealth_founders_redirect():
+    """Redirect to founders page."""
+    return RedirectResponse(url="/founders", status_code=302)
 
 
 @app.get("/founders", response_class=HTMLResponse)
@@ -570,6 +721,392 @@ async def admin_restore_db():
         }
     except Exception as e:
         return {"error": str(e)}
+
+
+# =============================================================================
+# Background Stealth Founder Job Scheduler
+# =============================================================================
+
+import threading
+import logging
+from contextlib import asynccontextmanager
+
+# Job status tracking (in-memory, resets on restart)
+stealth_job_status = {
+    "running": False,
+    "last_run": None,
+    "last_result": None,
+    "scheduled": False,
+    "interval_hours": 6,
+    "error": None,
+}
+
+scheduler = None
+job_lock = threading.Lock()
+logger = logging.getLogger(__name__)
+
+
+def run_stealth_job_sync():
+    """Run the stealth founder job synchronously (for background thread)."""
+    global stealth_job_status
+
+    with job_lock:
+        if stealth_job_status["running"]:
+            logger.warning("Stealth job already running, skipping")
+            return
+
+        stealth_job_status["running"] = True
+        stealth_job_status["error"] = None
+
+    try:
+        logger.info("Starting stealth founder discovery job...")
+
+        from scheduler.jobs.stealth_founder_job import StealthFounderJob
+        from persistence.database import Database
+
+        db = Database(DB_PATH)
+        try:
+            job = StealthFounderJob(
+                db=db,
+                max_queries=3,  # Conservative for cloud
+                max_profiles_to_scrape=10,
+                min_confidence=0.3,
+                google_delay=(20, 60),  # Longer delays for cloud IPs
+                linkedin_delay=(10, 30),
+            )
+            result = job.run()
+
+            stealth_job_status["last_result"] = result
+            stealth_job_status["last_run"] = datetime.now().isoformat()
+            logger.info(f"Stealth job completed: {result}")
+
+        finally:
+            db.close()
+
+    except Exception as e:
+        logger.error(f"Stealth job failed: {e}")
+        stealth_job_status["error"] = str(e)
+        stealth_job_status["last_run"] = datetime.now().isoformat()
+
+    finally:
+        stealth_job_status["running"] = False
+
+
+def start_scheduler():
+    """Start the APScheduler background scheduler."""
+    global scheduler
+
+    if scheduler is not None:
+        return
+
+    try:
+        from apscheduler.schedulers.background import BackgroundScheduler
+        from apscheduler.triggers.interval import IntervalTrigger
+
+        scheduler = BackgroundScheduler()
+
+        # Add stealth job on schedule (default: every 6 hours)
+        if os.environ.get('ENABLE_STEALTH_SCHEDULER', 'false').lower() == 'true':
+            interval_hours = int(os.environ.get('STEALTH_INTERVAL_HOURS', '6'))
+            scheduler.add_job(
+                run_stealth_job_sync,
+                trigger=IntervalTrigger(hours=interval_hours),
+                id='stealth_founder_job',
+                name='Stealth Founder Discovery',
+                replace_existing=True,
+            )
+            stealth_job_status["scheduled"] = True
+            stealth_job_status["interval_hours"] = interval_hours
+            logger.info(f"Stealth job scheduled every {interval_hours} hours")
+
+        scheduler.start()
+        logger.info("Background scheduler started")
+
+    except Exception as e:
+        logger.error(f"Failed to start scheduler: {e}")
+
+
+@app.on_event("startup")
+async def startup_event():
+    """Start background scheduler on app startup."""
+    start_scheduler()
+
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    """Shutdown scheduler on app shutdown."""
+    global scheduler
+    if scheduler:
+        scheduler.shutdown(wait=False)
+        scheduler = None
+
+
+@app.get("/admin/stealth-job", response_class=HTMLResponse)
+async def admin_stealth_job_page(request: Request):
+    """Stealth job management page."""
+    db = get_db()
+    try:
+        # Get stealth founder stats
+        try:
+            founder_count = db.conn.execute(
+                "SELECT COUNT(*) FROM stealth_founders"
+            ).fetchone()[0]
+            high_conf_count = db.conn.execute(
+                "SELECT COUNT(*) FROM stealth_founders WHERE confidence_score >= 0.6"
+            ).fetchone()[0]
+            recent_founders = db.conn.execute("""
+                SELECT name, headline, location, confidence_score, first_seen_at
+                FROM stealth_founders
+                ORDER BY first_seen_at DESC
+                LIMIT 5
+            """).fetchall()
+            recent_founders = [dict(r) for r in recent_founders]
+        except:
+            founder_count = 0
+            high_conf_count = 0
+            recent_founders = []
+
+        return templates.TemplateResponse("admin_stealth_job.html", {
+            "request": request,
+            "status": stealth_job_status,
+            "founder_count": founder_count,
+            "high_conf_count": high_conf_count,
+            "recent_founders": recent_founders,
+            "env_enabled": os.environ.get('ENABLE_STEALTH_SCHEDULER', 'false'),
+        })
+    finally:
+        db.close()
+
+
+@app.get("/admin/stealth-job/status")
+async def admin_stealth_job_status():
+    """Get stealth job status (API)."""
+    return stealth_job_status
+
+
+@app.post("/admin/stealth-job/run")
+async def admin_stealth_job_run():
+    """Trigger a manual stealth job run."""
+    if stealth_job_status["running"]:
+        return {"error": "Job already running", "status": stealth_job_status}
+
+    # Run in background thread
+    thread = threading.Thread(target=run_stealth_job_sync, daemon=True)
+    thread.start()
+
+    return {
+        "message": "Stealth job started in background",
+        "status": stealth_job_status,
+    }
+
+
+@app.post("/admin/stealth-job/schedule")
+async def admin_stealth_job_schedule(hours: int = 6):
+    """Enable/update scheduled stealth job."""
+    global scheduler
+
+    if scheduler is None:
+        start_scheduler()
+
+    try:
+        from apscheduler.triggers.interval import IntervalTrigger
+
+        # Remove existing job if any
+        try:
+            scheduler.remove_job('stealth_founder_job')
+        except:
+            pass
+
+        # Add new scheduled job
+        scheduler.add_job(
+            run_stealth_job_sync,
+            trigger=IntervalTrigger(hours=hours),
+            id='stealth_founder_job',
+            name='Stealth Founder Discovery',
+            replace_existing=True,
+        )
+
+        stealth_job_status["scheduled"] = True
+        stealth_job_status["interval_hours"] = hours
+
+        return {
+            "message": f"Stealth job scheduled every {hours} hours",
+            "status": stealth_job_status,
+        }
+
+    except Exception as e:
+        return {"error": str(e)}
+
+
+@app.post("/admin/stealth-job/stop")
+async def admin_stealth_job_stop():
+    """Stop scheduled stealth job."""
+    global scheduler
+
+    if scheduler:
+        try:
+            scheduler.remove_job('stealth_founder_job')
+            stealth_job_status["scheduled"] = False
+            return {"message": "Scheduled job stopped", "status": stealth_job_status}
+        except:
+            pass
+
+    return {"message": "No scheduled job to stop", "status": stealth_job_status}
+
+
+# =============================================================================
+# Sync Founders from Local
+# =============================================================================
+
+@app.get("/admin/sync-founders", response_class=HTMLResponse)
+async def admin_sync_founders_page(request: Request):
+    """Page to sync stealth founders from local machine."""
+    db = get_db()
+    try:
+        try:
+            founder_count = db.conn.execute(
+                "SELECT COUNT(*) FROM stealth_founders"
+            ).fetchone()[0]
+        except:
+            founder_count = 0
+
+        return templates.TemplateResponse("admin_sync_founders.html", {
+            "request": request,
+            "founder_count": founder_count,
+        })
+    finally:
+        db.close()
+
+
+@app.post("/admin/sync-founders")
+async def admin_sync_founders_post(request: Request):
+    """
+    Receive stealth founders data from local machine.
+    Accepts JSON array of founder objects or base64-encoded JSON.
+    """
+    import json
+    import base64
+
+    db = get_db()
+    try:
+        # Try to parse form data
+        form = await request.form()
+        data_str = form.get("data", "")
+
+        if not data_str:
+            # Try JSON body
+            try:
+                body = await request.json()
+                founders = body if isinstance(body, list) else body.get("founders", [])
+            except:
+                return {"error": "No data provided"}
+        else:
+            # Check if base64 encoded
+            try:
+                if data_str.startswith("eyJ") or data_str.startswith("W3si"):
+                    # Looks like base64
+                    decoded = base64.b64decode(data_str).decode('utf-8')
+                    founders = json.loads(decoded)
+                else:
+                    founders = json.loads(data_str)
+            except Exception as e:
+                return {"error": f"Failed to parse data: {e}"}
+
+        if not isinstance(founders, list):
+            founders = [founders]
+
+        # Insert/update founders
+        inserted = 0
+        updated = 0
+        errors = []
+
+        for founder in founders:
+            try:
+                linkedin_url = founder.get("linkedin_url")
+                if not linkedin_url:
+                    errors.append("Missing linkedin_url")
+                    continue
+
+                # Check if exists
+                existing = db.conn.execute(
+                    "SELECT id FROM stealth_founders WHERE linkedin_url = ?",
+                    (linkedin_url,)
+                ).fetchone()
+
+                if existing:
+                    # Update
+                    db.conn.execute("""
+                        UPDATE stealth_founders SET
+                            name = COALESCE(?, name),
+                            headline = COALESCE(?, headline),
+                            location = COALESCE(?, location),
+                            summary = COALESCE(?, summary),
+                            current_company = COALESCE(?, current_company),
+                            previous_companies = COALESCE(?, previous_companies),
+                            detection_source = COALESCE(?, detection_source),
+                            search_query = COALESCE(?, search_query),
+                            stealth_signals = COALESCE(?, stealth_signals),
+                            confidence_score = COALESCE(?, confidence_score),
+                            last_checked_at = COALESCE(?, last_checked_at)
+                        WHERE linkedin_url = ?
+                    """, (
+                        founder.get("name"),
+                        founder.get("headline"),
+                        founder.get("location"),
+                        founder.get("summary"),
+                        founder.get("current_company"),
+                        founder.get("previous_companies"),
+                        founder.get("detection_source"),
+                        founder.get("search_query"),
+                        founder.get("stealth_signals"),
+                        founder.get("confidence_score"),
+                        founder.get("last_checked_at"),
+                        linkedin_url,
+                    ))
+                    updated += 1
+                else:
+                    # Insert
+                    db.conn.execute("""
+                        INSERT INTO stealth_founders (
+                            linkedin_url, name, headline, location, summary,
+                            current_company, previous_companies, detection_source,
+                            search_query, stealth_signals, confidence_score,
+                            first_seen_at, last_checked_at
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """, (
+                        linkedin_url,
+                        founder.get("name"),
+                        founder.get("headline"),
+                        founder.get("location"),
+                        founder.get("summary"),
+                        founder.get("current_company"),
+                        founder.get("previous_companies"),
+                        founder.get("detection_source", "local_sync"),
+                        founder.get("search_query"),
+                        founder.get("stealth_signals"),
+                        founder.get("confidence_score", 0.0),
+                        founder.get("first_seen_at", datetime.now().isoformat()),
+                        founder.get("last_checked_at"),
+                    ))
+                    inserted += 1
+
+            except Exception as e:
+                errors.append(f"{founder.get('linkedin_url', 'unknown')}: {e}")
+
+        db.conn.commit()
+
+        return {
+            "success": True,
+            "inserted": inserted,
+            "updated": updated,
+            "total": inserted + updated,
+            "errors": errors[:10] if errors else None,  # Limit error output
+        }
+
+    except Exception as e:
+        return {"error": str(e)}
+    finally:
+        db.close()
 
 
 if __name__ == "__main__":

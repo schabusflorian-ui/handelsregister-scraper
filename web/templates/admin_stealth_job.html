@@ -1,0 +1,324 @@
+{% extends "base.html" %}
+
+{% block title %}Stealth Job Admin - Handelsregister Scraper{% endblock %}
+
+{% block header %}
+<header class="bg-white shadow">
+    <div class="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+        <h1 class="text-3xl font-bold tracking-tight text-gray-900">Stealth Founder Discovery</h1>
+        <p class="mt-1 text-sm text-gray-500">Background job for discovering stealth founders via DuckDuckGo + LinkedIn</p>
+    </div>
+</header>
+{% endblock %}
+
+{% block content %}
+<!-- Status Cards -->
+<div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+    <div class="bg-white overflow-hidden shadow rounded-lg">
+        <div class="p-5">
+            <div class="flex items-center">
+                <div class="flex-shrink-0">
+                    <svg class="h-6 w-6 {% if status.running %}text-green-500 animate-spin{% else %}text-gray-400{% endif %}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                    </svg>
+                </div>
+                <div class="ml-5 w-0 flex-1">
+                    <dl>
+                        <dt class="text-sm font-medium text-gray-500 truncate">Status</dt>
+                        <dd class="text-lg font-semibold {% if status.running %}text-green-600{% else %}text-gray-900{% endif %}">
+                            {% if status.running %}Running{% else %}Idle{% endif %}
+                        </dd>
+                    </dl>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="bg-white overflow-hidden shadow rounded-lg">
+        <div class="p-5">
+            <div class="flex items-center">
+                <div class="flex-shrink-0">
+                    <svg class="h-6 w-6 {% if status.scheduled %}text-blue-500{% else %}text-gray-400{% endif %}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                    </svg>
+                </div>
+                <div class="ml-5 w-0 flex-1">
+                    <dl>
+                        <dt class="text-sm font-medium text-gray-500 truncate">Scheduled</dt>
+                        <dd class="text-lg font-semibold text-gray-900">
+                            {% if status.scheduled %}Every {{ status.interval_hours }}h{% else %}Off{% endif %}
+                        </dd>
+                    </dl>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="bg-white overflow-hidden shadow rounded-lg">
+        <div class="p-5">
+            <div class="flex items-center">
+                <div class="flex-shrink-0">
+                    <svg class="h-6 w-6 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path>
+                    </svg>
+                </div>
+                <div class="ml-5 w-0 flex-1">
+                    <dl>
+                        <dt class="text-sm font-medium text-gray-500 truncate">Founders Found</dt>
+                        <dd class="text-lg font-semibold text-gray-900">{{ founder_count }}</dd>
+                    </dl>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="bg-white overflow-hidden shadow rounded-lg">
+        <div class="p-5">
+            <div class="flex items-center">
+                <div class="flex-shrink-0">
+                    <svg class="h-6 w-6 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                    </svg>
+                </div>
+                <div class="ml-5 w-0 flex-1">
+                    <dl>
+                        <dt class="text-sm font-medium text-gray-500 truncate">High Confidence</dt>
+                        <dd class="text-lg font-semibold text-gray-900">{{ high_conf_count }}</dd>
+                    </dl>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+    <!-- Controls -->
+    <div class="bg-white shadow rounded-lg">
+        <div class="px-4 py-5 sm:px-6 border-b border-gray-200">
+            <h3 class="text-lg font-medium leading-6 text-gray-900">Job Controls</h3>
+        </div>
+        <div class="px-4 py-5 sm:p-6 space-y-4">
+            <!-- Manual Run -->
+            <div>
+                <button id="run-btn" onclick="runJob()"
+                    class="inline-flex items-center rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                    {% if status.running %}disabled{% endif %}>
+                    <svg class="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"></path>
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                    </svg>
+                    Run Now (Cloud)
+                </button>
+                <a href="/admin/sync-founders"
+                    class="ml-3 inline-flex items-center rounded-md bg-purple-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-purple-500">
+                    <svg class="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
+                    </svg>
+                    Sync from Local
+                </a>
+                <p class="mt-2 text-sm text-gray-500">
+                    <strong>Recommended:</strong> Run scraper locally, then sync results here (cloud IPs often get blocked).
+                    {% if status.running %}Job is currently running...{% endif %}
+                </p>
+            </div>
+
+            <!-- Schedule Controls -->
+            <div class="border-t pt-4">
+                <label for="interval" class="block text-sm font-medium text-gray-700">Schedule Interval</label>
+                <div class="mt-2 flex items-center space-x-3">
+                    <select id="interval" name="interval"
+                        class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+                        <option value="1" {% if status.interval_hours == 1 %}selected{% endif %}>Every 1 hour</option>
+                        <option value="3" {% if status.interval_hours == 3 %}selected{% endif %}>Every 3 hours</option>
+                        <option value="6" {% if status.interval_hours == 6 %}selected{% endif %}>Every 6 hours</option>
+                        <option value="12" {% if status.interval_hours == 12 %}selected{% endif %}>Every 12 hours</option>
+                        <option value="24" {% if status.interval_hours == 24 %}selected{% endif %}>Every 24 hours</option>
+                    </select>
+                    <button onclick="scheduleJob()"
+                        class="inline-flex items-center rounded-md bg-green-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-green-500">
+                        Enable Schedule
+                    </button>
+                    <button onclick="stopSchedule()"
+                        class="inline-flex items-center rounded-md bg-red-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-red-500">
+                        Disable
+                    </button>
+                </div>
+            </div>
+
+            <!-- Last Run Info -->
+            {% if status.last_run %}
+            <div class="border-t pt-4">
+                <h4 class="text-sm font-medium text-gray-700">Last Run</h4>
+                <p class="mt-1 text-sm text-gray-500">{{ status.last_run }}</p>
+                {% if status.last_result %}
+                <div class="mt-2 bg-gray-50 rounded p-3 text-sm">
+                    <ul class="space-y-1">
+                        <li><strong>Queries run:</strong> {{ status.last_result.queries_run }}</li>
+                        <li><strong>URLs found:</strong> {{ status.last_result.urls_found }}</li>
+                        <li><strong>New URLs:</strong> {{ status.last_result.new_urls }}</li>
+                        <li><strong>Profiles scraped:</strong> {{ status.last_result.profiles_scraped }}</li>
+                        <li><strong>Founders stored:</strong> {{ status.last_result.founders_stored }}</li>
+                        <li><strong>High confidence:</strong> {{ status.last_result.high_confidence }}</li>
+                        {% if status.last_result.errors %}<li class="text-red-600"><strong>Errors:</strong> {{ status.last_result.errors }}</li>{% endif %}
+                    </ul>
+                </div>
+                {% endif %}
+                {% if status.error %}
+                <div class="mt-2 bg-red-50 border border-red-200 rounded p-3 text-sm text-red-700">
+                    <strong>Error:</strong> {{ status.error }}
+                </div>
+                {% endif %}
+            </div>
+            {% endif %}
+
+            <!-- Environment Info -->
+            <div class="border-t pt-4">
+                <h4 class="text-sm font-medium text-gray-700">Environment</h4>
+                <p class="mt-1 text-sm text-gray-500">
+                    <code>ENABLE_STEALTH_SCHEDULER={{ env_enabled }}</code>
+                </p>
+                <p class="mt-1 text-xs text-gray-400">
+                    Set <code>ENABLE_STEALTH_SCHEDULER=true</code> in Railway to auto-start on deploy.
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Recent Discoveries -->
+    <div class="bg-white shadow rounded-lg">
+        <div class="px-4 py-5 sm:px-6 border-b border-gray-200">
+            <h3 class="text-lg font-medium leading-6 text-gray-900">Recent Discoveries</h3>
+        </div>
+        <div class="px-4 py-5 sm:p-6">
+            {% if recent_founders %}
+            <ul class="divide-y divide-gray-200">
+                {% for founder in recent_founders %}
+                <li class="py-3">
+                    <div class="flex items-start justify-between">
+                        <div class="min-w-0 flex-1">
+                            <p class="text-sm font-medium text-gray-900 truncate">{{ founder.name or 'Unknown' }}</p>
+                            <p class="text-xs text-gray-500 truncate">{{ founder.headline or '-' }}</p>
+                            <p class="text-xs text-gray-400">{{ founder.location or '-' }} &middot; {{ founder.first_seen_at[:10] if founder.first_seen_at else '-' }}</p>
+                        </div>
+                        <span class="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium
+                            {% if founder.confidence_score >= 0.6 %}bg-green-100 text-green-800
+                            {% elif founder.confidence_score >= 0.4 %}bg-yellow-100 text-yellow-800
+                            {% else %}bg-gray-100 text-gray-800{% endif %}">
+                            {{ "%.0f"|format(founder.confidence_score * 100) }}%
+                        </span>
+                    </div>
+                </li>
+                {% endfor %}
+            </ul>
+            <div class="mt-4">
+                <a href="/stealth-founders" class="text-sm text-indigo-600 hover:text-indigo-500">
+                    View all stealth founders &rarr;
+                </a>
+            </div>
+            {% else %}
+            <p class="text-sm text-gray-500">No stealth founders discovered yet. Run the job to start discovering!</p>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- How It Works -->
+<div class="mt-6 bg-white shadow rounded-lg">
+    <div class="px-4 py-5 sm:px-6 border-b border-gray-200">
+        <h3 class="text-lg font-medium leading-6 text-gray-900">How It Works</h3>
+    </div>
+    <div class="px-4 py-5 sm:p-6">
+        <ol class="list-decimal list-inside space-y-2 text-sm text-gray-600">
+            <li><strong>DuckDuckGo Search:</strong> Searches for LinkedIn profiles matching stealth founder patterns (e.g., "stealth founder germany", "building something new berlin")</li>
+            <li><strong>URL Extraction:</strong> Extracts LinkedIn profile URLs from search results</li>
+            <li><strong>Profile Scraping:</strong> Fetches public LinkedIn profile data using cloudscraper</li>
+            <li><strong>Signal Detection:</strong> Analyzes profiles for stealth signals (Specter/Harmonic-inspired):
+                <ul class="ml-6 mt-1 list-disc text-gray-500">
+                    <li>Stealth keywords ("stealth mode", "building something new", etc.)</li>
+                    <li>Career transitions ("ex-Google", "just left", etc.)</li>
+                    <li>High-value backgrounds (FAANG, unicorns, top VCs)</li>
+                    <li>Urgency signals ("hiring", "raising", "beta")</li>
+                </ul>
+            </li>
+            <li><strong>Confidence Scoring:</strong> Calculates confidence score (0-100%) based on signals</li>
+            <li><strong>Storage:</strong> Stores qualified founders (confidence >= 30%) in database</li>
+        </ol>
+
+        <div class="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded text-sm text-yellow-800">
+            <strong>Note:</strong> Cloud IPs may get blocked more often. The job uses conservative delays (20-60s for search, 10-30s for profiles) to minimize blocks.
+        </div>
+    </div>
+</div>
+
+<script>
+let refreshInterval = null;
+
+async function runJob() {
+    const btn = document.getElementById('run-btn');
+    btn.disabled = true;
+    btn.innerHTML = '<svg class="animate-spin mr-2 h-4 w-4" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> Running...';
+
+    try {
+        const resp = await fetch('/admin/stealth-job/run', { method: 'POST' });
+        const data = await resp.json();
+
+        if (data.error) {
+            alert('Error: ' + data.error);
+        } else {
+            // Start polling for status
+            startStatusPolling();
+        }
+    } catch (e) {
+        alert('Failed to start job: ' + e);
+        btn.disabled = false;
+        btn.innerHTML = 'Run Now';
+    }
+}
+
+async function scheduleJob() {
+    const hours = document.getElementById('interval').value;
+    try {
+        const resp = await fetch(`/admin/stealth-job/schedule?hours=${hours}`, { method: 'POST' });
+        const data = await resp.json();
+        alert(data.message || data.error);
+        location.reload();
+    } catch (e) {
+        alert('Failed: ' + e);
+    }
+}
+
+async function stopSchedule() {
+    try {
+        const resp = await fetch('/admin/stealth-job/stop', { method: 'POST' });
+        const data = await resp.json();
+        alert(data.message || data.error);
+        location.reload();
+    } catch (e) {
+        alert('Failed: ' + e);
+    }
+}
+
+function startStatusPolling() {
+    if (refreshInterval) clearInterval(refreshInterval);
+
+    refreshInterval = setInterval(async () => {
+        try {
+            const resp = await fetch('/admin/stealth-job/status');
+            const status = await resp.json();
+
+            if (!status.running) {
+                clearInterval(refreshInterval);
+                location.reload();
+            }
+        } catch (e) {
+            console.error('Status poll failed:', e);
+        }
+    }, 5000);
+}
+
+// If job is running on page load, start polling
+{% if status.running %}
+startStatusPolling();
+{% endif %}
+</script>
+{% endblock %}

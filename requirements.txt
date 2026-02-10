@@ -36,3 +36,6 @@ duckduckgo-search>=8.0.0  # also available as 'ddgs'
 fastapi>=0.109.0
 uvicorn>=0.27.0
 jinja2>=3.1.0
+
+# LinkedIn/web scraping
+cloudscraper>=1.2.71
