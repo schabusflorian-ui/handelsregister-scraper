@@ -156,57 +156,62 @@
         <table class="min-w-full divide-y divide-gray-200">
             <thead class="bg-gray-50">
                 <tr>
-                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Company</th>
-                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Legal Form</th>
-                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">City</th>
-                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">First Seen</th>
-                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">AI Score</th>
-                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                    <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Company</th>
+                    <th scope="col" class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Legal Form</th>
+                    <th scope="col" class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">City</th>
+                    <th scope="col" class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">State</th>
+                    <th scope="col" class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Year</th>
+                    <th scope="col" class="px-3 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Web</th>
+                    <th scope="col" class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">AI</th>
+                    <th scope="col" class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
                 </tr>
             </thead>
             <tbody class="bg-white divide-y divide-gray-200">
                 {% for company in companies %}
                 <tr class="hover:bg-gray-50 {% if company.contacted %}bg-green-50{% endif %}">
-                    <td class="px-6 py-4">
-                        <div class="flex items-center">
-                            <div>
-                                <a href="/companies/{{ company.id }}" class="text-sm font-medium text-indigo-600 hover:text-indigo-900">
-                                    {{ company.name }}
-                                </a>
-                                {% if company.website %}
-                                <p class="text-xs text-gray-500">
-                                    <a href="{{ company.website }}" target="_blank" class="hover:text-indigo-600">{{ company.website[:40] }}{% if company.website|length > 40 %}...{% endif %}</a>
-                                </p>
-                                {% endif %}
-                                {% if company.startup_classification %}
-                                <span class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium mt-1
-                                    {% if company.startup_classification == 'startup' %}bg-purple-100 text-purple-800
-                                    {% elif company.startup_classification == 'tech_company' %}bg-blue-100 text-blue-800
-                                    {% else %}bg-gray-100 text-gray-800{% endif %}">
-                                    {{ company.startup_classification }}
-                                </span>
-                                {% endif %}
-                            </div>
-                        </div>
+                    <td class="px-4 py-3">
+                        <a href="/companies/{{ company.id }}" class="text-sm font-medium text-indigo-600 hover:text-indigo-900">
+                            {{ company.name[:50] }}{% if company.name|length > 50 %}...{% endif %}
+                        </a>
+                        {% if company.startup_classification %}
+                        <span class="ml-1 inline-flex items-center rounded-full px-1.5 py-0.5 text-xs font-medium
+                            {% if company.startup_classification == 'startup' %}bg-purple-100 text-purple-800
+                            {% elif company.startup_classification == 'tech_company' %}bg-blue-100 text-blue-800
+                            {% else %}bg-gray-100 text-gray-800{% endif %}">
+                            {{ company.startup_classification[:1]|upper }}
+                        </span>
+                        {% endif %}
                     </td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-500">
                         {{ company.legal_form or '-' }}
                     </td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-500">
                         {{ company.city or '-' }}
                     </td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {{ company.first_seen_date|date }}
+                    <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-500">
+                        {{ company.state[:15] if company.state else '-' }}{% if company.state and company.state|length > 15 %}...{% endif %}
                     </td>
-                    <td class="px-6 py-4 whitespace-nowrap">
-                        <span class="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium
+                    <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-500">
+                        {{ company.first_seen_date[:4] if company.first_seen_date else '-' }}
+                    </td>
+                    <td class="px-3 py-3 whitespace-nowrap text-center">
+                        {% if company.website %}
+                        <a href="{{ company.website }}" target="_blank" class="text-green-600 hover:text-green-800" title="{{ company.website }}">
+                            <svg class="w-4 h-4 inline" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M4.083 9h1.946c.089-1.546.383-2.97.837-4.118A6.004 6.004 0 004.083 9zM10 2a8 8 0 100 16 8 8 0 000-16zm0 2c-.076 0-.232.032-.465.262-.238.234-.497.623-.737 1.182-.389.907-.673 2.142-.766 3.556h3.936c-.093-1.414-.377-2.649-.766-3.556-.24-.56-.5-.948-.737-1.182C10.232 4.032 10.076 4 10 4zm3.971 5c-.089-1.546-.383-2.97-.837-4.118A6.004 6.004 0 0115.917 9h-1.946zm-2.003 2H8.032c.093 1.414.377 2.649.766 3.556.24.56.5.948.737 1.182.233.23.389.262.465.262.076 0 .232-.032.465-.262.238-.234.498-.623.737-1.182.389-.907.673-2.142.766-3.556zm1.166 4.118c.454-1.147.748-2.572.837-4.118h1.946a6.004 6.004 0 01-2.783 4.118zm-6.268 0C6.412 13.97 6.118 12.546 6.03 11H4.083a6.004 6.004 0 002.783 4.118z" clip-rule="evenodd"/></svg>
+                        </a>
+                        {% else %}
+                        <span class="text-gray-300">-</span>
+                        {% endif %}
+                    </td>
+                    <td class="px-3 py-3 whitespace-nowrap">
+                        <span class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium
                             {% if company.ai_robotics_score >= 5 %}bg-green-100 text-green-800
                             {% elif company.ai_robotics_score >= 3 %}bg-yellow-100 text-yellow-800
                             {% else %}bg-gray-100 text-gray-800{% endif %}">
                             {{ company.ai_robotics_score }}
                         </span>
                     </td>
-                    <td class="px-6 py-4 whitespace-nowrap">
+                    <td class="px-3 py-3 whitespace-nowrap">
                         <div class="flex space-x-1">
                             {% if company.viewed %}
                             <span class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-blue-100 text-blue-800" title="Viewed">
@@ -226,7 +231,7 @@
                 </tr>
                 {% else %}
                 <tr>
-                    <td colspan="6" class="px-6 py-4 text-center text-sm text-gray-500">
+                    <td colspan="8" class="px-6 py-4 text-center text-sm text-gray-500">
                         No companies found matching your criteria.
                     </td>
                 </tr>
