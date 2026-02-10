@@ -164,12 +164,14 @@ class SlowStealthScraper:
         search_delay: int = 60,  # Seconds between search requests
         scrape_delay: int = 90,  # Seconds between LinkedIn scrapes
         jitter: float = 0.3,     # Random jitter (0.3 = ±30%)
+        search_engine: str = 'brave',  # 'brave', 'ddg', or 'rotate'
     ):
         self.db = db
         self.state_file = state_file
         self.search_delay = search_delay
         self.scrape_delay = scrape_delay
         self.jitter = jitter
+        self.search_engine = search_engine
         self.consecutive_failures = 0
 
         self.state = self._load_state()
@@ -497,31 +499,31 @@ class SlowStealthScraper:
         self.db.conn.commit()
         logger.info(f"Stored founder: {profile.name} (conf={profile.confidence_score:.2f})")
 
-    def _do_search(self, max_pages: int = 2, use_multi_engine: bool = True) -> List[str]:
+    def _do_search(self, max_pages: int = 2) -> List[str]:
         """
         Perform one search query and return new URLs found.
 
         Args:
             max_pages: Number of result pages to fetch (default 2 = ~60 results)
-            use_multi_engine: Rotate between DuckDuckGo and Brave
         """
-        from sources.google_search import DuckDuckGoSearchScraper, MultiSearchScraper
+        from sources.google_search import DuckDuckGoSearchScraper, BraveSearchScraper, MultiSearchScraper
 
         # Get current query
         query = STEALTH_QUERIES[self.state['query_index']]
 
-        logger.info(f"Searching: {query}")
-
-        if use_multi_engine:
-            scraper = MultiSearchScraper(delay_range=(2, 5))
-        else:
-            scraper = DuckDuckGoSearchScraper(delay_range=(2, 5), use_cloudscraper=True)
+        engine_name = self.search_engine.upper()
+        logger.info(f"[{engine_name}] Searching: {query}")
 
         try:
-            # Fetch results (multi-engine handles pagination internally)
-            if use_multi_engine:
+            # Select search engine based on preference
+            if self.search_engine == 'brave':
+                scraper = BraveSearchScraper(delay_range=(2, 5), use_cloudscraper=True)
+                results = scraper.search_query(query)
+            elif self.search_engine == 'ddg':
+                scraper = DuckDuckGoSearchScraper(delay_range=(2, 5), use_cloudscraper=True)
                 results = scraper.search_query(query, max_pages=max_pages)
-            else:
+            else:  # rotate
+                scraper = MultiSearchScraper(delay_range=(2, 5))
                 results = scraper.search_query(query, max_pages=max_pages)
 
             # Get existing URLs to filter
@@ -791,6 +793,7 @@ class SlowStealthScraper:
         iteration = 0
 
         logger.info("Starting slow continuous scraper...")
+        logger.info(f"  Search engine: {self.search_engine}")
         logger.info(f"  Search delay: {self.search_delay}s (±{self.jitter*100:.0f}%)")
         logger.info(f"  Scrape delay: {self.scrape_delay}s (±{self.jitter*100:.0f}%)")
         logger.info(f"  State file: {self.state_file}")

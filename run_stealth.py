@@ -35,6 +35,11 @@ def main():
         "--reset-state", action="store_true",
         help="Clear state and start fresh"
     )
+    parser.add_argument(
+        "--engine", "-e", type=str, default="brave",
+        choices=["brave", "ddg", "rotate"],
+        help="Search engine: brave (default, less blocking), ddg, or rotate"
+    )
     args = parser.parse_args()
 
     logging.basicConfig(
@@ -61,9 +66,10 @@ def main():
     print(f"Database: {db_path}")
     print(f"State file: {state_file}")
     print(f"Search delay: {args.delay}s")
+    print(f"Search engine: {args.engine}")
     print(f"Iterations: {'unlimited' if args.iterations is None else args.iterations}")
     print()
-    print("Extracts founders from DuckDuckGo search snippets.")
+    print("Extracts founders from search snippets.")
     print("98 search queries, rotates through all of them.")
     print()
     print("Press Ctrl+C to stop (state is auto-saved)")
@@ -79,6 +85,7 @@ def main():
             state_file=str(state_file),
             search_delay=args.delay,
             scrape_delay=120,  # LinkedIn scraping mostly disabled
+            search_engine=args.engine,
         )
 
         # Show current state
