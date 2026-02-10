@@ -674,6 +674,7 @@ class BraveSearchScraper:
             'User-Agent': random.choice(USER_AGENTS),
             'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
             'Accept-Language': 'en-US,en;q=0.5',
+            'Accept-Encoding': 'gzip, deflate',  # Avoid brotli - needs extra library
         }
 
     def _delay(self):
@@ -691,7 +692,7 @@ class BraveSearchScraper:
                     return response.text
 
                 if response.status_code == 429:
-                    wait_time = (attempt + 1) * 20
+                    wait_time = 60 * (2 ** attempt)  # 60s, 120s, 240s
                     logger.warning(f"Brave rate limit (429), waiting {wait_time}s...")
                     time.sleep(wait_time)
                     continue
