@@ -164,7 +164,8 @@ class SlowStealthScraper:
         search_delay: int = 60,  # Seconds between search requests
         scrape_delay: int = 90,  # Seconds between LinkedIn scrapes
         jitter: float = 0.3,     # Random jitter (0.3 = ±30%)
-        search_engine: str = 'brave',  # 'brave', 'ddg', or 'rotate'
+        search_engine: str = 'brave',  # 'brave', 'ddg', 'rotate', or 'playwright'
+        headless: bool = True,   # For playwright: run headless
     ):
         self.db = db
         self.state_file = state_file
@@ -172,7 +173,9 @@ class SlowStealthScraper:
         self.scrape_delay = scrape_delay
         self.jitter = jitter
         self.search_engine = search_engine
+        self.headless = headless
         self.consecutive_failures = 0
+        self._playwright_scraper = None  # Lazy init for playwright
 
         self.state = self._load_state()
         self._ensure_schema()
@@ -254,6 +257,16 @@ class SlowStealthScraper:
                 json.dump(self.state, f, indent=2)
         except Exception as e:
             logger.warning(f"Could not save state: {e}")
+
+    def _cleanup(self):
+        """Cleanup resources (e.g., Playwright browser)."""
+        if self._playwright_scraper:
+            try:
+                self._playwright_scraper.close()
+                logger.info("Playwright browser closed")
+            except Exception as e:
+                logger.warning(f"Error closing Playwright: {e}")
+            self._playwright_scraper = None
 
     def _get_delay(self, base_delay: int) -> float:
         """Get delay with random jitter."""
@@ -516,7 +529,16 @@ class SlowStealthScraper:
 
         try:
             # Select search engine based on preference
-            if self.search_engine == 'brave':
+            if self.search_engine == 'playwright':
+                # Use Playwright (real browser) - much harder to block
+                from sources.google_search import PlaywrightSearchScraper
+                if self._playwright_scraper is None:
+                    self._playwright_scraper = PlaywrightSearchScraper(
+                        headless=self.headless,
+                        search_engine='duckduckgo'
+                    )
+                results = self._playwright_scraper.search_query(query)
+            elif self.search_engine == 'brave':
                 scraper = BraveSearchScraper(delay_range=(2, 5), use_cloudscraper=True)
                 results = scraper.search_query(query)
             elif self.search_engine == 'ddg':
@@ -837,6 +859,7 @@ class SlowStealthScraper:
         except KeyboardInterrupt:
             logger.info("Stopped by user")
             self._save_state()
+            self._cleanup()
 
     def get_stats(self) -> Dict[str, Any]:
         """Get current scraper statistics."""

@@ -37,8 +37,12 @@ def main():
     )
     parser.add_argument(
         "--engine", "-e", type=str, default="brave",
-        choices=["brave", "ddg", "rotate"],
-        help="Search engine: brave (default, less blocking), ddg, or rotate"
+        choices=["brave", "ddg", "rotate", "playwright"],
+        help="Search engine: brave (default), ddg, rotate, or playwright (real browser)"
+    )
+    parser.add_argument(
+        "--visible", action="store_true",
+        help="Show browser window (only for playwright engine)"
     )
     args = parser.parse_args()
 
@@ -86,6 +90,7 @@ def main():
             search_delay=args.delay,
             scrape_delay=120,  # LinkedIn scraping mostly disabled
             search_engine=args.engine,
+            headless=not args.visible,  # Show browser if --visible flag
         )
 
         # Show current state

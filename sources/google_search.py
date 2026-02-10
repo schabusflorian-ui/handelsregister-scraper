@@ -868,6 +868,260 @@ class MultiSearchScraper:
         return all_results
 
 
+class PlaywrightSearchScraper:
+    """
+    Playwright-based search scraper using a real browser.
+
+    Much harder to detect than requests-based scraping.
+    Supports DuckDuckGo and Google searches.
+    """
+
+    def __init__(self, headless: bool = True, search_engine: str = 'duckduckgo'):
+        """
+        Initialize Playwright scraper.
+
+        Args:
+            headless: Run browser in headless mode (no visible window)
+            search_engine: 'duckduckgo' or 'google'
+        """
+        self.headless = headless
+        self.search_engine = search_engine
+        self.browser = None
+        self.context = None
+        self.page = None
+        self.found_urls: Set[str] = set()
+
+    def _ensure_browser(self):
+        """Lazily initialize browser on first use."""
+        if self.browser is None:
+            try:
+                from playwright.sync_api import sync_playwright
+                self._playwright = sync_playwright().start()
+                self.browser = self._playwright.chromium.launch(
+                    headless=self.headless,
+                    args=[
+                        '--disable-blink-features=AutomationControlled',
+                        '--disable-dev-shm-usage',
+                        '--no-sandbox',
+                    ]
+                )
+                self.context = self.browser.new_context(
+                    viewport={'width': 1920, 'height': 1080},
+                    user_agent=random.choice(USER_AGENTS),
+                    locale='en-US',
+                )
+                # Add stealth scripts to avoid detection
+                self.context.add_init_script("""
+                    Object.defineProperty(navigator, 'webdriver', {get: () => undefined});
+                    Object.defineProperty(navigator, 'plugins', {get: () => [1, 2, 3, 4, 5]});
+                    Object.defineProperty(navigator, 'languages', {get: () => ['en-US', 'en']});
+                    window.chrome = {runtime: {}};
+                """)
+                self.page = self.context.new_page()
+                logger.info("Playwright browser initialized")
+            except ImportError:
+                raise ImportError(
+                    "Playwright not installed. Run: pip3 install playwright && playwright install chromium"
+                )
+
+    def close(self):
+        """Close browser and cleanup."""
+        if self.browser:
+            self.browser.close()
+            self._playwright.stop()
+            self.browser = None
+            self.context = None
+            self.page = None
+
+    def _human_delay(self, min_sec: float = 1, max_sec: float = 3):
+        """Add human-like random delay."""
+        time.sleep(random.uniform(min_sec, max_sec))
+
+    def _search_duckduckgo(self, query: str) -> List[SearchResult]:
+        """Search DuckDuckGo with Playwright."""
+        self._ensure_browser()
+        results = []
+
+        try:
+            # Navigate to DuckDuckGo
+            url = f"https://duckduckgo.com/?q={quote_plus(query)}&t=h_&ia=web"
+            logger.info(f"Playwright DDG: {query[:50]}...")
+
+            self.page.goto(url, wait_until='networkidle', timeout=30000)
+            self._human_delay(2, 4)
+
+            # Wait for results to load
+            self.page.wait_for_selector('[data-testid="result"]', timeout=10000)
+
+            # Extract results
+            result_elements = self.page.query_selector_all('[data-testid="result"]')
+
+            for elem in result_elements:
+                try:
+                    # Get link
+                    link = elem.query_selector('a[data-testid="result-title-a"]')
+                    if not link:
+                        link = elem.query_selector('a')
+
+                    if not link:
+                        continue
+
+                    href = link.get_attribute('href')
+                    if not href or 'linkedin.com/in/' not in href:
+                        continue
+
+                    # Clean URL
+                    clean_url = self._clean_linkedin_url(href)
+                    if not clean_url or clean_url in self.found_urls:
+                        continue
+
+                    self.found_urls.add(clean_url)
+
+                    # Get title
+                    title = link.inner_text().strip()
+
+                    # Get snippet
+                    snippet_elem = elem.query_selector('[data-testid="result-snippet"]')
+                    snippet = snippet_elem.inner_text().strip() if snippet_elem else ''
+
+                    results.append(SearchResult(
+                        url=clean_url,
+                        title=title,
+                        snippet=snippet,
+                        query=query,
+                    ))
+                    logger.info(f"  Found: {title[:50]}")
+
+                except Exception as e:
+                    logger.debug(f"Error parsing result: {e}")
+                    continue
+
+            logger.info(f"  Total results: {len(results)}")
+            return results
+
+        except Exception as e:
+            logger.error(f"Playwright DDG search failed: {e}")
+            return results
+
+    def _search_google(self, query: str) -> List[SearchResult]:
+        """Search Google with Playwright."""
+        self._ensure_browser()
+        results = []
+
+        try:
+            url = f"https://www.google.com/search?q={quote_plus(query)}"
+            logger.info(f"Playwright Google: {query[:50]}...")
+
+            self.page.goto(url, wait_until='networkidle', timeout=30000)
+            self._human_delay(2, 4)
+
+            # Handle cookie consent if present
+            try:
+                accept_btn = self.page.query_selector('button:has-text("Accept all")')
+                if accept_btn:
+                    accept_btn.click()
+                    self._human_delay(1, 2)
+            except:
+                pass
+
+            # Wait for results
+            self.page.wait_for_selector('#search', timeout=10000)
+
+            # Extract results
+            links = self.page.query_selector_all('#search a')
+
+            for link in links:
+                try:
+                    href = link.get_attribute('href')
+                    if not href or 'linkedin.com/in/' not in href:
+                        continue
+
+                    clean_url = self._clean_linkedin_url(href)
+                    if not clean_url or clean_url in self.found_urls:
+                        continue
+
+                    self.found_urls.add(clean_url)
+
+                    # Get title from h3
+                    h3 = link.query_selector('h3')
+                    title = h3.inner_text().strip() if h3 else ''
+
+                    # Get snippet from parent
+                    parent = link.evaluate_handle('el => el.closest("div.g")')
+                    snippet = ''
+                    if parent:
+                        snippet_elem = parent.as_element().query_selector('[data-sncf], .VwiC3b')
+                        if snippet_elem:
+                            snippet = snippet_elem.inner_text().strip()
+
+                    results.append(SearchResult(
+                        url=clean_url,
+                        title=title,
+                        snippet=snippet,
+                        query=query,
+                    ))
+                    logger.info(f"  Found: {title[:50]}")
+
+                except Exception as e:
+                    logger.debug(f"Error parsing Google result: {e}")
+                    continue
+
+            logger.info(f"  Total results: {len(results)}")
+            return results
+
+        except Exception as e:
+            logger.error(f"Playwright Google search failed: {e}")
+            return results
+
+    def _clean_linkedin_url(self, url: str) -> Optional[str]:
+        """Extract clean LinkedIn profile URL."""
+        if not url:
+            return None
+
+        # Handle Google redirect URLs
+        if 'google.com/url' in url:
+            parsed = urlparse(url)
+            params = parse_qs(parsed.query)
+            url = params.get('url', params.get('q', [url]))[0]
+
+        # Handle DuckDuckGo redirect
+        if 'duckduckgo.com' in url and '/l/' in url:
+            parsed = urlparse(url)
+            params = parse_qs(parsed.query)
+            url = params.get('uddg', [url])[0]
+
+        # Extract linkedin.com/in/ URL
+        from urllib.parse import unquote
+        url = unquote(url)
+
+        match = re.search(r'(https?://(?:www\.|[a-z]{2}\.)?linkedin\.com/in/[^/?#&\s]+)', url)
+        if match:
+            return match.group(1).rstrip('/')
+
+        return None
+
+    def search_query(self, query: str) -> List[SearchResult]:
+        """
+        Search using configured engine.
+
+        Args:
+            query: Search query
+
+        Returns:
+            List of SearchResult objects
+        """
+        if self.search_engine == 'google':
+            return self._search_google(query)
+        else:
+            return self._search_duckduckgo(query)
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.close()
+
+
 if __name__ == '__main__':
     logging.basicConfig(level=logging.INFO)
 

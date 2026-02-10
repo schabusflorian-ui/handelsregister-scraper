@@ -40,3 +40,4 @@ jinja2>=3.1.0
 # LinkedIn/web scraping
 cloudscraper>=1.2.71
 brotli>=1.1.0  # For Brave search brotli decompression
+playwright>=1.40.0  # Headless browser for stealth scraping
