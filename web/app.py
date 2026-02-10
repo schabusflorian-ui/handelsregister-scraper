@@ -159,16 +159,21 @@ async def companies_list(
     city: Optional[str] = None,
     state: Optional[str] = None,
     legal_form: Optional[str] = None,
-    year: Optional[int] = None,
-    min_score: Optional[int] = None,
+    year: Optional[str] = None,  # Accept string, parse manually
+    min_score: Optional[str] = None,  # Accept string, parse manually
     classification: Optional[str] = None,
-    has_website: Optional[bool] = None,
+    has_website: Optional[str] = None,  # Accept string, parse manually
     contacted: Optional[str] = None,  # 'yes', 'no', or None for all
     viewed: Optional[str] = None,     # 'yes', 'no', or None for all
     page: int = 1,
     per_page: int = 25,
 ):
     """Company search and listing page."""
+    # Parse string params that may be empty
+    year_int = int(year) if year and year.isdigit() else None
+    min_score_int = int(min_score) if min_score and min_score.lstrip('-').isdigit() else None
+    has_website_bool = has_website == 'true' if has_website else None
+
     db = get_db()
     try:
         offset = (page - 1) * per_page
@@ -189,16 +194,16 @@ async def companies_list(
         if legal_form:
             conditions.append("legal_form = ?")
             params.append(legal_form)
-        if year:
+        if year_int:
             conditions.append("substr(first_seen_date, 1, 4) = ?")
-            params.append(str(year))
-        if min_score is not None:
+            params.append(str(year_int))
+        if min_score_int is not None:
             conditions.append("ai_robotics_score >= ?")
-            params.append(min_score)
+            params.append(min_score_int)
         if classification:
             conditions.append("startup_classification = ?")
             params.append(classification)
-        if has_website:
+        if has_website_bool:
             conditions.append("website IS NOT NULL")
         if contacted == 'yes':
             conditions.append("contacted = 1")
