@@ -3,6 +3,12 @@ AI/Robotics keyword filtering for company classification.
 
 Filters companies based on keyword matches in their name and business purpose.
 Provides separate AI/robotics and climate tech scoring.
+
+IMPORTANT: Two keyword contexts exist:
+- NAME_*_KEYWORDS: Slim lists for scoring company names (Handelsregister).
+  Only terms that realistically appear in German company names.
+- DEFAULT_*_KEYWORDS: Full lists kept for reference / future purpose-text scoring.
+- News monitor (sources/news_monitor.py) has its own full-text pattern lists.
 """
 
 import re
@@ -11,45 +17,36 @@ from dataclasses import dataclass, field
 
 
 # =============================================================================
-# AI / Robotics / Deeptech Keywords
+# NAME-FOCUSED AI Keywords (for company name scoring)
 # =============================================================================
 #
+# Only terms that realistically appear in German company names.
+# Multi-word English academic terms like "retrieval augmented generation"
+# or "convolutional neural network" are excluded — no one registers
+# a company with those in the name at the Handelsregister.
+#
 # DESIGN DECISIONS:
-# - "ki-" and "ai-" prefixes removed: cause false positives (e.g., "Kai-Uwe")
-# - "smart" removed: 90%+ false positives (Smart GmbH, Smart Repair, etc.)
-# - "agv"/"amr" kept but require word boundaries to avoid substring matches
-# - "automation"/"autonom" removed as standalone: too many false positives
-#   (building automation, Gebäudeautomation, etc.) — kept only in compounds
+# - "ki-"/"ai-" prefixes removed: false positives (e.g., "Kai-Uwe")
+# - "smart" removed: 90%+ false positives (Smart GmbH, Smart Repair)
+# - "automation"/"autonom" standalone removed: too generic
 # - Healthcare AI removed: not in scope
-# - Added standalone " AI " and ".ai" domain patterns (see STANDALONE_PATTERNS)
+# - Standalone " AI ", ".ai", "robot" handled via STANDALONE_AI_PATTERNS
 
-DEFAULT_AI_KEYWORDS = [
-    # === AI Core (High Signal) ===
+NAME_AI_KEYWORDS = [
+    # === AI Core — German terms in company names ===
     "künstliche intelligenz",
-    "artificial intelligence",
     "maschinelles lernen",
+
+    # === AI Core — 2-word English terms used as branding in German company names ===
+    "artificial intelligence",
     "machine learning",
     "deep learning",
     "neural network",
-    "neuronale netze",
-    "neuronales netz",
     "generative ai",
     "generative ki",
-    "large language model",
-    "foundation model",
+    "data science",
 
-    # === Agentic AI / Modern AI (High Signal) ===
-    "agentic ai",
-    "ai agent",
-    "ki-agent",
-    "diffusion model",
-    "text-to-image",
-    "text-to-video",
-    "retrieval augmented generation",
-    "rag",
-    "vector database",
-
-    # === Robotics (High Signal) ===
+    # === Robotics — very common in company names ===
     "robotik",
     "robotics",
     "roboter",
@@ -60,70 +57,41 @@ DEFAULT_AI_KEYWORDS = [
     "humanoide",
     "humanoid",
     "exoskelett",
-    "exoskeleton",
     "drone",
+    "drohne",
     "uav",
 
-    # === Automation & Autonomous (Only compound forms — standalone "automation"/"autonom" removed) ===
-    "rpa",
-    "process automation",
-    "robotic process automation",
-    "industrial automation",
-    "autonomes fahren",
-    "autonomous vehicle",
-    "autonomous systems",
-    "autonome systeme",
-    "selbstfahrend",
-    "self-driving",
-
-    # === Computer Vision (High Signal) ===
+    # === Computer Vision — German compounds + established English terms ===
     "computer vision",
     "bildverarbeitung",
     "bilderkennung",
-    "image recognition",
-    "objekterkennung",
-    "object detection",
-    "visual ai",
     "bildanalyse",
-    "video analytics",
-    "videoanalyse",
+    "objekterkennung",
     "gesichtserkennung",
-    "face recognition",
-    "lidar",
-    "3d vision",
     "machine vision",
+    "lidar",
+    "videoanalyse",
 
-    # === NLP / Language AI (High Signal) ===
-    "natural language processing",
+    # === NLP — short terms / German compounds in names ===
     "sprachverarbeitung",
-    "nlp",
-    "chatbot",
-    "chat bot",
-    "conversational ai",
-    "language model",
-    "sprachmodell",
     "spracherkennung",
-    "speech recognition",
-    "voice ai",
-    "text mining",
+    "chatbot",
+    "nlp",
     "textanalyse",
-    "sentiment analysis",
-    "named entity",
 
-    # === Data Science / ML (Medium Signal) ===
-    "data science",
-    "datenwissenschaft",
-    "predictive analytics",
-    "prädiktive analytik",
-    "predictive maintenance",
-    "recommendation engine",
-    "empfehlungssystem",
-    "anomaly detection",
-    "anomalieerkennung",
-    "pattern recognition",
-    "mustererkennung",
+    # === Automation — compound forms only ===
+    "rpa",
+    "autonomes fahren",
+    "autonome systeme",
+    "selbstfahrend",
 
-    # === Specific AI Applications (High Signal) ===
+    # === Industry 4.0 — established branding terms ===
+    "industrie 4.0",
+    "smart factory",
+    "digitaler zwilling",
+    "digital twin",
+
+    # === AI Application branding — common in company names ===
     "ai platform",
     "ki plattform",
     "ai software",
@@ -132,171 +100,181 @@ DEFAULT_AI_KEYWORDS = [
     "ki lösungen",
     "ai consulting",
     "ki beratung",
+
+    # === General — single words that appear in company names ===
+    "neural",
+    "neuronale",
+    "kognitiv",
+    "analytics",
+    "intelligent",
+
+    # === Short acronyms / brand terms ===
     "mlops",
     "aiops",
     "automl",
-
-    # === Industry 4.0 / Smart Manufacturing ===
-    "industrie 4.0",
-    "industry 4.0",
-    "smart factory",
-    "smart manufacturing",
-    "digitaler zwilling",
-    "digital twin",
-    "cyber physical",
-    "iot platform",
-    "iot analytics",
-
-    # === Fintech AI ===
-    "algorithmic trading",
-    "algo trading",
-    "robo advisor",
-    "robo-advisor",
-    "fraud detection",
-    "betrugserkennung",
-
-    # === General Tech Terms (Lower Signal - kept selective) ===
-    "intelligente systeme",
-    "cognitive computing",
-    "kognitiv",
-    "neural",
-    "neuronale",
-
-    # === Edge/Embedded AI ===
+    "iot",
     "edge ai",
-    "embedded ai",
-    "inference engine",
-    "tinyml",
 
-    # === Vision/Sensor ===
+    # === Sensor tech ===
     "sensorfusion",
     "sensor fusion",
 
-    # === Deeptech / Research ===
-    "quantum computing",
+    # === Deeptech — terms used in German company names ===
+    "quantum",
     "quantencomputer",
-    "qubit",
     "photonics",
     "photonik",
     "nanotechnologie",
     "nanotechnology",
     "nanomaterial",
-    "advanced materials",
-    "neue materialien",
-    "synthetische biologie",
-    "synthetic biology",
+    "bioinformatik",
     "genomics",
     "proteomics",
     "crispr",
-    "bioinformatik",
-    "computational biology",
-    "drug discovery",
-    "wirkstoffforschung",
 ]
 
 
 # =============================================================================
-# Climate Tech / Cleantech Keywords (separate scoring)
+# NAME-FOCUSED Climate Keywords (for company name scoring)
 # =============================================================================
 #
-# EXCLUDED (too generic / false-positive-heavy):
-# - nachhaltigkeit, sustainability, nachhaltig, sustainable
-# - kreislaufwirtschaft, circular economy (matches waste disposal)
-# - esg, impact investing, green finance (financial, not tech)
-# - abfallwirtschaft, waste management, recycling technologie (traditional)
-# - biomasse, biomass, bioenergie, bioenergy (traditional energy)
+# Only climate/cleantech terms that appear in German company names.
+# Excludes multi-word English phrases like "renewable energy" or
+# "solid state battery" — Germans don't register companies with those.
 
-DEFAULT_CLIMATE_KEYWORDS = [
-    # === Core Climate Tech ===
+NAME_CLIMATE_KEYWORDS = [
+    # === Core branding — very common in company names ===
     "cleantech",
-    "clean tech",
     "greentech",
-    "green tech",
-    "climate tech",
     "klimatechnologie",
 
-    # === Renewable Energy ===
-    "erneuerbare energie",
-    "renewable energy",
-    "solar energy",
+    # === Energy — German compounds in names ===
     "solarenergie",
     "photovoltaik",
-    "photovoltaic",
     "windenergie",
-    "wind energy",
-    "wind turbine",
     "windkraft",
+    "energiespeicher",
+    "batterietechnologie",
 
-    # === Hydrogen / Fuel Cells ===
+    # === Hydrogen — single words in names ===
     "wasserstoff",
     "hydrogen",
-    "grüner wasserstoff",
-    "green hydrogen",
     "brennstoffzelle",
-    "fuel cell",
 
-    # === E-Mobility ===
+    # === Mobility — German compounds ===
     "elektromobilität",
-    "electromobility",
     "elektrofahrzeug",
-    "electric vehicle",
     "ladeinfrastruktur",
-    "charging infrastructure",
 
-    # === Energy Storage / Batteries ===
-    "energiespeicher",
-    "energy storage",
-    "batterietechnologie",
-    "battery technology",
-    "festkörperbatterie",
-    "solid state battery",
-
-    # === Carbon / Decarbonization ===
-    "carbon capture",
-    "co2-abscheidung",
-    "co2 capture",
-    "kohlenstoffabscheidung",
-    "co2-reduktion",
+    # === Carbon / Decarb — German compounds ===
     "dekarbonisierung",
-    "decarbonization",
-    "emissionshandel",
-    "carbon trading",
-    "carbon credit",
-    "carbon footprint",
-    "co2-fußabdruck",
+    "co2-abscheidung",
+    "co2-reduktion",
 
-    # === Grid / Heat ===
-    "smart grid",
-    "intelligentes stromnetz",
-    "power grid",
+    # === Heat / Grid — German compounds ===
     "wärmepumpe",
-    "heat pump",
     "geothermie",
-    "geothermal",
-
-    # === AgriTech / Food ===
-    "agritech",
-    "agrartech",
-    "precision farming",
-    "präzisionslandwirtschaft",
-    "vertical farming",
-    "insektenprotein",
-    "alternative protein",
 
     # === Water ===
     "wasseraufbereitung",
-    "water treatment",
-    "water purification",
 
-    # === Energy Efficiency ===
+    # === AgriTech — brand terms ===
+    "agritech",
+    "agrartech",
+
+    # === Efficiency — German compound ===
     "energieeffizienz",
-    "energy efficiency",
-    "gebäudeenergie",
-    "building energy",
-    "klimaneutral",
-    "climate neutral",
-    "net zero",
-    "netto null",
+]
+
+
+# =============================================================================
+# FULL keyword lists (for news article matching / future purpose-text scoring)
+# =============================================================================
+# These are the comprehensive lists used by news_monitor.py and kept for
+# reference. NOT used for company name scoring — use NAME_*_KEYWORDS above.
+
+DEFAULT_AI_KEYWORDS = [
+    # Everything in NAME_AI_KEYWORDS plus multi-word English terms:
+    "künstliche intelligenz", "artificial intelligence",
+    "maschinelles lernen", "machine learning", "deep learning",
+    "neural network", "neuronale netze", "neuronales netz",
+    "generative ai", "generative ki",
+    "large language model", "foundation model",
+    "agentic ai", "ai agent", "ki-agent",
+    "diffusion model", "text-to-image", "text-to-video",
+    "retrieval augmented generation", "rag", "vector database",
+    "robotik", "robotics", "roboter", "cobot", "cobots",
+    "industrieroboter", "serviceroboter", "humanoide", "humanoid",
+    "exoskelett", "exoskeleton", "drone", "uav",
+    "rpa", "process automation", "robotic process automation",
+    "industrial automation",
+    "autonomes fahren", "autonomous vehicle", "autonomous systems",
+    "autonome systeme", "selbstfahrend", "self-driving",
+    "computer vision", "bildverarbeitung", "bilderkennung",
+    "image recognition", "objekterkennung", "object detection",
+    "visual ai", "bildanalyse", "video analytics", "videoanalyse",
+    "gesichtserkennung", "face recognition", "lidar", "3d vision",
+    "machine vision",
+    "natural language processing", "sprachverarbeitung", "nlp",
+    "chatbot", "chat bot", "conversational ai", "language model",
+    "sprachmodell", "spracherkennung", "speech recognition",
+    "voice ai", "text mining", "textanalyse", "sentiment analysis",
+    "named entity",
+    "data science", "datenwissenschaft",
+    "predictive analytics", "prädiktive analytik", "predictive maintenance",
+    "recommendation engine", "empfehlungssystem",
+    "anomaly detection", "anomalieerkennung",
+    "pattern recognition", "mustererkennung",
+    "ai platform", "ki plattform", "ai software", "ki software",
+    "ai solutions", "ki lösungen", "ai consulting", "ki beratung",
+    "mlops", "aiops", "automl",
+    "industrie 4.0", "industry 4.0", "smart factory", "smart manufacturing",
+    "digitaler zwilling", "digital twin", "cyber physical",
+    "iot platform", "iot analytics",
+    "algorithmic trading", "algo trading", "robo advisor", "robo-advisor",
+    "fraud detection", "betrugserkennung",
+    "intelligente systeme", "cognitive computing", "kognitiv",
+    "neural", "neuronale",
+    "edge ai", "embedded ai", "inference engine", "tinyml",
+    "sensorfusion", "sensor fusion",
+    "quantum computing", "quantencomputer", "qubit",
+    "photonics", "photonik",
+    "nanotechnologie", "nanotechnology", "nanomaterial",
+    "advanced materials", "neue materialien",
+    "synthetische biologie", "synthetic biology",
+    "genomics", "proteomics", "crispr",
+    "bioinformatik", "computational biology",
+    "drug discovery", "wirkstoffforschung",
+]
+
+DEFAULT_CLIMATE_KEYWORDS = [
+    # Everything in NAME_CLIMATE_KEYWORDS plus multi-word English terms:
+    "cleantech", "clean tech", "greentech", "green tech",
+    "climate tech", "klimatechnologie",
+    "erneuerbare energie", "renewable energy",
+    "solar energy", "solarenergie", "photovoltaik", "photovoltaic",
+    "windenergie", "wind energy", "wind turbine", "windkraft",
+    "wasserstoff", "hydrogen", "grüner wasserstoff", "green hydrogen",
+    "brennstoffzelle", "fuel cell",
+    "elektromobilität", "electromobility", "elektrofahrzeug",
+    "electric vehicle", "ladeinfrastruktur", "charging infrastructure",
+    "energiespeicher", "energy storage",
+    "batterietechnologie", "battery technology",
+    "festkörperbatterie", "solid state battery",
+    "carbon capture", "co2-abscheidung", "co2 capture",
+    "kohlenstoffabscheidung", "co2-reduktion",
+    "dekarbonisierung", "decarbonization",
+    "emissionshandel", "carbon trading", "carbon credit",
+    "carbon footprint", "co2-fußabdruck",
+    "smart grid", "intelligentes stromnetz", "power grid",
+    "wärmepumpe", "heat pump", "geothermie", "geothermal",
+    "agritech", "agrartech", "precision farming",
+    "präzisionslandwirtschaft", "vertical farming",
+    "insektenprotein", "alternative protein",
+    "wasseraufbereitung", "water treatment", "water purification",
+    "energieeffizienz", "energy efficiency",
+    "gebäudeenergie", "building energy",
+    "klimaneutral", "climate neutral", "net zero", "netto null",
 ]
 
 
@@ -309,54 +287,44 @@ STANDALONE_AI_PATTERNS = [
 ]
 
 # High-signal keywords that strongly indicate AI/Robotics focus
-# Companies matching these get bonus relevance score
+# Must also appear in NAME_AI_KEYWORDS (these add bonus points)
 HIGH_SIGNAL_KEYWORDS = [
     "künstliche intelligenz",
     "artificial intelligence",
-    "machine learning",
     "maschinelles lernen",
+    "machine learning",
     "deep learning",
+    "neural network",
     "robotik",
     "robotics",
     "computer vision",
     "bildverarbeitung",
     "nlp",
-    "neural network",
-    "neuronale netze",
     "generative ai",
     "chatbot",
     "ai platform",
     "ki plattform",
-    "agentic ai",
-    "large language model",
-    "diffusion model",
 ]
 
 # High-signal climate keywords for bonus scoring
+# Must also appear in NAME_CLIMATE_KEYWORDS
 HIGH_SIGNAL_CLIMATE_KEYWORDS = [
     "cleantech",
     "greentech",
-    "climate tech",
-    "grüner wasserstoff",
-    "green hydrogen",
-    "carbon capture",
-    "dekarbonisierung",
+    "wasserstoff",
     "brennstoffzelle",
-    "fuel cell",
-    "solid state battery",
-    "festkörperbatterie",
+    "dekarbonisierung",
+    "photovoltaik",
 ]
 
 # Keywords to use for Handelsregister portal searches
-# These are optimized for the search interface (single words work better)
+# These are the actual queries sent to the search interface
 SEARCH_KEYWORDS_GERMAN = [
-    # Core AI terms (highest priority)
+    # Core AI terms
     "künstliche intelligenz",
     "maschinelles lernen",
     "deep learning",
     "machine learning",
-    "neural",
-    "neuronale",
 
     # Robotics
     "robotik",
@@ -373,20 +341,22 @@ SEARCH_KEYWORDS_GERMAN = [
     "computer vision",
     "bildverarbeitung",
     "bilderkennung",
-    "machine vision",
 
     # Data/Analytics
     "data science",
-    "predictive",
     "analytics",
 
     # Industry 4.0
     "industrie 4.0",
-    "digital twin",
 
-    # General (kept selective)
+    # General (single words that match company names)
     "intelligent",
-    "cognitive",
+    "neural",
+    "drohne",
+    "lidar",
+    "quantencomputer",
+    "nanotechnologie",
+    "photonics",
 ]
 
 # Separate search keywords for climate tech discovery
@@ -404,81 +374,66 @@ SEARCH_KEYWORDS_CLIMATE = [
     "elektromobilität",
     "ladeinfrastruktur",
     "dekarbonisierung",
-    "klimaneutral",
     "wärmepumpe",
     "geothermie",
     "agritech",
-    "carbon capture",
 ]
 
 # Technology categories for classification
+# These use simple substring matching against company names,
+# so only name-realistic terms should be included
 TECH_CATEGORIES = {
     'computer_vision': [
-        'computer vision', 'bildverarbeitung', 'image recognition',
-        'objekterkennung', 'visual ai', 'bilderkennung', 'visuell',
-        'video analytics', 'videoanalyse', 'gesichtserkennung',
-        'face recognition', 'lidar', '3d vision', 'object detection',
+        'computer vision', 'bildverarbeitung', 'bilderkennung',
+        'objekterkennung', 'bildanalyse', 'videoanalyse',
+        'gesichtserkennung', 'lidar', 'machine vision',
     ],
     'nlp': [
-        'natural language processing', 'sprachverarbeitung', 'nlp',
-        'text analytics', 'chatbot', 'conversational ai', 'language model',
-        'sprachmodell', 'textanalyse', 'spracherkennung', 'speech recognition',
-        'voice ai', 'text mining', 'sentiment analysis', 'llm',
+        'sprachverarbeitung', 'nlp', 'chatbot', 'sprachmodell',
+        'textanalyse', 'spracherkennung', 'llm',
     ],
     'robotics': [
         'robotik', 'robotics', 'robot', 'drone', 'drohne', 'drohnen',
-        'cobots', 'cobot', 'industrial automation', 'roboter',
+        'cobots', 'cobot', 'roboter',
         'exoskelett', 'humanoid', 'humanoide', 'agv', 'amr',
         'serviceroboter', 'industrieroboter', 'uav',
     ],
     'ml_analytics': [
         'machine learning', 'maschinelles lernen', 'deep learning',
-        'predictive analytics', 'forecasting', 'prognose', 'data science',
-        'neural', 'neuronale', 'datenwissenschaft', 'anomaly detection',
-        'pattern recognition', 'mustererkennung', 'recommendation',
-        'empfehlungssystem', 'mlops', 'automl',
+        'data science', 'neural', 'neuronale', 'datenwissenschaft',
+        'mustererkennung', 'mlops', 'automl', 'analytics',
     ],
     'generative_ai': [
-        'generative ai', 'generative ki', 'llm', 'large language model',
-        'foundation model', 'transformer', 'gpt', 'stable diffusion',
-        'text generation', 'image generation', 'diffusion model',
-        'text-to-image', 'text-to-video', 'agentic ai', 'ai agent',
+        'generative ai', 'generative ki', 'llm',
     ],
     'autonomous_systems': [
-        'autonomous vehicle', 'autonomes fahren', 'selbstfahrend',
-        'autonomous systems', 'autonome systeme', 'self-driving',
-        'adas', 'autopilot',
+        'autonomes fahren', 'selbstfahrend',
+        'autonome systeme', 'autopilot',
     ],
     'industry_40': [
-        'industrie 4.0', 'industry 4.0', 'smart factory', 'smart manufacturing',
-        'digital twin', 'digitaler zwilling', 'cyber physical', 'iot analytics',
-        'predictive maintenance',
+        'industrie 4.0', 'smart factory',
+        'digital twin', 'digitaler zwilling',
     ],
     'fintech_ai': [
-        'algorithmic trading', 'algo trading', 'quantitative', 'robo advisor',
-        'fraud detection', 'betrugserkennung', 'credit scoring',
+        'robo advisor', 'robo-advisor',
     ],
     'general_ai': [
         'künstliche intelligenz', 'artificial intelligence',
-        'intelligent', 'cognitive', 'kognitiv', 'ai platform',
+        'intelligent', 'kognitiv', 'ai platform',
         'ki plattform', 'ai solutions', 'ki lösungen', 'ai consulting',
     ],
     'deeptech': [
-        'quantum computing', 'quantencomputer', 'qubit', 'photonics', 'photonik',
-        'nanotechnologie', 'nanotechnology', 'nanomaterial', 'advanced materials',
-        'neue materialien', 'synthetische biologie', 'synthetic biology',
-        'genomics', 'proteomics', 'crispr', 'bioinformatik',
-        'computational biology', 'drug discovery', 'wirkstoffforschung',
+        'quantum', 'quantencomputer', 'qubit', 'photonics', 'photonik',
+        'nanotechnologie', 'nanotechnology', 'nanomaterial',
+        'bioinformatik', 'genomics', 'proteomics', 'crispr',
     ],
     'climate_tech': [
-        'cleantech', 'greentech', 'climate tech', 'klimatechnologie',
-        'erneuerbare energie', 'renewable energy', 'solar', 'photovoltaik',
-        'windenergie', 'wind energy', 'wasserstoff', 'hydrogen',
-        'brennstoffzelle', 'fuel cell', 'elektromobilität', 'electric vehicle',
-        'energiespeicher', 'energy storage', 'batterie', 'carbon capture',
-        'co2', 'dekarbonisierung', 'decarbonization',
-        'smart grid', 'wärmepumpe', 'heat pump', 'geothermie',
-        'agritech', 'agrartech', 'vertical farming', 'net zero', 'klimaneutral',
+        'cleantech', 'greentech', 'klimatechnologie',
+        'solar', 'photovoltaik', 'windenergie', 'windkraft',
+        'wasserstoff', 'hydrogen', 'brennstoffzelle',
+        'elektromobilität', 'energiespeicher', 'batterie',
+        'co2', 'dekarbonisierung', 'wärmepumpe', 'geothermie',
+        'agritech', 'agrartech',
     ],
 }
 
@@ -486,8 +441,8 @@ TECH_CATEGORIES = {
 @dataclass
 class FilterConfig:
     """Configuration for company filtering."""
-    ai_robotics_keywords: List[str] = field(default_factory=lambda: DEFAULT_AI_KEYWORDS.copy())
-    climate_keywords: List[str] = field(default_factory=lambda: DEFAULT_CLIMATE_KEYWORDS.copy())
+    ai_robotics_keywords: List[str] = field(default_factory=lambda: NAME_AI_KEYWORDS.copy())
+    climate_keywords: List[str] = field(default_factory=lambda: NAME_CLIMATE_KEYWORDS.copy())
     min_relevance_score: int = 1
     recent_months: Optional[int] = 24
     allowed_statuses: List[str] = field(default_factory=lambda: ['active', 'ACTIVE', 'currently registered'])

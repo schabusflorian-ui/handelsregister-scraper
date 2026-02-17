@@ -32,7 +32,7 @@ TRUE_POSITIVES = [
     # Computer Vision (high-signal gets bonus)
     ("Computer Vision Tech GmbH", True, 2, ["computer_vision"]),
     ("Bildverarbeitung Systems AG", True, 2, ["computer_vision"]),
-    ("Image Recognition AI UG", True, 3, ["computer_vision"]),
+    ("Bilderkennung AI UG", True, 3, ["computer_vision"]),
 
     # NLP / Language AI
     ("NLP Solutions GmbH", True, 2, ["nlp"]),
@@ -40,7 +40,7 @@ TRUE_POSITIVES = [
     ("Sprachverarbeitung Systeme UG", True, 1, ["nlp"]),
 
     # Autonomous systems (single keyword = score varies by high-signal status)
-    ("Autonomes Fahren GmbH", True, 1, ["autonomous_systems", "robotics"]),
+    ("Autonomes Fahren GmbH", True, 1, ["autonomous_systems"]),
 
     # Industry 4.0 (single keyword = 1 point unless high-signal)
     ("Industrie 4.0 Solutions GmbH", True, 1, ["industry_40"]),
@@ -48,10 +48,10 @@ TRUE_POSITIVES = [
     ("Digital Twin Analytics UG", True, 1, ["industry_40"]),
 
     # Generative AI (high-signal gets bonus)
-    ("Generative AI Studio GmbH", True, 3, ["generative_ai", "general_ai"]),
+    ("Generative AI Studio GmbH", True, 3, ["generative_ai"]),
 
     # Compound/Multiple keywords
-    ("AI Robotics Machine Learning GmbH", True, 4, ["general_ai", "robotics", "ml_analytics"]),
+    ("AI Robotics Machine Learning GmbH", True, 4, ["robotics", "ml_analytics"]),
 ]
 
 # False positives: Companies that should NOT match (or have very low score)
