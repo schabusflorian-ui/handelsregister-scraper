@@ -121,21 +121,9 @@ class AnnouncementScraper:
 
     def _extract_officers(self, text: str) -> List[str]:
         """Extract officer names mentioned in announcement."""
-        officers = []
-
-        # Common patterns for officer names
-        # "Geschäftsführer: Max Mustermann, geb. 01.01.1980"
-        # "Bestellt als Geschäftsführer: Dr. Hans Schmidt"
-        patterns = [
-            r'(?:geschäftsführer|vorstand|prokurist)[:\s]+([A-ZÄÖÜ][a-zäöüß]+(?:\s+[A-ZÄÖÜ][a-zäöüß]+)+)',
-            r'(?:bestellt|abberufen)[^:]*:\s*([A-ZÄÖÜ][a-zäöüß]+(?:\s+[A-ZÄÖÜ][a-zäöüß]+)+)',
-        ]
-
-        for pattern in patterns:
-            matches = re.findall(pattern, text, re.IGNORECASE)
-            officers.extend(matches)
-
-        return list(set(officers))  # Remove duplicates
+        from processing.officer_extractor import extract_officers_from_text
+        extracted = extract_officers_from_text(text)
+        return list({o.name for o in extracted})
 
     def _parse_announcement_block(self, block_html: str, company_name: str,
                                    native_company_number: str) -> Optional[Announcement]:

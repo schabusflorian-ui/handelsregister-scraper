@@ -712,6 +712,46 @@ class Database:
         cursor.execute('DELETE FROM officers WHERE company_id = ?', (company_id,))
         self.conn.commit()
 
+    def officer_exists(self, company_id: int, name: str) -> bool:
+        """Check if an officer already exists for this company (case-insensitive)."""
+        cursor = self.conn.cursor()
+        cursor.execute(
+            'SELECT 1 FROM officers WHERE company_id = ? AND LOWER(name) = LOWER(?)',
+            (company_id, name),
+        )
+        return cursor.fetchone() is not None
+
+    # =========================================================================
+    # Announcement Processing Helpers
+    # =========================================================================
+
+    def get_unprocessed_announcements(
+        self,
+        announcement_types: Optional[List[str]] = None,
+        limit: int = 200,
+    ) -> List[Dict]:
+        """Get announcements not yet processed for officer extraction."""
+        cursor = self.conn.cursor()
+        if announcement_types:
+            placeholders = ','.join('?' for _ in announcement_types)
+            cursor.execute(
+                f'SELECT * FROM announcements WHERE processed = 0 AND company_id IS NOT NULL '
+                f'AND announcement_type IN ({placeholders}) LIMIT ?',
+                announcement_types + [limit],
+            )
+        else:
+            cursor.execute(
+                'SELECT * FROM announcements WHERE processed = 0 AND company_id IS NOT NULL LIMIT ?',
+                (limit,),
+            )
+        return [dict(row) for row in cursor.fetchall()]
+
+    def mark_announcement_processed(self, announcement_id: int):
+        """Mark an announcement as processed for officer extraction."""
+        cursor = self.conn.cursor()
+        cursor.execute('UPDATE announcements SET processed = 1 WHERE id = ?', (announcement_id,))
+        self.conn.commit()
+
     # =========================================================================
     # Capital Event Operations
     # =========================================================================

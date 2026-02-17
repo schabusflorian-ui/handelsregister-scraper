@@ -247,13 +247,15 @@ class AnnouncementMonitoringJob:
 
         return True
 
+    OFFICER_TYPES = {'geschaeftsfuehrer', 'neueintragung', 'prokura'}
+
     def _store_announcement(
         self,
         ann: Announcement,
         company_id: Optional[int] = None,
     ) -> int:
-        """Store announcement in database."""
-        return self.db.insert_announcement(
+        """Store announcement in database and extract officers if applicable."""
+        ann_id = self.db.insert_announcement(
             company_name=ann.company_name,
             native_company_number=ann.native_company_number,
             announcement_type=ann.announcement_type,
@@ -263,6 +265,19 @@ class AnnouncementMonitoringJob:
             capital_new=ann.capital_new,
             company_id=company_id,
         )
+
+        # Extract officers for relevant announcement types
+        if company_id and ann.announcement_type in self.OFFICER_TYPES and ann.text:
+            try:
+                from processing.officer_extractor import extract_officers_from_text, persist_officers
+                officers = extract_officers_from_text(ann.text)
+                if officers:
+                    persist_officers(self.db, company_id, officers, ann.announcement_date)
+                self.db.mark_announcement_processed(ann_id)
+            except Exception as e:
+                logger.debug("Officer extraction failed for announcement %d: %s", ann_id, e)
+
+        return ann_id
 
     def run(self, dry_run: bool = False) -> Dict[str, Any]:
         """

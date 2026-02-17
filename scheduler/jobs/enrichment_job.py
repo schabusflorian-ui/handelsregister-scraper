@@ -213,9 +213,20 @@ class EnrichmentJob:
 
         stats['queue_remaining'] = self.db.get_enrichment_queue_size()
 
+        # Backfill officers from stored announcements
+        if not dry_run:
+            try:
+                from processing.officer_extractor import backfill_officers_from_announcements
+                officer_stats = backfill_officers_from_announcements(self.db)
+                stats['officers_added'] = officer_stats.get('officers_added', 0)
+            except Exception as e:
+                logger.debug("Officer backfill error: %s", e)
+                stats['officers_added'] = 0
+
         logger.info(
-            "Enrichment complete: %d processed, %d events detected, %d remaining",
-            stats['companies_processed'], stats['events_detected'], stats['queue_remaining']
+            "Enrichment complete: %d processed, %d events detected, %d officers added, %d remaining",
+            stats['companies_processed'], stats['events_detected'],
+            stats.get('officers_added', 0), stats['queue_remaining'],
         )
 
         return stats
