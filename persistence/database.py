@@ -441,6 +441,7 @@ class Database:
         # Migration: add is_early_stage_related column if table exists without it
         self._migrate_news_tables(cursor)
         self._migrate_companies_table(cursor)
+        self._migrate_officers_table(cursor)
 
     def _migrate_news_tables(self, cursor):
         """Add missing columns to news tables (safe migration)."""
@@ -483,6 +484,27 @@ class Database:
             ]:
                 if col not in columns and columns:
                     cursor.execute(f"ALTER TABLE companies ADD COLUMN {col} {col_type}")
+            self.conn.commit()
+        except Exception:
+            pass
+
+    def _migrate_officers_table(self, cursor):
+        """Add LinkedIn enrichment columns to officers table (safe migration)."""
+        try:
+            cursor.execute("PRAGMA table_info(officers)")
+            columns = [row[1] for row in cursor.fetchall()]
+            for col, col_type in [
+                ('linkedin_url', 'TEXT'),
+                ('linkedin_headline', 'TEXT'),
+                ('linkedin_location', 'TEXT'),
+                ('linkedin_previous_companies', 'TEXT'),
+                ('linkedin_snippet', 'TEXT'),
+                ('linkedin_match_confidence', 'REAL DEFAULT 0.0'),
+                ('linkedin_enriched_at', 'TEXT'),
+                ('linkedin_enrichment_source', 'TEXT'),
+            ]:
+                if col not in columns and columns:
+                    cursor.execute(f"ALTER TABLE officers ADD COLUMN {col} {col_type}")
             self.conn.commit()
         except Exception:
             pass
@@ -720,6 +742,33 @@ class Database:
             (company_id, name),
         )
         return cursor.fetchone() is not None
+
+    def get_officers_for_linkedin_enrichment(self, limit: int = 10) -> List[Dict]:
+        """Get current officers not yet enriched via LinkedIn, prioritized by AI score."""
+        cursor = self.conn.cursor()
+        cursor.execute('''
+            SELECT o.*, c.name AS company_name, c.city AS company_city,
+                   c.ai_robotics_score, c.startup_score
+            FROM officers o
+            JOIN companies c ON o.company_id = c.id
+            WHERE o.linkedin_enriched_at IS NULL
+              AND o.is_current = 1
+              AND c.ai_robotics_score >= 1
+            ORDER BY c.ai_robotics_score DESC, c.startup_score DESC
+            LIMIT ?
+        ''', (limit,))
+        return [dict(row) for row in cursor.fetchall()]
+
+    def update_officer_linkedin(self, officer_id: int, **kwargs):
+        """Update LinkedIn enrichment fields for an officer."""
+        if not kwargs:
+            return
+        kwargs['linkedin_enriched_at'] = datetime.now().isoformat()
+        set_clause = ', '.join(f'{k} = ?' for k in kwargs.keys())
+        values = list(kwargs.values()) + [officer_id]
+        cursor = self.conn.cursor()
+        cursor.execute(f'UPDATE officers SET {set_clause} WHERE id = ?', values)
+        self.conn.commit()
 
     # =========================================================================
     # Announcement Processing Helpers

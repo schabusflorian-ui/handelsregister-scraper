@@ -34,6 +34,7 @@ from scheduler.jobs.investor_detection_job import InvestorDetectionJob
 from scheduler.jobs.news_job import NewsMonitoringJob
 from scheduler.jobs.website_job import WebsiteFinderJob
 from scheduler.jobs.website_scrape_job import WebsiteScrapeJob
+from scheduler.jobs.officer_linkedin_job import OfficerLinkedInEnrichmentJob
 
 logger = logging.getLogger(__name__)
 
@@ -339,6 +340,33 @@ class HandelsregisterScheduler:
         finally:
             db.close()
 
+    def _run_officer_linkedin_job(self):
+        """Execute officer LinkedIn enrichment job wrapper."""
+        logger.info("Starting officer LinkedIn enrichment job")
+
+        db = Database(self.db_path)
+        try:
+            job = OfficerLinkedInEnrichmentJob(
+                db=db,
+                search_delay=180,       # 3 min between searches
+                min_confidence=0.40,
+            )
+            stats = job.run_batch(batch_size=5)
+
+            logger.info(
+                "Officer LinkedIn enrichment completed: %d processed, %d enriched, %d no match",
+                stats['officers_processed'],
+                stats['officers_enriched'],
+                stats['officers_no_match'],
+            )
+
+            self._log_job_completion('officer_linkedin', stats, db)
+
+        except Exception as e:
+            logger.exception("Officer LinkedIn enrichment job failed: %s", e)
+        finally:
+            db.close()
+
     def _log_job_completion(self, job_type: str, stats: Dict[str, Any], db: Database):
         """Log job completion to database."""
         try:
@@ -443,10 +471,20 @@ class HandelsregisterScheduler:
             replace_existing=True,
         )
 
+        # Officer LinkedIn enrichment job: daily at 11 AM UTC (after website scrape)
+        # Searches for officer LinkedIn profiles via DDG, extracts career data from snippets
+        self.scheduler.add_job(
+            self._run_officer_linkedin_job,
+            trigger=CronTrigger(hour=11, minute=0),
+            id='officer_linkedin_job',
+            name='Officer LinkedIn Enrichment Job',
+            replace_existing=True,
+        )
+
         logger.info(
             "Jobs configured: discovery every %d hours, backfill 3AM+3PM, enrichment 4AM, "
             "announcements 5AM, CSV export 6AM, investor detection 7AM, news monitoring 8AM, "
-            "website finder 9AM, website scrape 10AM",
+            "website finder 9AM, website scrape 10AM, officer LinkedIn 11AM",
             self.discovery_interval_hours
         )
 
