@@ -1292,6 +1292,54 @@ async def admin_sync_founders_post(request: Request):
         db.close()
 
 
+@app.get("/api/news-stats")
+async def news_stats():
+    """Quick stats on news-sourced companies and recent job runs."""
+    db = get_db()
+    try:
+        # News-sourced companies by day (last 14 days)
+        by_day = db.conn.execute("""
+            SELECT date(created_at) as day, COUNT(*) as cnt
+            FROM companies
+            WHERE source LIKE '%news%'
+              AND created_at >= date('now', '-14 days')
+            GROUP BY day ORDER BY day DESC
+        """).fetchall()
+
+        # All sources in last 7 days
+        by_source = db.conn.execute("""
+            SELECT source, COUNT(*) as cnt
+            FROM companies
+            WHERE created_at >= date('now', '-7 days')
+            GROUP BY source ORDER BY cnt DESC
+        """).fetchall()
+
+        # Recent news_monitoring job runs
+        job_runs = db.conn.execute("""
+            SELECT job_type, completed_at, companies_found, companies_new, requests_used
+            FROM job_runs
+            WHERE job_type = 'news_monitoring'
+            ORDER BY id DESC LIMIT 14
+        """).fetchall()
+
+        # Also all job runs from last 7 days
+        all_runs = db.conn.execute("""
+            SELECT job_type, completed_at, companies_found, companies_new, requests_used
+            FROM job_runs
+            WHERE completed_at >= date('now', '-7 days')
+            ORDER BY completed_at DESC
+        """).fetchall()
+
+        return {
+            "news_companies_by_day": [dict(r) for r in by_day],
+            "all_sources_last_7d": [dict(r) for r in by_source],
+            "news_job_runs": [dict(r) for r in job_runs],
+            "all_job_runs_last_7d": [dict(r) for r in all_runs],
+        }
+    finally:
+        db.close()
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
