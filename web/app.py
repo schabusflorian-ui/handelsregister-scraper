@@ -1299,10 +1299,10 @@ async def news_stats():
     try:
         # News-sourced companies by day (last 14 days)
         by_day = db.conn.execute("""
-            SELECT date(created_at) as day, COUNT(*) as cnt
+            SELECT date(first_seen_date) as day, COUNT(*) as cnt
             FROM companies
             WHERE source LIKE '%news%'
-              AND created_at >= date('now', '-14 days')
+              AND first_seen_date >= date('now', '-14 days')
             GROUP BY day ORDER BY day DESC
         """).fetchall()
 
@@ -1310,7 +1310,7 @@ async def news_stats():
         by_source = db.conn.execute("""
             SELECT source, COUNT(*) as cnt
             FROM companies
-            WHERE created_at >= date('now', '-7 days')
+            WHERE first_seen_date >= date('now', '-7 days')
             GROUP BY source ORDER BY cnt DESC
         """).fetchall()
 
