@@ -436,6 +436,16 @@ class Database:
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_founder_history_type ON founder_history(change_type)')
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_founder_history_date ON founder_history(changed_at)')
 
+        # Saved filter presets
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS filter_presets (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                params TEXT NOT NULL,
+                created_at TEXT DEFAULT (datetime('now'))
+            )
+        ''')
+
         self.conn.commit()
 
         # Migration: add is_early_stage_related column if table exists without it
@@ -481,6 +491,7 @@ class Database:
                 ('viewed', 'INTEGER DEFAULT 0'),
                 ('viewed_at', 'TEXT'),
                 ('notes', 'TEXT'),
+                ('relevance', 'TEXT'),
             ]:
                 if col not in columns and columns:
                     cursor.execute(f"ALTER TABLE companies ADD COLUMN {col} {col_type}")

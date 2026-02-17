@@ -82,7 +82,7 @@
                 </div>
             </div>
 
-            <div class="grid grid-cols-1 md:grid-cols-6 gap-4">
+            <div class="grid grid-cols-1 md:grid-cols-7 gap-4">
                 <!-- Min Score -->
                 <div>
                     <label for="min_score" class="block text-sm font-medium text-gray-700">Min AI Score</label>
@@ -138,6 +138,18 @@
                     </select>
                 </div>
 
+                <!-- Relevance Filter -->
+                <div>
+                    <label for="relevance" class="block text-sm font-medium text-gray-700">Relevance</label>
+                    <select name="relevance" id="relevance"
+                        class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+                        <option value="">All</option>
+                        <option value="relevant" {% if relevance == 'relevant' %}selected{% endif %}>Relevant</option>
+                        <option value="irrelevant" {% if relevance == 'irrelevant' %}selected{% endif %}>Irrelevant</option>
+                        <option value="unscreened" {% if relevance == 'unscreened' %}selected{% endif %}>Unscreened</option>
+                    </select>
+                </div>
+
                 <div class="flex items-end">
                     <button type="submit"
                         class="inline-flex items-center rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600">
@@ -148,6 +160,30 @@
             </div>
         </form>
     </div>
+</div>
+
+<!-- Saved Filters -->
+<div class="flex items-center gap-2 mb-4 flex-wrap">
+    <span class="text-xs font-medium text-gray-500 uppercase">Saved filters:</span>
+    {% for preset in filter_presets %}
+    <div class="inline-flex items-center rounded-full bg-indigo-50 ring-1 ring-indigo-200">
+        <a href="/companies?{{ preset.params }}" class="px-3 py-1 text-xs font-medium text-indigo-700 hover:text-indigo-900">{{ preset.name }}</a>
+        <button onclick="deletePreset({{ preset.id }}, '{{ preset.name }}')" class="pr-2 text-indigo-400 hover:text-red-500" title="Delete">&times;</button>
+    </div>
+    {% endfor %}
+    <button onclick="savePreset()" class="inline-flex items-center gap-1 rounded-full bg-white px-3 py-1 text-xs font-medium text-gray-600 ring-1 ring-gray-300 hover:bg-gray-50" title="Save current filters">
+        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+        Save
+    </button>
+</div>
+
+<!-- Bulk Action Bar (hidden until selection) -->
+<div id="bulk-bar" class="hidden mb-4 bg-indigo-50 border border-indigo-200 rounded-lg px-4 py-2 flex items-center gap-3">
+    <span class="text-sm font-medium text-indigo-800"><span id="bulk-count">0</span> selected</span>
+    <button onclick="bulkSetRelevance('relevant')" class="inline-flex items-center rounded-md bg-green-600 px-3 py-1 text-xs font-semibold text-white hover:bg-green-500">Mark Relevant</button>
+    <button onclick="bulkSetRelevance('irrelevant')" class="inline-flex items-center rounded-md bg-red-600 px-3 py-1 text-xs font-semibold text-white hover:bg-red-500">Mark Irrelevant</button>
+    <button onclick="bulkSetRelevance(null)" class="inline-flex items-center rounded-md bg-gray-500 px-3 py-1 text-xs font-semibold text-white hover:bg-gray-400">Clear Relevance</button>
+    <button onclick="clearSelection()" class="ml-auto text-xs text-gray-500 hover:text-gray-700">Deselect all</button>
 </div>
 
 <!-- Results Table -->
@@ -174,27 +210,63 @@
         <table class="min-w-full divide-y divide-gray-200" id="companies-table">
             <thead class="bg-gray-50">
                 <tr>
-                    <th data-col="company" scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Company</th>
-                    <th data-col="legal_form" scope="col" class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Legal Form</th>
-                    <th data-col="city" scope="col" class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">City</th>
-                    <th data-col="state" scope="col" class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">State</th>
-                    <th data-col="year" scope="col" class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Year</th>
+                    {% macro sort_th(col_key, label, align='left', sort_key=None) %}
+                    {% set sk = sort_key or col_key %}
+                    {% set is_sorted = sort == sk %}
+                    {% set next_dir = 'asc' if (not is_sorted or sort_dir == 'desc') else 'desc' %}
+                    <th data-col="{{ col_key }}" scope="col" class="px-3 py-3 text-{{ align }} text-xs font-medium uppercase tracking-wider {% if col_key == 'company' %}px-4{% endif %}">
+                        <a href="?{{ filter_qs }}&sort={{ sk }}&sort_dir={{ next_dir }}&page=1"
+                           class="group inline-flex items-center gap-1 {% if is_sorted %}text-indigo-600{% else %}text-gray-500 hover:text-gray-700{% endif %}">
+                            {{ label }}
+                            {% if is_sorted %}
+                            <svg class="w-3 h-3 {% if sort_dir == 'asc' %}rotate-180{% endif %}" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd"/></svg>
+                            {% else %}
+                            <svg class="w-3 h-3 opacity-0 group-hover:opacity-40" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd"/></svg>
+                            {% endif %}
+                        </a>
+                    </th>
+                    {% endmacro %}
+                    <th scope="col" class="px-3 py-3 w-8">
+                        <input type="checkbox" id="select-all" onchange="toggleSelectAll(this.checked)"
+                               class="rounded border-gray-300 text-indigo-600">
+                    </th>
+                    {{ sort_th('relevance', 'Rel.') }}
+                    {{ sort_th('company', 'Company', sort_key='name') }}
+                    {{ sort_th('legal_form', 'Legal Form') }}
+                    {{ sort_th('city', 'City') }}
+                    {{ sort_th('state', 'State') }}
+                    {{ sort_th('year', 'Year') }}
                     <th data-col="website" scope="col" class="px-3 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Web</th>
-                    <th data-col="ai_score" scope="col" class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">AI</th>
+                    {{ sort_th('ai_score', 'AI') }}
                     <th data-col="status" scope="col" class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                    <th data-col="classification" scope="col" class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Class</th>
-                    <th data-col="startup_score" scope="col" class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Startup</th>
-                    <th data-col="capital" scope="col" class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Capital</th>
-                    <th data-col="registry" scope="col" class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Registry</th>
-                    <th data-col="reg_date" scope="col" class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Reg. Date</th>
+                    {{ sort_th('classification', 'Class') }}
+                    {{ sort_th('startup_score', 'Startup') }}
+                    {{ sort_th('capital', 'Capital') }}
+                    {{ sort_th('registry', 'Registry') }}
+                    {{ sort_th('reg_date', 'Reg. Date') }}
                     <th data-col="purpose" scope="col" class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Purpose</th>
-                    <th data-col="source" scope="col" class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Source</th>
+                    {{ sort_th('source', 'Source') }}
                     <th data-col="keywords" scope="col" class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Keywords</th>
                 </tr>
             </thead>
             <tbody class="bg-white divide-y divide-gray-200">
                 {% for company in companies %}
-                <tr class="hover:bg-gray-50 {% if company.contacted %}bg-green-50{% endif %}">
+                <tr class="hover:bg-gray-50 {% if company.contacted %}bg-green-50{% endif %}" data-company-id="{{ company.id }}">
+                    <td class="px-3 py-3">
+                        <input type="checkbox" class="row-select rounded border-gray-300 text-indigo-600"
+                               value="{{ company.id }}" onchange="updateBulkBar()">
+                    </td>
+                    <td data-col="relevance" class="px-3 py-3 whitespace-nowrap">
+                        <select onchange="setRelevance({{ company.id }}, this.value)"
+                                class="rounded-md border-gray-300 text-xs py-1 px-1.5
+                                {% if company.relevance == 'relevant' %}bg-green-50 text-green-800 ring-1 ring-green-300
+                                {% elif company.relevance == 'irrelevant' %}bg-red-50 text-red-800 ring-1 ring-red-300
+                                {% else %}bg-gray-50 text-gray-500{% endif %}">
+                            <option value="" {% if not company.relevance %}selected{% endif %}>-</option>
+                            <option value="relevant" {% if company.relevance == 'relevant' %}selected{% endif %}>Relevant</option>
+                            <option value="irrelevant" {% if company.relevance == 'irrelevant' %}selected{% endif %}>Irrelevant</option>
+                        </select>
+                    </td>
                     <td data-col="company" class="px-4 py-3">
                         <a href="/companies/{{ company.id }}" class="text-sm font-medium text-indigo-600 hover:text-indigo-900">
                             {{ company.name[:50] }}{% if company.name|length > 50 %}...{% endif %}
@@ -283,7 +355,7 @@
                 </tr>
                 {% else %}
                 <tr>
-                    <td colspan="16" class="px-6 py-4 text-center text-sm text-gray-500">
+                    <td colspan="18" class="px-6 py-4 text-center text-sm text-gray-500">
                         No companies found matching your criteria.
                     </td>
                 </tr>
@@ -307,13 +379,13 @@
             </div>
             <div class="flex space-x-2">
                 {% if page > 1 %}
-                <a href="?{{ filter_qs }}&page={{ page - 1 }}"
+                <a href="?{{ filter_qs_with_sort }}&page={{ page - 1 }}"
                     class="relative inline-flex items-center rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 ring-1 ring-inset ring-gray-300 hover:bg-gray-50">
                     Previous
                 </a>
                 {% endif %}
                 {% if page < total_pages %}
-                <a href="?{{ filter_qs }}&page={{ page + 1 }}"
+                <a href="?{{ filter_qs_with_sort }}&page={{ page + 1 }}"
                     class="relative inline-flex items-center rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 ring-1 ring-inset ring-gray-300 hover:bg-gray-50">
                     Next
                 </a>
@@ -327,6 +399,7 @@
 <script>
 // Column configuration: key -> { label, defaultVisible }
 const COLUMNS = {
+    relevance:      { label: 'Relevance',      defaultVisible: true },
     company:        { label: 'Company',        defaultVisible: true },
     legal_form:     { label: 'Legal Form',     defaultVisible: true },
     city:           { label: 'City',           defaultVisible: true },
@@ -419,5 +492,111 @@ document.addEventListener('click', function(e) {
         document.getElementById('col-menu').classList.add('hidden');
     }
 });
+
+// Relevance toggle
+async function setRelevance(companyId, value) {
+    const select = event.target;
+    try {
+        const resp = await fetch('/companies/' + companyId + '/relevance', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({relevance: value || null}),
+        });
+        if (!resp.ok) throw new Error('Failed');
+        applyRelevanceStyle(select, value);
+    } catch (e) {
+        alert('Error updating relevance');
+        location.reload();
+    }
+}
+
+function applyRelevanceStyle(select, value) {
+    select.className = select.className.replace(/bg-\S+|text-\S+|ring-\S+/g, '');
+    select.className += ' rounded-md border-gray-300 text-xs py-1 px-1.5 ';
+    if (value === 'relevant') {
+        select.className += 'bg-green-50 text-green-800 ring-1 ring-green-300';
+    } else if (value === 'irrelevant') {
+        select.className += 'bg-red-50 text-red-800 ring-1 ring-red-300';
+    } else {
+        select.className += 'bg-gray-50 text-gray-500';
+    }
+}
+
+// === Bulk selection ===
+function getSelectedIds() {
+    return Array.from(document.querySelectorAll('.row-select:checked')).map(cb => parseInt(cb.value));
+}
+
+function updateBulkBar() {
+    const ids = getSelectedIds();
+    const bar = document.getElementById('bulk-bar');
+    const count = document.getElementById('bulk-count');
+    if (ids.length > 0) {
+        bar.classList.remove('hidden');
+        count.textContent = ids.length;
+    } else {
+        bar.classList.add('hidden');
+    }
+    // Update select-all state
+    const allBoxes = document.querySelectorAll('.row-select');
+    const allChecked = allBoxes.length > 0 && ids.length === allBoxes.length;
+    document.getElementById('select-all').checked = allChecked;
+    document.getElementById('select-all').indeterminate = ids.length > 0 && !allChecked;
+}
+
+function toggleSelectAll(checked) {
+    document.querySelectorAll('.row-select').forEach(cb => cb.checked = checked);
+    updateBulkBar();
+}
+
+function clearSelection() {
+    toggleSelectAll(false);
+}
+
+async function bulkSetRelevance(value) {
+    const ids = getSelectedIds();
+    if (!ids.length) return;
+    try {
+        const resp = await fetch('/companies/bulk-relevance', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({company_ids: ids, relevance: value}),
+        });
+        if (!resp.ok) throw new Error('Failed');
+        // Update UI for each affected row
+        ids.forEach(id => {
+            const row = document.querySelector('tr[data-company-id="' + id + '"]');
+            if (!row) return;
+            const select = row.querySelector('[data-col="relevance"] select');
+            if (select) {
+                select.value = value || '';
+                applyRelevanceStyle(select, value);
+            }
+        });
+        clearSelection();
+    } catch (e) {
+        alert('Error updating relevance');
+        location.reload();
+    }
+}
+
+// === Saved filter presets ===
+function savePreset() {
+    const qs = '{{ filter_qs }}'.trim();
+    if (!qs) { alert('No active filters to save. Apply some filters first.'); return; }
+    const name = prompt('Name this filter preset:');
+    if (!name) return;
+    fetch('/api/filter-presets', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({name: name, params: qs}),
+    }).then(r => { if (r.ok) location.reload(); else alert('Error saving preset'); });
+}
+
+function deletePreset(id, name) {
+    if (!confirm('Delete preset "' + name + '"?')) return;
+    fetch('/api/filter-presets/' + id, {method: 'DELETE'})
+        .then(r => { if (r.ok) location.reload(); else alert('Error deleting preset'); });
+}
 </script>
 {% endblock %}

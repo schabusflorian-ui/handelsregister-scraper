@@ -28,17 +28,21 @@ def main():
         help="Max iterations (default: unlimited)"
     )
     parser.add_argument(
-        "--delay", "-d", type=int, default=90,
-        help="Seconds between searches (default: 90)"
+        "--delay", "-d", type=int, default=180,
+        help="Seconds between searches (default: 180)"
     )
     parser.add_argument(
         "--reset-state", action="store_true",
         help="Clear state and start fresh"
     )
     parser.add_argument(
-        "--engine", "-e", type=str, default="curl",
-        choices=["brave", "ddg", "curl", "rotate"],
-        help="Search engine: curl (default, TLS fingerprint), brave, ddg, or rotate"
+        "--engine", "-e", type=str, default="ddgs",
+        choices=["ddgs", "serper", "curl", "brave", "ddg", "rotate"],
+        help="Search engine: ddgs (default, Bing-backed), serper (Google API), curl, brave, ddg, or rotate"
+    )
+    parser.add_argument(
+        "--report", action="store_true",
+        help="Print query yield report and exit (no scraping)"
     )
     args = parser.parse_args()
 
@@ -47,6 +51,10 @@ def main():
         format='%(asctime)s %(levelname)s %(message)s',
         datefmt='%H:%M:%S',
     )
+
+    # Silence noisy third-party loggers (rustls, h2, hyper from primp)
+    for noisy_logger in ('rustls', 'h2', 'hyper_util', 'cookie_store', 'primp'):
+        logging.getLogger(noisy_logger).setLevel(logging.WARNING)
 
     db_path = project_root / "handelsregister.db"
     state_file = project_root / "data" / "stealth_scraper_state.json"
@@ -69,13 +77,13 @@ def main():
     print(f"Search engine: {args.engine}")
     print(f"Iterations: {'unlimited' if args.iterations is None else args.iterations}")
     print()
+    from scheduler.jobs.slow_stealth_scraper import SlowStealthScraper, STEALTH_QUERIES
+
     print("Extracts founders from search snippets.")
-    print("98 search queries, rotates through all of them.")
+    print(f"{len(STEALTH_QUERIES)} search queries, rotates through all of them.")
     print()
     print("Press Ctrl+C to stop (state is auto-saved)")
     print()
-
-    from scheduler.jobs.slow_stealth_scraper import SlowStealthScraper
     from persistence.database import Database
 
     db = Database(str(db_path))
@@ -88,9 +96,15 @@ def main():
             search_engine=args.engine,
         )
 
+        # Report mode: print query yield stats and exit
+        if args.report:
+            scraper.print_query_report()
+            db.close()
+            return
+
         # Show current state
         stats = scraper.get_stats()
-        print(f"Resuming from query #{stats.get('query_index', 0) + 1}/98")
+        print(f"Resuming from query #{stats.get('query_index', 0) + 1}/{len(STEALTH_QUERIES)}")
         print(f"Total founders so far: {stats.get('total_founders_found', 0)}")
         print()
 

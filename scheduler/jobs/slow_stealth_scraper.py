@@ -20,123 +20,108 @@ logger = logging.getLogger(__name__)
 
 # Search queries to cycle through (DACH region: Germany, Austria, Switzerland)
 STEALTH_QUERIES = [
-    # === GERMANY - Stealth keywords ===
-    'linkedin.com/in stealth founder germany',
-    'linkedin.com/in stealth founder berlin',
-    'linkedin.com/in stealth mode founder germany',
-    'linkedin.com/in stealth startup founder berlin',
-    'linkedin.com/in stealth startup founder hamburg',
-    'linkedin.com/in stealth startup founder frankfurt',
-    'linkedin.com/in stealth startup founder munich',
-    'linkedin.com/in stealth co-founder berlin',
-    'linkedin.com/in stealth co-founder munich',
+    # === GERMANY - Core stealth signals (highest yield) ===
+    'site:linkedin.com/in stealth founder germany',
+    'site:linkedin.com/in stealth founder berlin',
+    'site:linkedin.com/in stealth founder munich',
+    'site:linkedin.com/in stealth founder hamburg',
+    'site:linkedin.com/in stealth founder frankfurt',
+    'site:linkedin.com/in stealth founder cologne',
+    'site:linkedin.com/in stealth founder stuttgart',
+    'site:linkedin.com/in stealth founder dusseldorf',
+    'site:linkedin.com/in stealth co-founder germany',
+    'site:linkedin.com/in stealth co-founder berlin',
+    'site:linkedin.com/in "stealth mode" founder germany',
+    'site:linkedin.com/in "stealth startup" founder germany',
+    'site:linkedin.com/in "stealth" "gründer" deutschland',
 
-    # === GERMANY - "Working on something new" variations ===
-    'linkedin.com/in "working on something new" germany',
-    'linkedin.com/in "working on something new" berlin',
-    'linkedin.com/in "working on something new" founder',
-    'linkedin.com/in "building something new" founder germany',
-    'linkedin.com/in "building something new" founder berlin',
-    'linkedin.com/in "building something new" entrepreneur',
-    'linkedin.com/in "working on something exciting" germany',
-    'linkedin.com/in "building something exciting" berlin',
-    'linkedin.com/in "working on my next thing" founder',
-    'linkedin.com/in "building my next company" germany',
+    # === GERMANY - "Building something new" (high yield) ===
+    'site:linkedin.com/in "building something new" founder germany',
+    'site:linkedin.com/in "building something new" founder berlin',
+    'site:linkedin.com/in "building something new" entrepreneur germany',
+    'site:linkedin.com/in "working on something new" founder germany',
+    'site:linkedin.com/in "working on something new" founder berlin',
+    'site:linkedin.com/in "working on something exciting" founder germany',
+    'site:linkedin.com/in "building something exciting" founder berlin',
+    'site:linkedin.com/in "building my next company" germany',
+    'site:linkedin.com/in "working on my next thing" founder germany',
 
     # === GERMANY - Transition/new venture phrases ===
-    'linkedin.com/in "next chapter" founder berlin',
-    'linkedin.com/in "next adventure" founder germany',
-    'linkedin.com/in "new venture" founder berlin',
-    'linkedin.com/in "new project" founder germany',
-    'linkedin.com/in "exploring opportunities" founder germany',
-    'linkedin.com/in "taking time" founder berlin',
-    'linkedin.com/in "on a sabbatical" founder germany',
-    'linkedin.com/in "between ventures" berlin',
-    'linkedin.com/in "figuring out what\'s next" founder',
-    'linkedin.com/in "what\'s next" entrepreneur germany',
+    'site:linkedin.com/in "next chapter" founder germany',
+    'site:linkedin.com/in "next chapter" founder berlin',
+    'site:linkedin.com/in "next adventure" founder germany',
+    'site:linkedin.com/in "new venture" founder germany',
+    'site:linkedin.com/in "new venture" founder berlin',
+    'site:linkedin.com/in "exploring opportunities" founder germany',
+    'site:linkedin.com/in "between ventures" germany',
+    'site:linkedin.com/in "figuring out" founder germany',
 
     # === GERMANY - Pre-launch/unannounced ===
-    'linkedin.com/in "pre-launch" founder germany',
-    'linkedin.com/in "pre-seed" founder berlin',
-    'linkedin.com/in "unannounced" founder germany',
-    'linkedin.com/in "coming soon" founder berlin',
-    'linkedin.com/in "launching soon" founder germany',
-    'linkedin.com/in "secret project" founder berlin',
-    'linkedin.com/in "confidential" founder startup germany',
+    'site:linkedin.com/in "pre-launch" founder germany',
+    'site:linkedin.com/in "pre-seed" founder germany',
+    'site:linkedin.com/in "pre-seed" founder berlin',
+    'site:linkedin.com/in "unannounced" founder germany',
+    'site:linkedin.com/in "coming soon" founder germany',
+    'site:linkedin.com/in "launching soon" founder germany',
+    'site:linkedin.com/in "confidential" founder germany',
 
     # === GERMANY - Ex-FAANG founders ===
-    'linkedin.com/in "ex-google" founder germany',
-    'linkedin.com/in "ex-google" founder berlin',
-    'linkedin.com/in "ex-meta" founder germany',
-    'linkedin.com/in "ex-facebook" founder berlin',
-    'linkedin.com/in "ex-amazon" founder germany',
-    'linkedin.com/in "ex-amazon" founder berlin',
-    'linkedin.com/in "ex-microsoft" founder germany',
-    'linkedin.com/in "ex-apple" founder berlin',
-    'linkedin.com/in "ex-stripe" founder germany',
-    'linkedin.com/in "ex-uber" founder berlin',
-    'linkedin.com/in "ex-airbnb" founder germany',
+    'site:linkedin.com/in "ex-google" founder germany',
+    'site:linkedin.com/in "ex-google" founder berlin',
+    'site:linkedin.com/in "ex-meta" founder germany',
+    'site:linkedin.com/in "ex-amazon" founder germany',
+    'site:linkedin.com/in "ex-microsoft" founder germany',
+    'site:linkedin.com/in "ex-apple" founder germany',
+    'site:linkedin.com/in "ex-stripe" founder germany',
+    'site:linkedin.com/in "ex-uber" founder germany',
+    'site:linkedin.com/in "ex-airbnb" founder germany',
 
     # === GERMANY - Ex-European unicorns ===
-    'linkedin.com/in "ex-n26" founder',
-    'linkedin.com/in "ex-zalando" founder',
-    'linkedin.com/in "ex-delivery hero" founder',
-    'linkedin.com/in "ex-celonis" founder',
-    'linkedin.com/in "ex-personio" founder',
-    'linkedin.com/in "ex-flixbus" founder',
-    'linkedin.com/in "ex-trade republic" founder',
-    'linkedin.com/in "ex-contentful" founder',
-    'linkedin.com/in "ex-mambu" founder',
-    'linkedin.com/in "ex-sennder" founder',
+    'site:linkedin.com/in "ex-n26" founder',
+    'site:linkedin.com/in "ex-zalando" founder',
+    'site:linkedin.com/in "ex-delivery hero" founder',
+    'site:linkedin.com/in "ex-celonis" founder',
+    'site:linkedin.com/in "ex-personio" founder',
+    'site:linkedin.com/in "ex-flixbus" founder',
+    'site:linkedin.com/in "ex-trade republic" founder',
 
     # === GERMANY - Entrepreneur keywords ===
-    'linkedin.com/in "serial entrepreneur" berlin',
-    'linkedin.com/in "serial entrepreneur" germany',
-    'linkedin.com/in "repeat founder" germany',
-    'linkedin.com/in "2x founder" berlin',
-    'linkedin.com/in "3x founder" germany',
-    'linkedin.com/in "angel investor" building berlin',
-    'linkedin.com/in "entrepreneur in residence" germany',
-    'linkedin.com/in "EIR" startup germany',
-    'linkedin.com/in "venture partner" building berlin',
+    'site:linkedin.com/in "serial entrepreneur" germany',
+    'site:linkedin.com/in "serial entrepreneur" berlin',
+    'site:linkedin.com/in "repeat founder" germany',
+    'site:linkedin.com/in "2x founder" germany',
+    'site:linkedin.com/in "entrepreneur in residence" germany',
 
-    # === GERMANY - German language keywords ===
-    'linkedin.com/in "gründer" stealth deutschland',
-    'linkedin.com/in "mitgründer" stealth berlin',
-    'linkedin.com/in "im aufbau" gründer',
-    'linkedin.com/in "neugründung" berlin',
-    'linkedin.com/in "unternehmer" stealth münchen',
+    # === GERMANY - German language ===
+    'site:linkedin.com/in "gründer" stealth deutschland',
+    'site:linkedin.com/in "mitgründer" stealth',
+    'site:linkedin.com/in "im aufbau" gründer',
+    'site:linkedin.com/in "neugründung" gründer',
 
     # === AUSTRIA ===
-    'linkedin.com/in stealth founder austria',
-    'linkedin.com/in stealth founder vienna',
-    'linkedin.com/in stealth founder wien',
-    'linkedin.com/in "building something new" founder austria',
-    'linkedin.com/in "working on something new" vienna',
-    'linkedin.com/in "ex-google" founder vienna',
-    'linkedin.com/in stealth co-founder graz',
-    'linkedin.com/in "serial entrepreneur" vienna',
-    'linkedin.com/in "serial entrepreneur" austria',
-    'linkedin.com/in stealth startup founder salzburg',
-    'linkedin.com/in "next venture" founder austria',
-    'linkedin.com/in "ex-bitpanda" founder',
-    'linkedin.com/in "ex-refurbed" founder',
+    'site:linkedin.com/in stealth founder austria',
+    'site:linkedin.com/in stealth founder vienna',
+    'site:linkedin.com/in stealth founder wien',
+    'site:linkedin.com/in "building something new" founder austria',
+    'site:linkedin.com/in "working on something new" vienna',
+    'site:linkedin.com/in "serial entrepreneur" austria',
+    'site:linkedin.com/in "serial entrepreneur" vienna',
+    'site:linkedin.com/in stealth co-founder graz',
+    'site:linkedin.com/in "next venture" founder austria',
+    'site:linkedin.com/in "ex-bitpanda" founder',
 
     # === SWITZERLAND ===
-    'linkedin.com/in stealth founder switzerland',
-    'linkedin.com/in stealth founder zurich',
-    'linkedin.com/in stealth founder zürich',
-    'linkedin.com/in "building something new" founder switzerland',
-    'linkedin.com/in "working on something new" zurich',
-    'linkedin.com/in "ex-google" founder zurich',
-    'linkedin.com/in stealth co-founder geneva',
-    'linkedin.com/in "serial entrepreneur" zurich',
-    'linkedin.com/in "serial entrepreneur" switzerland',
-    'linkedin.com/in stealth startup founder basel',
-    'linkedin.com/in "crypto" founder zug',
-    'linkedin.com/in "web3" founder switzerland',
-    'linkedin.com/in "next venture" founder zurich',
-    'linkedin.com/in "ex-google" founder geneva',
+    'site:linkedin.com/in stealth founder switzerland',
+    'site:linkedin.com/in stealth founder zurich',
+    'site:linkedin.com/in stealth founder zürich',
+    'site:linkedin.com/in "building something new" founder switzerland',
+    'site:linkedin.com/in "working on something new" zurich',
+    'site:linkedin.com/in "serial entrepreneur" switzerland',
+    'site:linkedin.com/in "serial entrepreneur" zurich',
+    'site:linkedin.com/in stealth co-founder geneva',
+    'site:linkedin.com/in "crypto" founder zug',
+    'site:linkedin.com/in "web3" founder switzerland',
+    'site:linkedin.com/in "next venture" founder zurich',
 ]
 
 
@@ -230,6 +215,7 @@ class SlowStealthScraper:
             'total_founders_found': 0,
             'skipped_non_german': 0,
             'skipped_low_confidence': 0,
+            'query_stats': {},  # {query: {runs, total_results, new_results, last_run}}
         }
 
         try:
@@ -499,6 +485,41 @@ class SlowStealthScraper:
         self.db.conn.commit()
         logger.info(f"Stored founder: {profile.name} (conf={profile.confidence_score:.2f})")
 
+    def _build_exclusion_query(self, base_query: str, max_exclusions: int = 5) -> str:
+        """
+        Append -"Name" exclusions to a query to push past already-seen results.
+
+        DDG returns the same ranked results for the same query every time.
+        By excluding names we've already found, we force it to show the next tier.
+        """
+        cursor = self.db.conn.cursor()
+        # Get names of founders already found by this exact query
+        cursor.execute('''
+            SELECT name FROM stealth_founders
+            WHERE search_query = ? AND name IS NOT NULL AND name != ''
+            ORDER BY confidence_score DESC
+            LIMIT ?
+        ''', (base_query, max_exclusions))
+
+        names = [row[0] for row in cursor.fetchall()]
+        if not names:
+            return base_query
+
+        # Build exclusion string: -"Firstname Lastname"
+        exclusions = ' '.join(f'-"{name}"' for name in names)
+        enhanced = f'{base_query} {exclusions}'
+
+        # DDG has a ~500 char query limit; trim if needed
+        if len(enhanced) > 480:
+            # Reduce exclusions until we fit
+            while names and len(enhanced) > 480:
+                names.pop()
+                exclusions = ' '.join(f'-"{name}"' for name in names)
+                enhanced = f'{base_query} {exclusions}'
+
+        logger.info(f"  Excluding {len(names)} known names to surface new profiles")
+        return enhanced
+
     def _do_search(self, max_pages: int = 2) -> List[str]:
         """
         Perform one search query and return new URLs found.
@@ -506,17 +527,29 @@ class SlowStealthScraper:
         Args:
             max_pages: Number of result pages to fetch (default 2 = ~60 results)
         """
-        from sources.google_search import DuckDuckGoSearchScraper, BraveSearchScraper, MultiSearchScraper, CurlCffiSearchScraper
+        from sources.google_search import (
+            DuckDuckGoSearchScraper, BraveSearchScraper, MultiSearchScraper,
+            CurlCffiSearchScraper, DdgsLibraryScraper, SerperSearchScraper,
+        )
 
-        # Get current query
-        query = STEALTH_QUERIES[self.state['query_index']]
+        # Get current base query
+        base_query = STEALTH_QUERIES[self.state['query_index']]
+
+        # Enhance with exclusions to surface new results on repeat runs
+        query = self._build_exclusion_query(base_query, max_exclusions=5)
 
         engine_name = self.search_engine.upper()
-        logger.info(f"[{engine_name}] Searching: {query}")
+        logger.info(f"[{engine_name}] Searching: {base_query}")
 
         try:
             # Select search engine based on preference
-            if self.search_engine == 'curl':
+            if self.search_engine == 'ddgs':
+                scraper = DdgsLibraryScraper(delay_range=(1, 3))
+                results = scraper.search_query(query, max_pages=max_pages)
+            elif self.search_engine == 'serper':
+                scraper = SerperSearchScraper(delay_range=(0.5, 1.5))
+                results = scraper.search_query(query)
+            elif self.search_engine == 'curl':
                 scraper = CurlCffiSearchScraper(delay_range=(2, 5))
                 results = scraper.search_query(query, max_pages=max_pages)
             elif self.search_engine == 'brave':
@@ -542,17 +575,27 @@ class SlowStealthScraper:
                     logger.info(f"  Found: {r.title[:50]}")
 
                     # Store founder directly from search snippet (no LinkedIn scrape needed!)
-                    self._store_from_search_result(r, query)
+                    # Use base_query (without exclusions) so exclusions accumulate correctly
+                    self._store_from_search_result(r, base_query)
 
             # Update state
             self.state['query_index'] = (self.state['query_index'] + 1) % len(STEALTH_QUERIES)
             self.state['last_search_at'] = datetime.now().isoformat()
             self.state['total_searches'] += 1
-            # Don't add to pending_urls since we already stored from snippet
-            # self.state['pending_urls'].extend(new_urls)
+
+            # Track per-query yield for validation (keyed by base query)
+            if 'query_stats' not in self.state:
+                self.state['query_stats'] = {}
+            qs = self.state['query_stats'].get(base_query, {'runs': 0, 'total_results': 0, 'new_results': 0})
+            qs['runs'] = qs.get('runs', 0) + 1
+            qs['total_results'] = qs.get('total_results', 0) + len(results)
+            qs['new_results'] = qs.get('new_results', 0) + len(new_urls)
+            qs['last_run'] = datetime.now().isoformat()
+            self.state['query_stats'][base_query] = qs
+
             self._save_state()
 
-            logger.info(f"  Stored {len(new_urls)} founders from search snippets")
+            logger.info(f"  Stored {len(new_urls)} founders from search snippets (total results: {len(results)}, new: {len(new_urls)})")
 
             return new_urls
 
@@ -820,6 +863,8 @@ class SlowStealthScraper:
                         backoff = self._calculate_backoff()
                         logger.warning(f"  {self.consecutive_failures} consecutive failures - backing off for {backoff/60:.0f} minutes")
                         time.sleep(backoff)
+                        # Reset counter after long backoff so we don't spiral
+                        self.consecutive_failures = 0
                         continue
 
                 # Choose delay based on action
@@ -828,11 +873,10 @@ class SlowStealthScraper:
                 else:
                     delay = self._get_delay(self.scrape_delay)
 
-                # Add extra delay if we had a failure (but not yet at max)
+                # On rate limit failure: wait 5 minutes flat instead of compounding
                 if not stats['success'] and self.consecutive_failures > 0:
-                    extra_delay = self.consecutive_failures * 30  # 30s extra per failure
-                    delay += extra_delay
-                    logger.info(f"  Adding {extra_delay}s extra delay due to {self.consecutive_failures} failure(s)")
+                    delay = max(delay, 300)  # At least 5 minutes after a rate limit
+                    logger.info(f"  Rate limited — waiting {delay:.0f}s before next query")
 
                 logger.info(f"  Sleeping {delay:.0f}s...")
                 time.sleep(delay)
@@ -880,6 +924,68 @@ class SlowStealthScraper:
             'last_search_at': self.state['last_search_at'],
             'last_scrape_at': self.state['last_scrape_at'],
         }
+
+
+    def print_query_report(self):
+        """Print a report showing which queries produce results and which don't."""
+        qs = self.state.get('query_stats', {})
+        if not qs:
+            print("No query stats yet. Run the scraper first to collect data.")
+            return
+
+        # Sort by new_results descending
+        sorted_queries = sorted(qs.items(), key=lambda x: x[1].get('new_results', 0), reverse=True)
+
+        print(f"\n{'='*90}")
+        print(f"QUERY YIELD REPORT — {len(sorted_queries)} queries tracked")
+        print(f"{'='*90}")
+
+        # Summary
+        total_runs = sum(v.get('runs', 0) for v in qs.values())
+        total_results = sum(v.get('total_results', 0) for v in qs.values())
+        total_new = sum(v.get('new_results', 0) for v in qs.values())
+        zero_yield = sum(1 for v in qs.values() if v.get('new_results', 0) == 0)
+
+        print(f"\n  Total runs: {total_runs} | Total results: {total_results} | New founders: {total_new}")
+        print(f"  Zero-yield queries: {zero_yield}/{len(sorted_queries)} ({zero_yield*100//max(len(sorted_queries),1)}%)")
+        print(f"  Avg new per query: {total_new/max(len(sorted_queries),1):.1f}")
+
+        # Top producers
+        print(f"\n{'─'*90}")
+        print(f"  TOP PRODUCERS (queries that find the most new founders)")
+        print(f"{'─'*90}")
+        for query, stats in sorted_queries[:15]:
+            runs = stats.get('runs', 0)
+            total = stats.get('total_results', 0)
+            new = stats.get('new_results', 0)
+            yield_pct = (new * 100 // max(total, 1)) if total > 0 else 0
+            bar = '#' * min(new, 30)
+            print(f"  {new:>4} new ({total:>3} total, {runs}x run) {bar}")
+            print(f"       {query[:80]}")
+
+        # Zero-yield queries
+        zero_queries = [(q, s) for q, s in sorted_queries if s.get('new_results', 0) == 0 and s.get('runs', 0) > 0]
+        if zero_queries:
+            print(f"\n{'─'*90}")
+            print(f"  ZERO-YIELD QUERIES ({len(zero_queries)} queries returned 0 new founders)")
+            print(f"{'─'*90}")
+            for query, stats in zero_queries:
+                runs = stats.get('runs', 0)
+                total = stats.get('total_results', 0)
+                print(f"  {total:>3} total results, {runs}x run — {query[:70]}")
+
+        # Not yet run
+        not_run = [q for q in STEALTH_QUERIES if q not in qs]
+        if not_run:
+            print(f"\n{'─'*90}")
+            print(f"  NOT YET RUN ({len(not_run)} queries)")
+            print(f"{'─'*90}")
+            for q in not_run[:10]:
+                print(f"    {q[:80]}")
+            if len(not_run) > 10:
+                print(f"    ... and {len(not_run) - 10} more")
+
+        print(f"\n{'='*90}\n")
 
 
 def run_slow_scraper(

@@ -165,6 +165,9 @@ async def companies_list(
     has_website: Optional[str] = None,  # Accept string, parse manually
     contacted: Optional[str] = None,  # 'yes', 'no', or None for all
     viewed: Optional[str] = None,     # 'yes', 'no', or None for all
+    relevance: Optional[str] = None,  # 'relevant', 'irrelevant', 'unscreened', or None
+    sort: Optional[str] = None,       # Column to sort by
+    sort_dir: Optional[str] = None,   # 'asc' or 'desc'
     page: int = 1,
     per_page: int = 25,
 ):
@@ -213,8 +216,37 @@ async def companies_list(
             conditions.append("viewed = 1")
         elif viewed == 'no':
             conditions.append("(viewed = 0 OR viewed IS NULL)")
+        if relevance == 'relevant':
+            conditions.append("relevance = 'relevant'")
+        elif relevance == 'irrelevant':
+            conditions.append("relevance = 'irrelevant'")
+        elif relevance == 'unscreened':
+            conditions.append("(relevance IS NULL)")
 
         where_clause = " AND ".join(conditions) if conditions else "1=1"
+
+        # Sorting
+        allowed_sort_cols = {
+            'name': 'name',
+            'legal_form': 'legal_form',
+            'city': 'city',
+            'state': 'state',
+            'year': 'first_seen_date',
+            'ai_score': 'ai_robotics_score',
+            'classification': 'startup_classification',
+            'startup_score': 'startup_score',
+            'capital': 'capital_amount',
+            'registry': 'registry_court',
+            'reg_date': 'registration_date',
+            'source': 'source',
+            'relevance': 'relevance',
+        }
+        sort_column = allowed_sort_cols.get(sort)
+        sort_direction = 'ASC' if sort_dir == 'asc' else 'DESC'
+        if sort_column:
+            order_clause = f"{sort_column} {sort_direction} NULLS LAST, name"
+        else:
+            order_clause = "first_seen_date DESC, ai_robotics_score DESC, name"
 
         # Get total count
         count_query = f"SELECT COUNT(*) FROM companies WHERE {where_clause}"
@@ -224,7 +256,7 @@ async def companies_list(
         query = f"""
             SELECT * FROM companies
             WHERE {where_clause}
-            ORDER BY first_seen_date DESC, ai_robotics_score DESC, name
+            ORDER BY {order_clause}
             LIMIT ? OFFSET ?
         """
         companies = db.conn.execute(query, params + [per_page, offset]).fetchall()
@@ -267,6 +299,15 @@ async def companies_list(
 
         total_pages = (total + per_page - 1) // per_page
 
+        # Load saved filter presets
+        try:
+            filter_presets = db.conn.execute(
+                "SELECT * FROM filter_presets ORDER BY name"
+            ).fetchall()
+            filter_presets = [dict(row) for row in filter_presets]
+        except:
+            filter_presets = []
+
         # Build filter query string for pagination links (exclude empty values)
         filter_params = {}
         if q: filter_params["q"] = q
@@ -279,8 +320,14 @@ async def companies_list(
         if has_website: filter_params["has_website"] = "true"
         if contacted: filter_params["contacted"] = contacted
         if viewed: filter_params["viewed"] = viewed
+        if relevance: filter_params["relevance"] = relevance
         from urllib.parse import urlencode
+        # filter_qs excludes sort/page so sort links and pagination can set them
         filter_qs = urlencode(filter_params)
+        if sort: filter_params["sort"] = sort
+        if sort_dir: filter_params["sort_dir"] = sort_dir
+        # filter_qs_with_sort includes sort for pagination links
+        filter_qs_with_sort = urlencode(filter_params)
 
         return templates.TemplateResponse("companies.html", {
             "request": request,
@@ -299,7 +346,12 @@ async def companies_list(
             "has_website": has_website or "",
             "contacted": contacted or "",
             "viewed": viewed or "",
+            "relevance": relevance or "",
+            "sort": sort or "",
+            "sort_dir": sort_dir or "",
             "filter_qs": filter_qs,
+            "filter_qs_with_sort": filter_qs_with_sort,
+            "filter_presets": filter_presets,
             "cities": cities,
             "states": states,
             "legal_forms": legal_forms,
@@ -398,6 +450,52 @@ async def toggle_contacted(company_id: int):
         db.close()
 
 
+@app.post("/companies/{company_id}/relevance")
+async def set_relevance(company_id: int, request: Request):
+    """Set relevance for a company (relevant/irrelevant/null)."""
+    db = get_db()
+    try:
+        body = await request.json()
+        relevance = body.get("relevance")  # 'relevant', 'irrelevant', or null to clear
+        if relevance not in ('relevant', 'irrelevant', None):
+            raise HTTPException(status_code=400, detail="Invalid relevance value")
+
+        db.conn.execute(
+            "UPDATE companies SET relevance = ? WHERE id = ?",
+            (relevance, company_id)
+        )
+        db.conn.commit()
+
+        return {"success": True, "relevance": relevance}
+    finally:
+        db.close()
+
+
+@app.post("/companies/bulk-relevance")
+async def bulk_set_relevance(request: Request):
+    """Set relevance for multiple companies at once."""
+    db = get_db()
+    try:
+        body = await request.json()
+        company_ids = body.get("company_ids", [])
+        relevance = body.get("relevance")
+        if relevance not in ('relevant', 'irrelevant', None):
+            raise HTTPException(status_code=400, detail="Invalid relevance value")
+        if not company_ids or not isinstance(company_ids, list):
+            raise HTTPException(status_code=400, detail="company_ids must be a non-empty list")
+
+        placeholders = ",".join("?" for _ in company_ids)
+        db.conn.execute(
+            f"UPDATE companies SET relevance = ? WHERE id IN ({placeholders})",
+            [relevance] + company_ids
+        )
+        db.conn.commit()
+
+        return {"success": True, "updated": len(company_ids), "relevance": relevance}
+    finally:
+        db.close()
+
+
 @app.post("/companies/{company_id}/notes")
 async def update_notes(company_id: int, request: Request):
     """Update notes for a company."""
@@ -412,6 +510,53 @@ async def update_notes(company_id: int, request: Request):
         )
         db.conn.commit()
 
+        return {"success": True}
+    finally:
+        db.close()
+
+
+@app.get("/api/filter-presets")
+async def list_filter_presets():
+    """List all saved filter presets."""
+    db = get_db()
+    try:
+        presets = db.conn.execute(
+            "SELECT * FROM filter_presets ORDER BY name"
+        ).fetchall()
+        return [dict(row) for row in presets]
+    finally:
+        db.close()
+
+
+@app.post("/api/filter-presets")
+async def create_filter_preset(request: Request):
+    """Save current filters as a named preset."""
+    db = get_db()
+    try:
+        body = await request.json()
+        name = body.get("name", "").strip()
+        params = body.get("params", "")
+        if not name:
+            raise HTTPException(status_code=400, detail="Name is required")
+
+        cursor = db.conn.execute(
+            "INSERT INTO filter_presets (name, params) VALUES (?, ?)",
+            (name, params)
+        )
+        db.conn.commit()
+
+        return {"success": True, "id": cursor.lastrowid, "name": name}
+    finally:
+        db.close()
+
+
+@app.delete("/api/filter-presets/{preset_id}")
+async def delete_filter_preset(preset_id: int):
+    """Delete a saved filter preset."""
+    db = get_db()
+    try:
+        db.conn.execute("DELETE FROM filter_presets WHERE id = ?", (preset_id,))
+        db.conn.commit()
         return {"success": True}
     finally:
         db.close()

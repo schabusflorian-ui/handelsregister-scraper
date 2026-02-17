@@ -5,6 +5,7 @@ Uses Google or DuckDuckGo to find LinkedIn profiles matching specific patterns.
 Handles rate limiting and anti-bot detection.
 """
 
+import os
 import re
 import time
 import random
@@ -679,8 +680,13 @@ class CurlCffiSearchScraper:
     def _delay(self):
         time.sleep(random.uniform(*self.delay_range))
 
-    def _search_ddg(self, query: str, retries: int = 2, page_data: dict = None) -> tuple:
-        """Execute DuckDuckGo search via curl_cffi."""
+    def _search_ddg(self, query: str, retries: int = 1, page_data: dict = None) -> tuple:
+        """Execute DuckDuckGo search via curl_cffi.
+
+        On 202 rate limit: return immediately instead of retrying.
+        Retrying burns time and makes rate limiting worse. Better to let
+        the outer loop handle backoff and move to the next query.
+        """
         from curl_cffi import requests as curl_requests
 
         headers = self._get_headers()
@@ -708,10 +714,10 @@ class CurlCffiSearchScraper:
                     return response.text, next_data
 
                 if response.status_code == 202:
-                    wait_time = 30 * (2 ** attempt)
-                    logger.warning(f"DDG rate limit (202), waiting {wait_time}s...")
-                    time.sleep(wait_time)
-                    continue
+                    # Don't retry — return immediately and let the outer loop
+                    # handle backoff. Retrying just digs the rate limit deeper.
+                    logger.warning(f"DDG rate limit (202) — skipping to next query")
+                    return None, None
 
                 logger.warning(f"DuckDuckGo returned {response.status_code}")
                 return None, None
@@ -977,74 +983,307 @@ class BraveSearchScraper:
         return new_results
 
 
+class DdgsLibraryScraper:
+    """
+    Search using the ddgs library (duckduckgo-search package).
+
+    As of v8.x, the 'auto' backend routes through Bing HTML search,
+    which is far more resilient to rate limiting than DDG's html endpoint.
+    Supports site: operator, pagination, and has built-in error handling.
+
+    Lightweight, free, no API key needed.
+    """
+
+    def __init__(
+        self,
+        delay_range: tuple = (1, 3),
+        max_results_per_query: int = 30,
+        proxy: Optional[str] = None,
+    ):
+        self.delay_range = delay_range
+        self.max_results_per_query = max_results_per_query
+        self.proxy = proxy
+        self.found_urls: Set[str] = set()
+
+    def _delay(self):
+        time.sleep(random.uniform(*self.delay_range))
+
+    def _clean_linkedin_url(self, url: str) -> Optional[str]:
+        """Clean LinkedIn URL - normalize country subdomains."""
+        match = re.search(
+            r'(https?://(?:[a-z]{2}\.)?(?:www\.)?linkedin\.com/in/[^/?&#]+)', url
+        )
+        if match:
+            cleaned = match.group(1)
+            cleaned = re.sub(
+                r'https?://[a-z]{2}\.linkedin\.com',
+                'https://www.linkedin.com',
+                cleaned,
+            )
+            return cleaned
+        return None
+
+    def search_query(self, query: str, max_pages: int = 3) -> List[SearchResult]:
+        """
+        Execute a search query using the ddgs library.
+
+        Args:
+            query: Search query (supports site: operator)
+            max_pages: Ignored — ddgs handles pagination via max_results
+
+        Returns:
+            List of SearchResult with LinkedIn profile URLs
+        """
+        try:
+            from ddgs import DDGS
+            from ddgs.exceptions import RatelimitException, DDGSException, TimeoutException
+            DuckDuckGoSearchException = DDGSException
+        except ImportError:
+            from duckduckgo_search import DDGS
+            from duckduckgo_search.exceptions import (
+                RatelimitException,
+                DuckDuckGoSearchException,
+                TimeoutException,
+            )
+
+        logger.info(f"DDGs Library Search: {query[:60]}...")
+
+        raw_results = None
+        for attempt in range(3):
+            try:
+                ddgs = DDGS(proxy=self.proxy, timeout=30)
+                raw_results = ddgs.text(
+                    query=query,
+                    max_results=self.max_results_per_query,
+                )
+                break
+            except RatelimitException:
+                logger.warning("ddgs rate limited — skipping to next query")
+                return []
+            except TimeoutException:
+                logger.warning("ddgs timeout")
+                return []
+            except DuckDuckGoSearchException as e:
+                logger.error(f"ddgs search error: {e}")
+                return []
+            except Exception as e:
+                if attempt < 2:
+                    logger.debug(f"ddgs attempt {attempt+1} failed: {e}, retrying...")
+                    time.sleep(2)
+                    continue
+                logger.error(f"ddgs failed after 3 attempts: {e}")
+                return []
+
+        if not raw_results:
+            logger.info("  No results returned")
+            return []
+
+        results = []
+        for item in raw_results:
+            href = item.get("href", "")
+            if "linkedin.com/in/" not in href:
+                continue
+
+            url = self._clean_linkedin_url(href)
+            if not url or url in self.found_urls:
+                continue
+
+            self.found_urls.add(url)
+            results.append(SearchResult(
+                url=url,
+                title=item.get("title", ""),
+                snippet=item.get("body", ""),
+                query=query,
+            ))
+
+        logger.info(f"  Found {len(results)} new LinkedIn URLs")
+        return results
+
+
+class SerperSearchScraper:
+    """
+    Google search via Serper.dev API.
+
+    2,500 free queries (no credit card needed), then $50/50k queries.
+    Returns Google-quality results with structured JSON.
+    Requires SERPER_API_KEY environment variable.
+    """
+
+    ENDPOINT = "https://google.serper.dev/search"
+
+    def __init__(
+        self,
+        api_key: Optional[str] = None,
+        delay_range: tuple = (0.5, 1.5),
+        max_results_per_query: int = 30,
+    ):
+        self.api_key = api_key or os.environ.get("SERPER_API_KEY")
+        if not self.api_key:
+            raise ValueError(
+                "Serper API key required. Set SERPER_API_KEY env var "
+                "or pass api_key=. Get one free at https://serper.dev/"
+            )
+        self.delay_range = delay_range
+        self.max_results_per_query = max_results_per_query
+        self.found_urls: Set[str] = set()
+
+    def _delay(self):
+        time.sleep(random.uniform(*self.delay_range))
+
+    def _clean_linkedin_url(self, url: str) -> Optional[str]:
+        """Clean LinkedIn URL."""
+        match = re.search(
+            r'(https?://(?:[a-z]{2}\.)?(?:www\.)?linkedin\.com/in/[^/?&#]+)', url
+        )
+        if match:
+            cleaned = match.group(1)
+            cleaned = re.sub(
+                r'https?://[a-z]{2}\.linkedin\.com',
+                'https://www.linkedin.com',
+                cleaned,
+            )
+            return cleaned
+        return None
+
+    def search_query(self, query: str, max_pages: int = 1) -> List[SearchResult]:
+        """
+        Execute search via Serper.dev API.
+
+        Args:
+            query: Search query (Google syntax, supports site: operator)
+            max_pages: Ignored — Serper returns up to 100 results per request
+
+        Returns:
+            List of SearchResult with LinkedIn profile URLs
+        """
+        logger.info(f"Serper Search: {query[:60]}...")
+
+        num = min(self.max_results_per_query, 100)
+
+        headers = {
+            "X-API-KEY": self.api_key,
+            "Content-Type": "application/json",
+        }
+
+        payload = {
+            "q": query,
+            "num": num,
+        }
+
+        try:
+            response = requests.post(
+                self.ENDPOINT,
+                json=payload,
+                headers=headers,
+                timeout=30,
+            )
+
+            if response.status_code == 429:
+                logger.warning("Serper rate limited (429)")
+                return []
+
+            if response.status_code == 403:
+                logger.error("Serper API key invalid or quota exhausted")
+                return []
+
+            if response.status_code != 200:
+                logger.warning(f"Serper returned {response.status_code}")
+                return []
+
+            data = response.json()
+
+        except requests.RequestException as e:
+            logger.error(f"Serper request failed: {e}")
+            return []
+
+        results = []
+        for item in data.get("organic", []):
+            href = item.get("link", "")
+            if "linkedin.com/in/" not in href:
+                continue
+
+            url = self._clean_linkedin_url(href)
+            if not url or url in self.found_urls:
+                continue
+
+            self.found_urls.add(url)
+            results.append(SearchResult(
+                url=url,
+                title=item.get("title", ""),
+                snippet=item.get("snippet", ""),
+                query=query,
+            ))
+
+        logger.info(f"  Found {len(results)} new LinkedIn URLs")
+        return results
+
+
 class MultiSearchScraper:
     """
-    Combines multiple search engines for better coverage.
+    Combines multiple search engines with automatic fallback.
 
-    Rotates between engines to avoid rate limits.
+    Primary: ddgs library (Bing-backed, free, no API key)
+    Fallback: Serper.dev (Google results, 2500 free queries)
+    Last resort: CurlCffi DDG (raw HTTP, rate-limited)
     """
 
-    def __init__(self, delay_range: tuple = (5, 10)):
+    def __init__(self, delay_range: tuple = (2, 5)):
         self.delay_range = delay_range
-        self.ddg = CurlCffiSearchScraper(delay_range=delay_range)
-        self.brave = BraveSearchScraper(delay_range=delay_range)
         self.found_urls: Set[str] = set()
-        self.engine_index = 0
 
-    def _get_next_engine(self):
-        """Rotate between search engines."""
-        engines = [self.ddg, self.brave]
-        engine = engines[self.engine_index % len(engines)]
-        self.engine_index += 1
-        return engine
+        # Primary: ddgs library (Bing-backed, free)
+        self.ddgs_lib = DdgsLibraryScraper(delay_range=delay_range)
 
-    def search_query(self, query: str, max_pages: int = 2) -> List[SearchResult]:
-        """Search using rotating engines."""
-        engine = self._get_next_engine()
-        engine_name = "DDG (curl_cffi)" if isinstance(engine, CurlCffiSearchScraper) else "Brave"
+        # Fallback: Serper (only if API key available)
+        self.serper = None
+        serper_key = os.environ.get("SERPER_API_KEY")
+        if serper_key:
+            self.serper = SerperSearchScraper(api_key=serper_key, delay_range=(0.5, 1.5))
+            logger.info("Serper.dev fallback enabled")
 
-        logger.info(f"[{engine_name}] Searching: {query[:50]}...")
+        # Last resort: curl_cffi raw DDG
+        self.ddg_curl = CurlCffiSearchScraper(delay_range=delay_range)
 
-        if isinstance(engine, CurlCffiSearchScraper):
-            results = engine.search_query(query, max_pages=max_pages)
-        else:
-            results = engine.search_query(query)
-
-        # Deduplicate across all engines
+    def _deduplicate(self, results: List[SearchResult]) -> List[SearchResult]:
+        """Deduplicate across all engines."""
         new_results = []
         for r in results:
             if r.url not in self.found_urls:
                 self.found_urls.add(r.url)
                 new_results.append(r)
-
         return new_results
 
-    def search_all_engines(self, query: str) -> List[SearchResult]:
-        """Search all engines for the same query (more coverage)."""
-        all_results = []
+    def search_query(self, query: str, max_pages: int = 2) -> List[SearchResult]:
+        """Search with automatic fallback chain: ddgs → serper → curl_cffi."""
 
-        # DuckDuckGo (via curl_cffi)
+        # 1. Try ddgs library first (Bing-backed, most reliable)
         try:
-            results = self.ddg.search_query(query, max_pages=2)
-            for r in results:
-                if r.url not in self.found_urls:
-                    self.found_urls.add(r.url)
-                    all_results.append(r)
-            time.sleep(random.uniform(*self.delay_range))
+            results = self.ddgs_lib.search_query(query, max_pages=max_pages)
+            if results:
+                return self._deduplicate(results)
         except Exception as e:
-            logger.warning(f"DuckDuckGo (curl_cffi) failed: {e}")
+            logger.warning(f"ddgs library failed: {e}")
 
-        # Brave
+        # 2. Fallback to Serper if available
+        if self.serper:
+            try:
+                results = self.serper.search_query(query)
+                if results:
+                    logger.info("  (via Serper fallback)")
+                    return self._deduplicate(results)
+            except Exception as e:
+                logger.warning(f"Serper fallback failed: {e}")
+
+        # 3. Last resort: curl_cffi raw DDG
         try:
-            results = self.brave.search_query(query)
-            for r in results:
-                if r.url not in self.found_urls:
-                    self.found_urls.add(r.url)
-                    all_results.append(r)
+            results = self.ddg_curl.search_query(query, max_pages=max_pages)
+            if results:
+                logger.info("  (via curl_cffi fallback)")
+                return self._deduplicate(results)
         except Exception as e:
-            logger.warning(f"Brave failed: {e}")
+            logger.warning(f"curl_cffi fallback failed: {e}")
 
-        return all_results
+        return []
 
 
 if __name__ == '__main__':

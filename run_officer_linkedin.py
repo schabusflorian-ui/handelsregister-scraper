@@ -56,6 +56,10 @@ def main():
         datefmt='%H:%M:%S',
     )
 
+    # Silence noisy third-party loggers (rustls, h2, hyper from primp)
+    for noisy_logger in ('rustls', 'h2', 'hyper_util', 'cookie_store', 'primp'):
+        logging.getLogger(noisy_logger).setLevel(logging.WARNING)
+
     db_path = project_root / "handelsregister.db"
     state_file = project_root / "data" / "officer_linkedin_state.json"
 

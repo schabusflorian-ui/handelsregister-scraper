@@ -78,6 +78,10 @@ def main():
         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     )
 
+    # Silence noisy third-party loggers (rustls, h2, hyper from primp)
+    for noisy_logger in ('rustls', 'h2', 'hyper_util', 'cookie_store', 'primp'):
+        logging.getLogger(noisy_logger).setLevel(logging.WARNING)
+
     # Handle status commands
     if args.rate_status:
         print_rate_limit_status(args.db)
