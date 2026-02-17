@@ -28,7 +28,7 @@ echo "Scheduler started with PID: $SCHEDULER_PID"
 # Start stealth scraper in background (founder discovery)
 echo "Starting stealth scraper (background)..."
 python3 -u run_stealth.py \
-    --engine curl \
+    --engine "${STEALTH_ENGINE:-brave}" \
     --delay "${STEALTH_DELAY:-90}" \
     2>&1 &
 STEALTH_PID=$!
