@@ -38,6 +38,7 @@ class Company:
     capital_amount: Optional[float]
     capital_currency: Optional[str]
     ai_robotics_score: int
+    climate_score: int  # Climate tech relevance score (separate from AI)
     matched_keywords: Optional[str]
     tech_categories: Optional[str]
     startup_score: int  # Startup likelihood score
@@ -129,6 +130,7 @@ class Database:
                 capital_amount REAL,
                 capital_currency TEXT DEFAULT 'EUR',
                 ai_robotics_score INTEGER DEFAULT 0,
+                climate_score INTEGER DEFAULT 0,
                 matched_keywords TEXT,
                 tech_categories TEXT,
                 startup_score INTEGER DEFAULT 0,
@@ -246,6 +248,11 @@ class Database:
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_companies_city ON companies(city)')
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_companies_status ON companies(current_status)')
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_companies_ai_score ON companies(ai_robotics_score)')
+        # climate_score index created in _migrate_companies_table for existing DBs
+        try:
+            cursor.execute('CREATE INDEX IF NOT EXISTS idx_companies_climate_score ON companies(climate_score)')
+        except Exception:
+            pass  # Column added via migration later
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_companies_source ON companies(source)')
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_companies_enrichment ON companies(enrichment_status)')
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_officers_company ON officers(company_id)')
@@ -492,9 +499,11 @@ class Database:
                 ('viewed_at', 'TEXT'),
                 ('notes', 'TEXT'),
                 ('relevance', 'TEXT'),
+                ('climate_score', 'INTEGER DEFAULT 0'),
             ]:
                 if col not in columns and columns:
                     cursor.execute(f"ALTER TABLE companies ADD COLUMN {col} {col_type}")
+            cursor.execute('CREATE INDEX IF NOT EXISTS idx_companies_climate_score ON companies(climate_score)')
             self.conn.commit()
         except Exception:
             pass
@@ -544,6 +553,7 @@ class Database:
         capital_amount: Optional[float] = None,
         capital_currency: str = 'EUR',
         ai_robotics_score: int = 0,
+        climate_score: int = 0,
         matched_keywords: Optional[List[str]] = None,
         tech_categories: Optional[List[str]] = None,
         startup_score: int = 0,
@@ -563,15 +573,15 @@ class Database:
                 company_number, native_company_number, name, legal_form,
                 current_status, registry_court, registry_type, registration_date,
                 street, postal_code, city, state, purpose, website,
-                capital_amount, capital_currency, ai_robotics_score,
+                capital_amount, capital_currency, ai_robotics_score, climate_score,
                 matched_keywords, tech_categories, startup_score, startup_classification,
                 source, first_seen_date, last_updated, enrichment_status
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ''', (
             company_number, native_company_number, name, legal_form,
             current_status, registry_court, registry_type, registration_date,
             street, postal_code, city, state, purpose, website,
-            capital_amount, capital_currency, ai_robotics_score,
+            capital_amount, capital_currency, ai_robotics_score, climate_score,
             json.dumps(matched_keywords) if matched_keywords else None,
             json.dumps(tech_categories) if tech_categories else None,
             startup_score, startup_classification,

@@ -160,6 +160,7 @@ class AnnouncementMonitoringJob:
             current_status='currently registered',
             registry_type=registry_type,
             ai_robotics_score=filter_result.relevance_score,
+            climate_score=filter_result.climate_score,
             matched_keywords=filter_result.matched_keywords,
             tech_categories=filter_result.tech_categories,
             startup_score=startup_result.total_score,

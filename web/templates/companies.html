@@ -82,8 +82,8 @@
                 </div>
             </div>
 
-            <div class="grid grid-cols-1 md:grid-cols-7 gap-4">
-                <!-- Min Score -->
+            <div class="grid grid-cols-1 md:grid-cols-8 gap-4">
+                <!-- Min AI Score -->
                 <div>
                     <label for="min_score" class="block text-sm font-medium text-gray-700">Min AI Score</label>
                     <select name="min_score" id="min_score"
@@ -91,6 +91,18 @@
                         <option value="">Any</option>
                         {% for score in range(1, 11) %}
                         <option value="{{ score }}" {% if min_score == score %}selected{% endif %}>{{ score }}+</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <!-- Min Climate Score -->
+                <div>
+                    <label for="min_climate" class="block text-sm font-medium text-gray-700">Min Climate</label>
+                    <select name="min_climate" id="min_climate"
+                        class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+                        <option value="">Any</option>
+                        {% for score in range(1, 11) %}
+                        <option value="{{ score }}" {% if min_climate == score|string %}selected{% endif %}>{{ score }}+</option>
                         {% endfor %}
                     </select>
                 </div>
@@ -238,6 +250,7 @@
                     {{ sort_th('year', 'Year') }}
                     <th data-col="website" scope="col" class="px-3 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Web</th>
                     {{ sort_th('ai_score', 'AI') }}
+                    {{ sort_th('climate_score', 'Climate') }}
                     <th data-col="status" scope="col" class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
                     {{ sort_th('classification', 'Class') }}
                     {{ sort_th('startup_score', 'Startup') }}
@@ -309,6 +322,18 @@
                             {{ company.ai_robotics_score }}
                         </span>
                     </td>
+                    <td data-col="climate_score" class="px-3 py-3 whitespace-nowrap">
+                        {% if company.climate_score %}
+                        <span class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium
+                            {% if company.climate_score >= 5 %}bg-emerald-100 text-emerald-800
+                            {% elif company.climate_score >= 3 %}bg-teal-100 text-teal-800
+                            {% else %}bg-gray-100 text-gray-800{% endif %}">
+                            {{ company.climate_score }}
+                        </span>
+                        {% else %}
+                        <span class="text-gray-300 text-xs">-</span>
+                        {% endif %}
+                    </td>
                     <td data-col="status" class="px-3 py-3 whitespace-nowrap">
                         <div class="flex space-x-1">
                             {% if company.viewed %}
@@ -355,7 +380,7 @@
                 </tr>
                 {% else %}
                 <tr>
-                    <td colspan="18" class="px-6 py-4 text-center text-sm text-gray-500">
+                    <td colspan="19" class="px-6 py-4 text-center text-sm text-gray-500">
                         No companies found matching your criteria.
                     </td>
                 </tr>
@@ -416,6 +441,7 @@ const COLUMNS = {
     year:           { label: 'Year',           defaultVisible: true },
     website:        { label: 'Website',        defaultVisible: true },
     ai_score:       { label: 'AI Score',       defaultVisible: true },
+    climate_score:  { label: 'Climate Score',  defaultVisible: true },
     status:         { label: 'Status',         defaultVisible: true },
     classification: { label: 'Classification', defaultVisible: false },
     startup_score:  { label: 'Startup Score',  defaultVisible: false },

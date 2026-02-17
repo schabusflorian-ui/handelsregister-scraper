@@ -242,8 +242,8 @@ FUNDING_SIGNALS = [
     (r'\binvestor(?:en)?\b', 1),
 ]
 
-# Keywords indicating AI/robotics/climate - use word boundaries to avoid false matches
-AI_ROBOTICS_CLIMATE_PATTERNS = [
+# Keywords indicating AI/robotics - use word boundaries to avoid false matches
+AI_ROBOTICS_PATTERNS = [
     # === AI Core ===
     r'\bkünstliche(?:r|n|s)?\s+intelligenz\b',
     r'\b(?:K|k)(?:I|i)[-\s](?:Startup|Unternehmen|Firma|Tool|Agent|Model|System|Funktion)',
@@ -254,7 +254,13 @@ AI_ROBOTICS_CLIMATE_PATTERNS = [
     r'\bgenerative\s+(?:ai|ki)\b',
     r'\blarge\s+language\s+model\b',
     r'\bfoundation\s+model\b',
+    r'\bdiffusion\s+model\b',
+    r'\btext-to-(?:image|video)\b',
+    r'\bagentic\s+ai\b',
+    r'\bai\s+agent\b',
     r'\bKI-\w+',  # KI-Startup, KI-Firma, KI-Agenten, etc.
+    r'\bAI\b',
+    r'\.ai\b',
 
     # === NLP / Language AI ===
     r'\bnlp\b',
@@ -265,6 +271,9 @@ AI_ROBOTICS_CLIMATE_PATTERNS = [
     r'\bspracherkennung\b',
     r'\bspeech\s+recognition\b',
     r'\btext\s+mining\b',
+    r'\bretrieval\s+augmented\s+generation\b',
+    r'\brag\b',
+    r'\bvector\s+database\b',
 
     # === Computer Vision ===
     r'\bcomputer\s+vision\b',
@@ -280,6 +289,7 @@ AI_ROBOTICS_CLIMATE_PATTERNS = [
     r'\brobotik\b',
     r'\brobotics\b',
     r'\brobotic\b',
+    r'\brobot\b',
     r'\bcobot\b',
     r'\bhumanoide?\b',
     r'\bexoskelett\b',
@@ -289,12 +299,13 @@ AI_ROBOTICS_CLIMATE_PATTERNS = [
     r'\bserviceroboter\b',
     r'\bindustrieroboter\b',
 
-    # === Automation / Autonomous ===
-    r'\bautonomous?\b',
+    # === Autonomous / Process Automation ===
     r'\bautonome\s+(?:systeme|fahrzeuge|fahren)\b',
     r'\bselbstfahrend\b',
     r'\brpa\b',
     r'\bprocess\s+automation\b',
+    r'\brobotic\s+process\s+automation\b',
+    r'\bindustrial\s+automation\b',
     r'\bindustrie\s+4\.0\b',
     r'\bsmart\s+factory\b',
     r'\bdigital(?:er)?\s+zwilling\b',
@@ -307,8 +318,10 @@ AI_ROBOTICS_CLIMATE_PATTERNS = [
     r'\bmlops\b',
     r'\bautoml\b',
     r'\bedge\s+ai\b',
+]
 
-    # === Climate Tech / Cleantech ===
+# Keywords indicating climate tech / cleantech
+CLIMATE_PATTERNS = [
     r'\bcleantech\b',
     r'\bgreentech\b',
     r'\bclimate\s*tech\b',
@@ -337,8 +350,6 @@ AI_ROBOTICS_CLIMATE_PATTERNS = [
     r'\bco2-abscheidung\b',
     r'\bdekarbonisierung\b',
     r'\bdecarbonization\b',
-    r'\bkreislaufwirtschaft\b',
-    r'\bcircular\s+economy\b',
     r'\bsmart\s+grid\b',
     r'\bwärmepumpe\b',
     r'\bheat\s+pump\b',
@@ -346,12 +357,10 @@ AI_ROBOTICS_CLIMATE_PATTERNS = [
     r'\bagritech\b',
     r'\bvertical\s+farming\b',
     r'\bprecision\s+farming\b',
-    r'\bnet\s+zero\b',
-    r'\bklimaneutral\b',
-    r'\bnachhaltigkeit\b',
-    r'\bsustainab\w+\b',
-    r'\besg\b',
 ]
+
+# Combined patterns for backward compatibility
+AI_ROBOTICS_CLIMATE_PATTERNS = AI_ROBOTICS_PATTERNS + CLIMATE_PATTERNS
 
 # Patterns for early-stage / grant / university spinoff detection
 EARLY_STAGE_PATTERNS = [

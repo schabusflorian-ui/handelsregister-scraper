@@ -2,6 +2,7 @@
 AI/Robotics keyword filtering for company classification.
 
 Filters companies based on keyword matches in their name and business purpose.
+Provides separate AI/robotics and climate tech scoring.
 """
 
 import re
@@ -9,14 +10,18 @@ from typing import List, Dict, Optional, Tuple
 from dataclasses import dataclass, field
 
 
-# Default AI/Robotics keywords (German and English)
-# Organized by category for easier maintenance
+# =============================================================================
+# AI / Robotics / Deeptech Keywords
+# =============================================================================
 #
 # DESIGN DECISIONS:
 # - "ki-" and "ai-" prefixes removed: cause false positives (e.g., "Kai-Uwe")
 # - "smart" removed: 90%+ false positives (Smart GmbH, Smart Repair, etc.)
 # - "agv"/"amr" kept but require word boundaries to avoid substring matches
-# - Added standalone " KI " and " AI " patterns (see STANDALONE_PATTERNS below)
+# - "automation"/"autonom" removed as standalone: too many false positives
+#   (building automation, Gebäudeautomation, etc.) — kept only in compounds
+# - Healthcare AI removed: not in scope
+# - Added standalone " AI " and ".ai" domain patterns (see STANDALONE_PATTERNS)
 
 DEFAULT_AI_KEYWORDS = [
     # === AI Core (High Signal) ===
@@ -33,6 +38,17 @@ DEFAULT_AI_KEYWORDS = [
     "large language model",
     "foundation model",
 
+    # === Agentic AI / Modern AI (High Signal) ===
+    "agentic ai",
+    "ai agent",
+    "ki-agent",
+    "diffusion model",
+    "text-to-image",
+    "text-to-video",
+    "retrieval augmented generation",
+    "rag",
+    "vector database",
+
     # === Robotics (High Signal) ===
     "robotik",
     "robotics",
@@ -48,17 +64,17 @@ DEFAULT_AI_KEYWORDS = [
     "drone",
     "uav",
 
-    # === Automation (Medium Signal) ===
-    "automation",
-    "automatisierung",
-    "autonome systeme",
-    "autonomous systems",
-    "autonomous vehicle",
-    "autonomes fahren",
-    "selbstfahrend",
-    "autonom",
-    "rpa",  # Robotic process automation
+    # === Automation & Autonomous (Only compound forms — standalone "automation"/"autonom" removed) ===
+    "rpa",
     "process automation",
+    "robotic process automation",
+    "industrial automation",
+    "autonomes fahren",
+    "autonomous vehicle",
+    "autonomous systems",
+    "autonome systeme",
+    "selbstfahrend",
+    "self-driving",
 
     # === Computer Vision (High Signal) ===
     "computer vision",
@@ -131,13 +147,6 @@ DEFAULT_AI_KEYWORDS = [
     "iot platform",
     "iot analytics",
 
-    # === Healthcare AI ===
-    "medizinische ki",
-    "medical ai",
-    "health ai",
-    "diagnostik ki",
-    "ai diagnostics",
-
     # === Fintech AI ===
     "algorithmic trading",
     "algo trading",
@@ -163,96 +172,6 @@ DEFAULT_AI_KEYWORDS = [
     "sensorfusion",
     "sensor fusion",
 
-    # === Climate Tech / Cleantech ===
-    "cleantech",
-    "clean tech",
-    "greentech",
-    "green tech",
-    "climate tech",
-    "klimatechnologie",
-    "erneuerbare energie",
-    "renewable energy",
-    "solar energy",
-    "solarenergie",
-    "photovoltaik",
-    "photovoltaic",
-    "windenergie",
-    "wind energy",
-    "wind turbine",
-    "windkraft",
-    "wasserstoff",
-    "hydrogen",
-    "grüner wasserstoff",
-    "green hydrogen",
-    "brennstoffzelle",
-    "fuel cell",
-    "elektromobilität",
-    "electromobility",
-    "elektrofahrzeug",
-    "electric vehicle",
-    "ladeinfrastruktur",
-    "charging infrastructure",
-    "energiespeicher",
-    "energy storage",
-    "batterietechnologie",
-    "battery technology",
-    "festkörperbatterie",
-    "solid state battery",
-    "carbon capture",
-    "co2-abscheidung",
-    "co2 capture",
-    "kohlenstoffabscheidung",
-    "co2-reduktion",
-    "dekarbonisierung",
-    "decarbonization",
-    "kreislaufwirtschaft",
-    "circular economy",
-    "nachhaltigkeit",
-    "sustainability",
-    "nachhaltig",
-    "sustainable",
-    "emissionshandel",
-    "carbon trading",
-    "carbon credit",
-    "smart grid",
-    "intelligentes stromnetz",
-    "power grid",
-    "wärmepumpe",
-    "heat pump",
-    "geothermie",
-    "geothermal",
-    "bioenergie",
-    "bioenergy",
-    "biomasse",
-    "biomass",
-    "agritech",
-    "agrartech",
-    "precision farming",
-    "präzisionslandwirtschaft",
-    "vertical farming",
-    "insektenprotein",
-    "alternative protein",
-    "wasseraufbereitung",
-    "water treatment",
-    "water purification",
-    "abfallwirtschaft",
-    "waste management",
-    "recycling technologie",
-    "energieeffizienz",
-    "energy efficiency",
-    "gebäudeenergie",
-    "building energy",
-    "klimaneutral",
-    "climate neutral",
-    "net zero",
-    "netto null",
-    "esg",
-    "impact investing",
-    "green finance",
-    "grüne finanzierung",
-    "carbon footprint",
-    "co2-fußabdruck",
-
     # === Deeptech / Research ===
     "quantum computing",
     "quantencomputer",
@@ -275,14 +194,118 @@ DEFAULT_AI_KEYWORDS = [
     "wirkstoffforschung",
 ]
 
+
+# =============================================================================
+# Climate Tech / Cleantech Keywords (separate scoring)
+# =============================================================================
+#
+# EXCLUDED (too generic / false-positive-heavy):
+# - nachhaltigkeit, sustainability, nachhaltig, sustainable
+# - kreislaufwirtschaft, circular economy (matches waste disposal)
+# - esg, impact investing, green finance (financial, not tech)
+# - abfallwirtschaft, waste management, recycling technologie (traditional)
+# - biomasse, biomass, bioenergie, bioenergy (traditional energy)
+
+DEFAULT_CLIMATE_KEYWORDS = [
+    # === Core Climate Tech ===
+    "cleantech",
+    "clean tech",
+    "greentech",
+    "green tech",
+    "climate tech",
+    "klimatechnologie",
+
+    # === Renewable Energy ===
+    "erneuerbare energie",
+    "renewable energy",
+    "solar energy",
+    "solarenergie",
+    "photovoltaik",
+    "photovoltaic",
+    "windenergie",
+    "wind energy",
+    "wind turbine",
+    "windkraft",
+
+    # === Hydrogen / Fuel Cells ===
+    "wasserstoff",
+    "hydrogen",
+    "grüner wasserstoff",
+    "green hydrogen",
+    "brennstoffzelle",
+    "fuel cell",
+
+    # === E-Mobility ===
+    "elektromobilität",
+    "electromobility",
+    "elektrofahrzeug",
+    "electric vehicle",
+    "ladeinfrastruktur",
+    "charging infrastructure",
+
+    # === Energy Storage / Batteries ===
+    "energiespeicher",
+    "energy storage",
+    "batterietechnologie",
+    "battery technology",
+    "festkörperbatterie",
+    "solid state battery",
+
+    # === Carbon / Decarbonization ===
+    "carbon capture",
+    "co2-abscheidung",
+    "co2 capture",
+    "kohlenstoffabscheidung",
+    "co2-reduktion",
+    "dekarbonisierung",
+    "decarbonization",
+    "emissionshandel",
+    "carbon trading",
+    "carbon credit",
+    "carbon footprint",
+    "co2-fußabdruck",
+
+    # === Grid / Heat ===
+    "smart grid",
+    "intelligentes stromnetz",
+    "power grid",
+    "wärmepumpe",
+    "heat pump",
+    "geothermie",
+    "geothermal",
+
+    # === AgriTech / Food ===
+    "agritech",
+    "agrartech",
+    "precision farming",
+    "präzisionslandwirtschaft",
+    "vertical farming",
+    "insektenprotein",
+    "alternative protein",
+
+    # === Water ===
+    "wasseraufbereitung",
+    "water treatment",
+    "water purification",
+
+    # === Energy Efficiency ===
+    "energieeffizienz",
+    "energy efficiency",
+    "gebäudeenergie",
+    "building energy",
+    "klimaneutral",
+    "climate neutral",
+    "net zero",
+    "netto null",
+]
+
+
 # Standalone patterns that need special regex handling
-# These catch "AI" and "KI" as standalone words without matching prefixes
-# NOTE: ML removed because it's too common as company initials (e.g., "ML Schiffsinvest")
-# NOTE: KI removed - too many false positives (Hap-Ki-Do, Mu-Ki-Va, etc.)
-# KI is better matched as part of longer phrases like "künstliche intelligenz"
+# These catch "AI" as standalone word and .ai domains
 STANDALONE_AI_PATTERNS = [
     r'\bAI\b',           # Matches " AI " but not "HAIR" or "FAIR"
-    # KI removed due to false positives with hyphenated words
+    r'\.ai\b',           # Matches .ai domains (e.g., "company.ai")
+    r'\brobot\b',        # Standalone "robot"
 ]
 
 # High-signal keywords that strongly indicate AI/Robotics focus
@@ -300,13 +323,17 @@ HIGH_SIGNAL_KEYWORDS = [
     "nlp",
     "neural network",
     "neuronale netze",
-    "autonomous",
-    "autonom",
     "generative ai",
     "chatbot",
     "ai platform",
     "ki plattform",
-    # Climate/Cleantech high-signal
+    "agentic ai",
+    "large language model",
+    "diffusion model",
+]
+
+# High-signal climate keywords for bonus scoring
+HIGH_SIGNAL_CLIMATE_KEYWORDS = [
     "cleantech",
     "greentech",
     "climate tech",
@@ -314,8 +341,6 @@ HIGH_SIGNAL_KEYWORDS = [
     "green hydrogen",
     "carbon capture",
     "dekarbonisierung",
-    "circular economy",
-    "kreislaufwirtschaft",
     "brennstoffzelle",
     "fuel cell",
     "solid state battery",
@@ -324,7 +349,6 @@ HIGH_SIGNAL_KEYWORDS = [
 
 # Keywords to use for Handelsregister portal searches
 # These are optimized for the search interface (single words work better)
-# Note: "smart" removed due to high false positive rate
 SEARCH_KEYWORDS_GERMAN = [
     # Core AI terms (highest priority)
     "künstliche intelligenz",
@@ -339,9 +363,6 @@ SEARCH_KEYWORDS_GERMAN = [
     "roboter",
     "robotics",
     "cobot",
-    "automation",
-    "automatisierung",
-    "autonom",
 
     # NLP/Language
     "chatbot",
@@ -366,8 +387,10 @@ SEARCH_KEYWORDS_GERMAN = [
     # General (kept selective)
     "intelligent",
     "cognitive",
+]
 
-    # Climate Tech / Cleantech
+# Separate search keywords for climate tech discovery
+SEARCH_KEYWORDS_CLIMATE = [
     "cleantech",
     "greentech",
     "wasserstoff",
@@ -381,8 +404,6 @@ SEARCH_KEYWORDS_GERMAN = [
     "elektromobilität",
     "ladeinfrastruktur",
     "dekarbonisierung",
-    "kreislaufwirtschaft",
-    "nachhaltigkeit",
     "klimaneutral",
     "wärmepumpe",
     "geothermie",
@@ -405,8 +426,8 @@ TECH_CATEGORIES = {
         'voice ai', 'text mining', 'sentiment analysis', 'llm',
     ],
     'robotics': [
-        'robotik', 'robotics', 'autonomous', 'drone', 'drohne', 'drohnen',
-        'cobots', 'cobot', 'industrial automation', 'roboter', 'autonom',
+        'robotik', 'robotics', 'robot', 'drone', 'drohne', 'drohnen',
+        'cobots', 'cobot', 'industrial automation', 'roboter',
         'exoskelett', 'humanoid', 'humanoide', 'agv', 'amr',
         'serviceroboter', 'industrieroboter', 'uav',
     ],
@@ -420,7 +441,8 @@ TECH_CATEGORIES = {
     'generative_ai': [
         'generative ai', 'generative ki', 'llm', 'large language model',
         'foundation model', 'transformer', 'gpt', 'stable diffusion',
-        'text generation', 'image generation',
+        'text generation', 'image generation', 'diffusion model',
+        'text-to-image', 'text-to-video', 'agentic ai', 'ai agent',
     ],
     'autonomous_systems': [
         'autonomous vehicle', 'autonomes fahren', 'selbstfahrend',
@@ -431,10 +453,6 @@ TECH_CATEGORIES = {
         'industrie 4.0', 'industry 4.0', 'smart factory', 'smart manufacturing',
         'digital twin', 'digitaler zwilling', 'cyber physical', 'iot analytics',
         'predictive maintenance',
-    ],
-    'healthcare_ai': [
-        'medical ai', 'medizinische ki', 'health ai', 'diagnostik',
-        'radiologie', 'pathologie', 'healthcare analytics',
     ],
     'fintech_ai': [
         'algorithmic trading', 'algo trading', 'quantitative', 'robo advisor',
@@ -458,10 +476,9 @@ TECH_CATEGORIES = {
         'windenergie', 'wind energy', 'wasserstoff', 'hydrogen',
         'brennstoffzelle', 'fuel cell', 'elektromobilität', 'electric vehicle',
         'energiespeicher', 'energy storage', 'batterie', 'carbon capture',
-        'co2', 'dekarbonisierung', 'decarbonization', 'kreislaufwirtschaft',
-        'circular economy', 'nachhaltigkeit', 'sustainability', 'smart grid',
-        'wärmepumpe', 'heat pump', 'geothermie', 'agritech', 'agrartech',
-        'vertical farming', 'net zero', 'klimaneutral', 'esg',
+        'co2', 'dekarbonisierung', 'decarbonization',
+        'smart grid', 'wärmepumpe', 'heat pump', 'geothermie',
+        'agritech', 'agrartech', 'vertical farming', 'net zero', 'klimaneutral',
     ],
 }
 
@@ -470,6 +487,7 @@ TECH_CATEGORIES = {
 class FilterConfig:
     """Configuration for company filtering."""
     ai_robotics_keywords: List[str] = field(default_factory=lambda: DEFAULT_AI_KEYWORDS.copy())
+    climate_keywords: List[str] = field(default_factory=lambda: DEFAULT_CLIMATE_KEYWORDS.copy())
     min_relevance_score: int = 1
     recent_months: Optional[int] = 24
     allowed_statuses: List[str] = field(default_factory=lambda: ['active', 'ACTIVE', 'currently registered'])
@@ -483,6 +501,7 @@ class FilterResult:
     """Result of filtering a company."""
     passes: bool
     relevance_score: int
+    climate_score: int
     matched_keywords: List[str]
     tech_categories: List[str]
     rejection_reason: Optional[str] = None
@@ -490,26 +509,35 @@ class FilterResult:
 
 class AIRoboticsFilter:
     """
-    Filter companies by AI/robotics relevance.
+    Filter companies by AI/robotics and climate tech relevance.
 
     Analyzes company names and business purposes to identify
-    AI and robotics related companies.
+    AI, robotics, deeptech, and climate tech companies.
 
-    Scoring:
+    AI/Robotics Scoring:
     - Each keyword match: +1 point
     - High-signal keyword match: +1 bonus point
-    - Standalone AI/KI/ML match: +2 points (strong signal)
-    - Multiple categories matched: indicates broader AI/robotics focus
+    - Standalone AI/.ai/robot match: +2 points (strong signal)
+
+    Climate Scoring (separate):
+    - Each keyword match: +1 point
+    - High-signal climate keyword: +1 bonus point
     """
 
     def __init__(self, config: Optional[FilterConfig] = None):
         self.config = config or FilterConfig()
 
-        # Pre-compile patterns for efficiency
+        # Pre-compile AI keyword patterns
         self._keyword_patterns = []
         for kw in self.config.ai_robotics_keywords:
             pattern = re.compile(rf'\b{re.escape(kw)}\b', re.IGNORECASE)
             self._keyword_patterns.append((kw, pattern))
+
+        # Pre-compile climate keyword patterns
+        self._climate_keyword_patterns = []
+        for kw in self.config.climate_keywords:
+            pattern = re.compile(rf'\b{re.escape(kw)}\b', re.IGNORECASE)
+            self._climate_keyword_patterns.append((kw, pattern))
 
         # Pre-compile high-signal patterns for bonus scoring
         self._high_signal_patterns = []
@@ -517,7 +545,13 @@ class AIRoboticsFilter:
             pattern = re.compile(rf'\b{re.escape(kw)}\b', re.IGNORECASE)
             self._high_signal_patterns.append((kw, pattern))
 
-        # Pre-compile standalone AI/KI/ML patterns
+        # Pre-compile high-signal climate patterns
+        self._high_signal_climate_patterns = []
+        for kw in HIGH_SIGNAL_CLIMATE_KEYWORDS:
+            pattern = re.compile(rf'\b{re.escape(kw)}\b', re.IGNORECASE)
+            self._high_signal_climate_patterns.append((kw, pattern))
+
+        # Pre-compile standalone AI patterns
         self._standalone_patterns = []
         for pattern_str in STANDALONE_AI_PATTERNS:
             pattern = re.compile(pattern_str, re.IGNORECASE)
@@ -525,16 +559,16 @@ class AIRoboticsFilter:
 
     def calculate_relevance_score(self, text: str) -> int:
         """
-        Calculate AI/robotics relevance score.
+        Calculate AI/robotics relevance score (excludes climate).
 
         Args:
             text: Company name + purpose text
 
         Returns:
-            Relevance score (0+):
+            AI/robotics relevance score (0+):
             - Each unique keyword match: +1
             - Each high-signal keyword: +1 bonus
-            - Standalone AI/KI/ML: +2 (strong indicator)
+            - Standalone AI/.ai/robot: +2 (strong indicator)
         """
         if not text:
             return 0
@@ -553,16 +587,46 @@ class AIRoboticsFilter:
             if pattern.search(text) and kw in matched_keywords:
                 score += 1  # Bonus point for high-signal match
 
-        # Check standalone AI/KI/ML patterns (strong signals)
+        # Check standalone AI/robot patterns (strong signals)
         for pattern_name, pattern in self._standalone_patterns:
             if pattern.search(text):
                 matched_keywords.add(pattern_name)
-                score += 2  # Strong signal for standalone AI/KI/ML
+                score += 2  # Strong signal for standalone AI/.ai/robot
+
+        return score
+
+    def calculate_climate_score(self, text: str) -> int:
+        """
+        Calculate climate tech relevance score (separate from AI).
+
+        Args:
+            text: Company name + purpose text
+
+        Returns:
+            Climate tech score (0+):
+            - Each unique keyword match: +1
+            - Each high-signal climate keyword: +1 bonus
+        """
+        if not text:
+            return 0
+
+        score = 0
+        matched_keywords = set()
+
+        for kw, pattern in self._climate_keyword_patterns:
+            if pattern.search(text):
+                matched_keywords.add(kw)
+                score += 1
+
+        # Add bonus for high-signal climate keywords
+        for kw, pattern in self._high_signal_climate_patterns:
+            if pattern.search(text) and kw in matched_keywords:
+                score += 1
 
         return score
 
     def get_matched_keywords(self, text: str) -> List[str]:
-        """Return list of matched keywords including standalone AI/KI/ML."""
+        """Return list of matched AI keywords including standalone patterns."""
         if not text:
             return []
 
@@ -574,9 +638,13 @@ class AIRoboticsFilter:
         # Also check standalone patterns
         for pattern_name, pattern in self._standalone_patterns:
             if pattern.search(text):
-                # Convert pattern to readable form
                 readable = pattern_name.replace(r'\b', '').upper()
-                matched.append(f"[{readable}]")  # Mark as standalone match
+                matched.append(f"[{readable}]")
+
+        # Also include climate keyword matches (tagged)
+        for keyword, pattern in self._climate_keyword_patterns:
+            if pattern.search(text):
+                matched.append(f"[climate] {keyword}")
 
         return matched
 
@@ -617,26 +685,29 @@ class AIRoboticsFilter:
             legal_form: Legal form (GmbH, AG, etc.)
 
         Returns:
-            FilterResult with pass/fail and details
+            FilterResult with pass/fail, AI score, climate score, and details
         """
         from datetime import datetime, timedelta
 
         # Combine name and purpose for keyword matching
         text = f"{name} {purpose or ''}"
 
-        # Calculate relevance
+        # Calculate both scores
         score = self.calculate_relevance_score(text)
+        climate_score = self.calculate_climate_score(text)
         matched_keywords = self.get_matched_keywords(text)
         tech_categories = self.classify_tech_categories(text)
 
-        # Check relevance score
-        if score < self.config.min_relevance_score:
+        # Company passes if either AI or climate score meets threshold
+        combined_score = score + climate_score
+        if combined_score < self.config.min_relevance_score:
             return FilterResult(
                 passes=False,
                 relevance_score=score,
+                climate_score=climate_score,
                 matched_keywords=matched_keywords,
                 tech_categories=tech_categories,
-                rejection_reason=f'Low relevance score: {score} < {self.config.min_relevance_score}'
+                rejection_reason=f'Low combined score: {combined_score} < {self.config.min_relevance_score}'
             )
 
         # Check status
@@ -647,6 +718,7 @@ class AIRoboticsFilter:
                 return FilterResult(
                     passes=False,
                     relevance_score=score,
+                    climate_score=climate_score,
                     matched_keywords=matched_keywords,
                     tech_categories=tech_categories,
                     rejection_reason=f'Status not allowed: {status}'
@@ -658,6 +730,7 @@ class AIRoboticsFilter:
                 return FilterResult(
                     passes=False,
                     relevance_score=score,
+                    climate_score=climate_score,
                     matched_keywords=matched_keywords,
                     tech_categories=tech_categories,
                     rejection_reason=f'City not in filter: {city}'
@@ -669,6 +742,7 @@ class AIRoboticsFilter:
                 return FilterResult(
                     passes=False,
                     relevance_score=score,
+                    climate_score=climate_score,
                     matched_keywords=matched_keywords,
                     tech_categories=tech_categories,
                     rejection_reason=f'Legal form not in filter: {legal_form}'
@@ -680,6 +754,7 @@ class AIRoboticsFilter:
                 return FilterResult(
                     passes=False,
                     relevance_score=score,
+                    climate_score=climate_score,
                     matched_keywords=matched_keywords,
                     tech_categories=tech_categories,
                     rejection_reason=f'Capital below minimum: {capital} < {self.config.min_capital}'
@@ -694,35 +769,37 @@ class AIRoboticsFilter:
                     return FilterResult(
                         passes=False,
                         relevance_score=score,
+                        climate_score=climate_score,
                         matched_keywords=matched_keywords,
                         tech_categories=tech_categories,
                         rejection_reason=f'Registration too old: {registration_date}'
                     )
             except (ValueError, TypeError):
-                # Can't parse date, skip this filter
                 pass
 
         # All filters passed
         return FilterResult(
             passes=True,
             relevance_score=score,
+            climate_score=climate_score,
             matched_keywords=matched_keywords,
             tech_categories=tech_categories,
         )
 
     def quick_filter(self, name: str, purpose: Optional[str] = None) -> bool:
         """
-        Quick check if company name/purpose contains any AI keywords.
+        Quick check if company name/purpose contains any relevant keywords.
 
         Use this for fast filtering during bulk processing.
         """
         text = f"{name} {purpose or ''}"
-        return self.calculate_relevance_score(text) >= self.config.min_relevance_score
+        ai = self.calculate_relevance_score(text)
+        climate = self.calculate_climate_score(text)
+        return (ai + climate) >= self.config.min_relevance_score
 
 
 def extract_legal_form(name: str) -> Optional[str]:
     """Extract legal form from company name."""
-    # Common German legal forms (order matters - check longer forms first)
     legal_forms = [
         'GmbH & Co. KG',
         'GmbH & Co. KGaA',

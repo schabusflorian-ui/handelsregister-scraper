@@ -115,8 +115,8 @@ class TestAIRoboticsFilterScoring:
         """High-signal keywords add bonus points."""
         # 'machine learning' is high-signal, should get bonus
         high_signal = filter_instance.calculate_relevance_score("Machine Learning GmbH")
-        # 'automation' is medium-signal, no bonus
-        medium_signal = filter_instance.calculate_relevance_score("Automation GmbH")
+        # 'data science' is medium-signal (no bonus)
+        medium_signal = filter_instance.calculate_relevance_score("Data Science GmbH")
 
         # High-signal gets +1 base +1 bonus = 2, medium-signal gets +1 base = 1
         assert high_signal >= 2, f"High-signal should score >= 2, got {high_signal}"
@@ -181,11 +181,16 @@ class TestAIRoboticsFilterCategories:
             "Robotik Automation GmbH",
             "Cobot Solutions AG",
             "Drone Technology UG",
-            "Autonomous Systems GmbH",
         ]
         for name in names:
             categories = filter_instance.classify_tech_categories(name)
             assert "robotics" in categories, f"'{name}' should be robotics"
+
+    def test_autonomous_systems_classification(self, filter_instance):
+        """Autonomous systems keywords -> autonomous_systems category."""
+        name = "Autonomous Systems GmbH"
+        categories = filter_instance.classify_tech_categories(name)
+        assert "autonomous_systems" in categories, f"'{name}' should be autonomous_systems"
 
     def test_multiple_categories(self, filter_instance):
         """Company matching multiple categories."""
@@ -221,7 +226,7 @@ class TestAIRoboticsFilterFullFiltering:
         )
         assert result.passes is False
         assert result.relevance_score == 0
-        assert "Low relevance score" in result.rejection_reason
+        assert "Low combined score" in result.rejection_reason
 
     def test_filter_respects_status(self, filter_instance):
         """Filter rejects inactive companies."""

@@ -290,6 +290,7 @@ class NewsMonitoringJob:
                 source='news',
                 legal_form=legal_form,
                 ai_robotics_score=filter_result.relevance_score,
+                climate_score=filter_result.climate_score,
                 matched_keywords=filter_result.matched_keywords if filter_result.matched_keywords else None,
                 tech_categories=filter_result.tech_categories if filter_result.tech_categories else None,
                 startup_score=startup_result.total_score,

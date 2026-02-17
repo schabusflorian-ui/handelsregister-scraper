@@ -163,6 +163,7 @@ async def companies_list(
     min_score: Optional[str] = None,  # Accept string, parse manually
     classification: Optional[str] = None,
     has_website: Optional[str] = None,  # Accept string, parse manually
+    min_climate: Optional[str] = None,  # Accept string, parse manually
     contacted: Optional[str] = None,  # 'yes', 'no', or None for all
     viewed: Optional[str] = None,     # 'yes', 'no', or None for all
     relevance: Optional[str] = None,  # 'relevant', 'irrelevant', 'unscreened', or None
@@ -175,6 +176,7 @@ async def companies_list(
     # Parse string params that may be empty
     year_int = int(year) if year and year.isdigit() else None
     min_score_int = int(min_score) if min_score and min_score.lstrip('-').isdigit() else None
+    min_climate_int = int(min_climate) if min_climate and min_climate.lstrip('-').isdigit() else None
     has_website_bool = has_website == 'true' if has_website else None
 
     db = get_db()
@@ -203,6 +205,9 @@ async def companies_list(
         if min_score_int is not None:
             conditions.append("ai_robotics_score >= ?")
             params.append(min_score_int)
+        if min_climate_int is not None:
+            conditions.append("climate_score >= ?")
+            params.append(min_climate_int)
         if classification:
             conditions.append("startup_classification = ?")
             params.append(classification)
@@ -233,6 +238,7 @@ async def companies_list(
             'state': 'state',
             'year': 'first_seen_date',
             'ai_score': 'ai_robotics_score',
+            'climate_score': 'climate_score',
             'classification': 'startup_classification',
             'startup_score': 'startup_score',
             'capital': 'capital_amount',
@@ -316,6 +322,7 @@ async def companies_list(
         if state: filter_params["state"] = state
         if legal_form: filter_params["legal_form"] = legal_form
         if min_score: filter_params["min_score"] = min_score
+        if min_climate: filter_params["min_climate"] = min_climate
         if classification: filter_params["classification"] = classification
         if has_website: filter_params["has_website"] = "true"
         if contacted: filter_params["contacted"] = contacted
@@ -343,6 +350,7 @@ async def companies_list(
             "legal_form": legal_form or "",
             "year": year or "",
             "min_score": min_score or "",
+            "min_climate": min_climate or "",
             "classification": classification or "",
             "has_website": has_website or "",
             "contacted": contacted or "",
