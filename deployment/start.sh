@@ -27,10 +27,10 @@ echo "Scheduler started with PID: $SCHEDULER_PID"
 
 # Start stealth scraper in background (founder discovery)
 echo "Starting stealth scraper (background)..."
-python3 run_stealth.py \
+python3 -u run_stealth.py \
     --engine curl \
     --delay "${STEALTH_DELAY:-90}" \
-    &> /tmp/stealth_scraper.log &
+    2>&1 &
 STEALTH_PID=$!
 echo "Stealth scraper started with PID: $STEALTH_PID"
 
