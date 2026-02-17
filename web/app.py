@@ -267,6 +267,21 @@ async def companies_list(
 
         total_pages = (total + per_page - 1) // per_page
 
+        # Build filter query string for pagination links (exclude empty values)
+        filter_params = {}
+        if q: filter_params["q"] = q
+        if year: filter_params["year"] = year
+        if city: filter_params["city"] = city
+        if state: filter_params["state"] = state
+        if legal_form: filter_params["legal_form"] = legal_form
+        if min_score: filter_params["min_score"] = min_score
+        if classification: filter_params["classification"] = classification
+        if has_website: filter_params["has_website"] = "true"
+        if contacted: filter_params["contacted"] = contacted
+        if viewed: filter_params["viewed"] = viewed
+        from urllib.parse import urlencode
+        filter_qs = urlencode(filter_params)
+
         return templates.TemplateResponse("companies.html", {
             "request": request,
             "companies": companies,
@@ -278,12 +293,13 @@ async def companies_list(
             "city": city or "",
             "state": state or "",
             "legal_form": legal_form or "",
-            "year": year,
-            "min_score": min_score,
+            "year": year or "",
+            "min_score": min_score or "",
             "classification": classification or "",
-            "has_website": has_website,
+            "has_website": has_website or "",
             "contacted": contacted or "",
             "viewed": viewed or "",
+            "filter_qs": filter_qs,
             "cities": cities,
             "states": states,
             "legal_forms": legal_forms,
@@ -651,6 +667,22 @@ async def export_csv(
         )
     finally:
         db.close()
+
+
+@app.get("/export/db")
+async def export_db():
+    """Download the raw SQLite database file."""
+    from fastapi.responses import FileResponse
+
+    db_path = os.path.abspath(DB_PATH)
+    if not os.path.exists(db_path):
+        raise HTTPException(status_code=404, detail="Database file not found")
+
+    return FileResponse(
+        db_path,
+        media_type="application/x-sqlite3",
+        headers={"Content-Disposition": "attachment; filename=handelsregister.db"},
+    )
 
 
 # API endpoints for HTMX partial updates

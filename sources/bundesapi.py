@@ -105,6 +105,7 @@ class SearchResult:
     registry_type: str
     status: Optional[str]
     state: Optional[str]
+    city: Optional[str] = None
     row_index: Optional[int] = None  # Index in search results for VO fetching
 
 
@@ -521,6 +522,7 @@ class BundesAPISource:
                     registry_type=registry_type,
                     status=normalized_status if normalized_status else None,
                     state=state if state else None,  # Don't use city as state fallback
+                    city=city if city else None,
                     row_index=row_index,
                 ))
 

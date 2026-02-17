@@ -278,12 +278,17 @@ class NewsMonitoringJob:
         if existing:
             return existing['id']
 
+        # Extract legal form from company name
+        from processing.filters import extract_legal_form
+        legal_form = extract_legal_form(company_name)
+
         # Insert company
         try:
             company_id = self.db.insert_company(
                 company_number=company_number,
                 name=company_name,
                 source='news',
+                legal_form=legal_form,
                 ai_robotics_score=filter_result.relevance_score,
                 matched_keywords=filter_result.matched_keywords if filter_result.matched_keywords else None,
                 tech_categories=filter_result.tech_categories if filter_result.tech_categories else None,
@@ -410,6 +415,7 @@ class NewsMonitoringJob:
                 'registry_type': best.registry_type,
                 'current_status': best.status,
                 'state': best.state,
+                'city': best.city,
             }
 
             # Update the company_number to reflect registry data

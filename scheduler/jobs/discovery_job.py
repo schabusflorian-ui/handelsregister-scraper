@@ -247,6 +247,10 @@ class DiscoveryJob:
             ai_relevance_score=filter_result.relevance_score
         )
 
+        # Extract legal form from company name
+        from processing.filters import extract_legal_form
+        legal_form = extract_legal_form(result.name)
+
         # Insert new company
         company_id = self.db.insert_company(
             company_number=f"bundesapi_{hash(result.native_company_number) & 0xFFFFFFFF:08x}",
@@ -257,6 +261,8 @@ class DiscoveryJob:
             registry_court=result.registry_court,
             registry_type=result.registry_type,
             state=result.state,
+            city=result.city,
+            legal_form=legal_form,
             ai_robotics_score=filter_result.relevance_score,
             matched_keywords=filter_result.matched_keywords,
             tech_categories=filter_result.tech_categories,

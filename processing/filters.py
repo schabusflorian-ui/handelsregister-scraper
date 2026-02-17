@@ -729,6 +729,7 @@ def extract_legal_form(name: str) -> Optional[str]:
         'AG & Co. KG',
         'UG (haftungsbeschränkt) & Co. KG',
         'UG (haftungsbeschränkt)',
+        'gGmbH',
         'GmbH',
         'AG',
         'KGaA',

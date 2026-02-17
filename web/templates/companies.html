@@ -32,7 +32,7 @@
                         class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
                         <option value="">All years</option>
                         {% for y in years %}
-                        <option value="{{ y.year }}" {% if year == y.year|int %}selected{% endif %}>
+                        <option value="{{ y.year }}" {% if year == y.year|string %}selected{% endif %}>
                             {{ y.year }} ({{ y.count }})
                         </option>
                         {% endfor %}
@@ -255,13 +255,13 @@
             </div>
             <div class="flex space-x-2">
                 {% if page > 1 %}
-                <a href="?q={{ q }}&year={{ year or '' }}&city={{ city }}&state={{ state }}&legal_form={{ legal_form }}&min_score={{ min_score or '' }}&classification={{ classification }}&has_website={{ 'true' if has_website else '' }}&contacted={{ contacted }}&viewed={{ viewed }}&page={{ page - 1 }}"
+                <a href="?{{ filter_qs }}&page={{ page - 1 }}"
                     class="relative inline-flex items-center rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 ring-1 ring-inset ring-gray-300 hover:bg-gray-50">
                     Previous
                 </a>
                 {% endif %}
                 {% if page < total_pages %}
-                <a href="?q={{ q }}&year={{ year or '' }}&city={{ city }}&state={{ state }}&legal_form={{ legal_form }}&min_score={{ min_score or '' }}&classification={{ classification }}&has_website={{ 'true' if has_website else '' }}&contacted={{ contacted }}&viewed={{ viewed }}&page={{ page + 1 }}"
+                <a href="?{{ filter_qs }}&page={{ page + 1 }}"
                     class="relative inline-flex items-center rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 ring-1 ring-inset ring-gray-300 hover:bg-gray-50">
                     Next
                 </a>
