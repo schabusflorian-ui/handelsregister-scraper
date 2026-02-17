@@ -43,6 +43,7 @@ class Company:
     tech_categories: Optional[str]
     startup_score: int  # Startup likelihood score
     startup_classification: Optional[str]  # 'startup', 'tech_company', 'traditional'
+    brand_name_score: int  # Brand name heuristic score (non-German name = likely startup)
     source: str
     first_seen_date: Optional[str]
     last_updated: Optional[str]
@@ -453,6 +454,21 @@ class Database:
             )
         ''')
 
+        # Scan state — tracks high-water marks for register number scanning
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS scan_state (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                court_code TEXT NOT NULL,
+                registry_type TEXT NOT NULL DEFAULT 'HRB',
+                last_scanned_number INTEGER NOT NULL DEFAULT 0,
+                last_scan_at TEXT,
+                total_scanned INTEGER NOT NULL DEFAULT 0,
+                total_found INTEGER NOT NULL DEFAULT 0,
+                UNIQUE(court_code, registry_type)
+            )
+        ''')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_scan_state_court ON scan_state(court_code, registry_type)')
+
         self.conn.commit()
 
         # Migration: add is_early_stage_related column if table exists without it
@@ -500,10 +516,12 @@ class Database:
                 ('notes', 'TEXT'),
                 ('relevance', 'TEXT'),
                 ('climate_score', 'INTEGER DEFAULT 0'),
+                ('brand_name_score', 'INTEGER DEFAULT 0'),
             ]:
                 if col not in columns and columns:
                     cursor.execute(f"ALTER TABLE companies ADD COLUMN {col} {col_type}")
             cursor.execute('CREATE INDEX IF NOT EXISTS idx_companies_climate_score ON companies(climate_score)')
+            cursor.execute('CREATE INDEX IF NOT EXISTS idx_companies_brand_name_score ON companies(brand_name_score)')
             self.conn.commit()
         except Exception:
             pass
@@ -558,6 +576,7 @@ class Database:
         tech_categories: Optional[List[str]] = None,
         startup_score: int = 0,
         startup_classification: Optional[str] = None,
+        brand_name_score: int = 0,
     ) -> int:
         """
         Insert a new company record.
@@ -575,8 +594,9 @@ class Database:
                 street, postal_code, city, state, purpose, website,
                 capital_amount, capital_currency, ai_robotics_score, climate_score,
                 matched_keywords, tech_categories, startup_score, startup_classification,
+                brand_name_score,
                 source, first_seen_date, last_updated, enrichment_status
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ''', (
             company_number, native_company_number, name, legal_form,
             current_status, registry_court, registry_type, registration_date,
@@ -585,6 +605,7 @@ class Database:
             json.dumps(matched_keywords) if matched_keywords else None,
             json.dumps(tech_categories) if tech_categories else None,
             startup_score, startup_classification,
+            brand_name_score,
             source, now, now, 'pending'
         ))
 
@@ -1452,6 +1473,83 @@ class Database:
             LIMIT ?
         ''', (f'%{name_pattern}%', limit))
         return [dict(row) for row in cursor.fetchall()]
+
+    # =========================================================================
+    # Scan State (high-water mark for register number scanning)
+    # =========================================================================
+
+    def get_scan_watermark(self, court_code: str, registry_type: str = 'HRB') -> int:
+        """
+        Get the last scanned register number for a court.
+
+        Returns 0 if no scan has been performed yet.
+        """
+        cursor = self.conn.execute(
+            'SELECT last_scanned_number FROM scan_state WHERE court_code = ? AND registry_type = ?',
+            (court_code, registry_type),
+        )
+        row = cursor.fetchone()
+        return row[0] if row else 0
+
+    def set_scan_watermark(
+        self,
+        court_code: str,
+        last_scanned_number: int,
+        registry_type: str = 'HRB',
+        scanned_count: int = 0,
+        found_count: int = 0,
+    ):
+        """
+        Update the high-water mark for a court's register scan.
+
+        Uses INSERT OR REPLACE to create or update the watermark.
+        Accumulates total_scanned and total_found counts.
+        """
+        now = datetime.now().isoformat()
+
+        # Try to get existing stats to accumulate
+        cursor = self.conn.execute(
+            'SELECT total_scanned, total_found FROM scan_state WHERE court_code = ? AND registry_type = ?',
+            (court_code, registry_type),
+        )
+        row = cursor.fetchone()
+        if row:
+            total_scanned = row[0] + scanned_count
+            total_found = row[1] + found_count
+            self.conn.execute('''
+                UPDATE scan_state
+                SET last_scanned_number = ?, last_scan_at = ?,
+                    total_scanned = ?, total_found = ?
+                WHERE court_code = ? AND registry_type = ?
+            ''', (last_scanned_number, now, total_scanned, total_found,
+                  court_code, registry_type))
+        else:
+            self.conn.execute('''
+                INSERT INTO scan_state (court_code, registry_type, last_scanned_number,
+                                       last_scan_at, total_scanned, total_found)
+                VALUES (?, ?, ?, ?, ?, ?)
+            ''', (court_code, registry_type, last_scanned_number, now,
+                  scanned_count, found_count))
+
+        self.conn.commit()
+
+    def get_all_scan_states(self) -> List[Dict]:
+        """Get all scan states for display/reporting."""
+        cursor = self.conn.execute(
+            'SELECT court_code, registry_type, last_scanned_number, last_scan_at, '
+            'total_scanned, total_found FROM scan_state ORDER BY court_code'
+        )
+        return [
+            {
+                'court_code': row[0],
+                'registry_type': row[1],
+                'last_scanned_number': row[2],
+                'last_scan_at': row[3],
+                'total_scanned': row[4],
+                'total_found': row[5],
+            }
+            for row in cursor.fetchall()
+        ]
 
     def close(self):
         """Close database connection."""

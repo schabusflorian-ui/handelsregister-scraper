@@ -7,6 +7,7 @@ Usage:
     python -m scheduler.main --run-now          # Start and run jobs immediately
     python -m scheduler.main --discovery-only   # Run single discovery job
     python -m scheduler.main --backfill-only    # Run single backfill job
+    python -m scheduler.main --regscan-only     # Run single registration scan job
     python -m scheduler.main --status           # Show status
 """
 
@@ -21,6 +22,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from scheduler.scheduler import run_scheduler, HandelsregisterScheduler
 from scheduler.jobs.discovery_job import run_discovery_job
 from scheduler.jobs.backfill_job import run_backfill_job
+from scheduler.jobs.registration_scan_job import run_registration_scan_job
 from scheduler.rate_limiter import print_rate_limit_status
 
 
@@ -47,6 +49,10 @@ def main():
     parser.add_argument(
         '--backfill-only', action='store_true',
         help='Run single backfill job and exit'
+    )
+    parser.add_argument(
+        '--regscan-only', action='store_true',
+        help='Run single registration scan job and exit'
     )
     parser.add_argument(
         '--status', action='store_true',
@@ -122,6 +128,22 @@ def main():
         except:
             print("\nBackfill Progress: Not initialized")
 
+        # Registration scan watermarks
+        try:
+            scan_states = db.get_all_scan_states()
+            if scan_states:
+                print("\nRegistration Scan Watermarks:")
+                for s in scan_states:
+                    print(f"  {s['court_code']} ({s['registry_type']}): "
+                          f"last_scanned={s['last_scanned_number']}, "
+                          f"total_scanned={s['total_scanned']}, "
+                          f"total_found={s['total_found']}, "
+                          f"last_scan={s['last_scan_at'] or 'never'}")
+            else:
+                print("\nRegistration Scan: No watermarks (will auto-bootstrap on first run)")
+        except:
+            print("\nRegistration Scan: Not initialized")
+
         # Recent jobs
         try:
             conn = db._get_connection()
@@ -173,6 +195,20 @@ def main():
         print(f"  New companies: {stats['companies_new']}")
         print(f"  Requests used: {stats['requests_used']}")
         print(f"  Overall progress: {stats['progress_percent']:.1f}%")
+        return
+
+    if args.regscan_only:
+        print("Running single registration scan job...")
+        stats = run_registration_scan_job(
+            db_path=args.db,
+            max_requests=args.max_requests,
+        )
+        print(f"\nResults:")
+        print(f"  Companies found: {stats['companies_found']}")
+        print(f"  New companies: {stats['companies_new']}")
+        print(f"  Requests used: {stats['requests_used']}")
+        print(f"  Courts scanned: {stats['courts_scanned']}")
+        print(f"  Empty lookups: {stats['empty_lookups']}")
         return
 
     # Start full scheduler

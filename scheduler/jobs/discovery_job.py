@@ -21,6 +21,7 @@ from persistence.database import Database
 from sources.bundesapi import BundesAPISource, SearchResult
 from processing.filters import AIRoboticsFilter
 from processing.startup_scorer import StartupScorer
+from processing.brand_name_scorer import BrandNameScorer
 from scheduler.rate_limiter import PersistentRateLimiter
 
 logger = logging.getLogger(__name__)
@@ -119,6 +120,7 @@ class DiscoveryJob:
 
         self.filter = AIRoboticsFilter()
         self.startup_scorer = StartupScorer()
+        self.brand_scorer = BrandNameScorer()
         self.source = None  # Lazily initialized
 
         self._state: Optional[DiscoveryJobState] = None
@@ -251,6 +253,9 @@ class DiscoveryJob:
         from processing.filters import extract_legal_form
         legal_form = extract_legal_form(result.name)
 
+        # Calculate brand name score
+        brand_result = self.brand_scorer.score(result.name, city=result.city)
+
         # Insert new company
         company_id = self.db.insert_company(
             company_number=f"bundesapi_{hash(result.native_company_number) & 0xFFFFFFFF:08x}",
@@ -269,10 +274,12 @@ class DiscoveryJob:
             tech_categories=filter_result.tech_categories,
             startup_score=startup_result.total_score,
             startup_classification=classification,
+            brand_name_score=brand_result.total_score,
         )
 
-        # Add to enrichment queue with high priority
-        self.db.add_to_enrichment_queue(company_id, priority=1, reason='new_from_bundesapi')
+        # Add to enrichment queue — boost priority for brand-name startups
+        priority = 0 if brand_result.is_likely_tech_startup else 1
+        self.db.add_to_enrichment_queue(company_id, priority=priority, reason='new_from_bundesapi')
 
         self._state.companies_new += 1
         logger.info(

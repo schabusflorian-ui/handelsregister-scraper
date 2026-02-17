@@ -9,11 +9,16 @@ Exceeding this limit can violate German criminal law (§303a, b StGB).
 
 Based on the approach from: https://github.com/bundesAPI/handelsregister
 
-Form field names (verified 2026-02-02):
-- Keywords: form:schlagwoerter (textarea)
+Form field names (verified 2026-02-02, extended 2026-02-17):
+- Keywords: form:schlagwoerter (textarea) — NOT required if other params set
 - Keyword mode: form:schlagwortOptionen (radio: 1=all, 2=at least one, 3=exact)
 - Register type: form:registerArt_input (select: "", HRA, HRB, GnR, PR, VR, GsR)
 - State checkboxes: form:{StateName}_input (e.g., form:Bayern_input)
+- City: form:ort (text, max 30 chars, supports wildcards * and ?)
+- Legal form: form:rechtsform (select, numeric codes — see LEGAL_FORM_CODES)
+- Postal code: form:postleitzahl (text, max 5 chars)
+- Shareholder: form:beteiligter (text)
+- Results per page: form:ergebnisseProSeite (select: 10, 25, 50, 100)
 - Submit: form:btnSuche
 """
 
@@ -119,6 +124,9 @@ class Announcement:
     text: str
     capital_old: Optional[float] = None
     capital_new: Optional[float] = None
+    city: Optional[str] = None
+    state: Optional[str] = None
+    registry_type: Optional[str] = None
 
 
 class BundesAPISource:
@@ -154,6 +162,30 @@ class BundesAPISource:
 
     # Valid register types
     REGISTER_TYPES = ['HRA', 'HRB', 'GnR', 'PR', 'VR', 'GsR']
+
+    # Registry court codes for form:registergericht_input
+    # Use these to search by specific court (HRB numbers are sequential per court)
+    REGISTRY_COURTS = {
+        'Berlin': 'F1103',           # Amtsgericht Charlottenburg
+        'München': 'D2601',          # Amtsgericht München
+        'Hamburg': 'R2101',          # Amtsgericht Hamburg
+        'Frankfurt': 'R3201',       # Amtsgericht Frankfurt am Main
+        'Köln': 'R2707',            # Amtsgericht Köln
+        'Düsseldorf': 'R2701',      # Amtsgericht Düsseldorf
+    }
+
+    # Legal form codes for form:rechtsform dropdown
+    # (verified from bundesAPI/handelsregister GitHub)
+    LEGAL_FORM_CODES = {
+        'AG': '1',               # Aktiengesellschaft
+        'eG': '2',               # Eingetragene Genossenschaft
+        'eV': '3',               # Eingetragener Verein
+        'SE': '6',               # Europäische Aktiengesellschaft
+        'GmbH': '8',             # Gesellschaft mit beschränkter Haftung (includes UG)
+        'KG': '10',              # Kommanditgesellschaft
+        'OHG': '12',             # Offene Handelsgesellschaft
+        'Partnerschaft': '13',   # Partnerschaft
+    }
 
     def __init__(self, config: Optional[BundesAPIConfig] = None):
         self.config = config or BundesAPIConfig()
@@ -250,25 +282,41 @@ class BundesAPISource:
 
     def search(
         self,
-        keywords: List[str],
+        keywords: Optional[List[str]] = None,
         keyword_mode: str = 'all',  # Changed default to 'all' - more reliable
         states: Optional[List[str]] = None,
         registry_types: Optional[List[str]] = None,
         include_deleted: bool = False,
         max_results: int = 100,
-        shareholder_name: Optional[str] = None,  # NEW: Search by shareholder/participant name
+        shareholder_name: Optional[str] = None,
+        city: Optional[str] = None,
+        legal_form_code: Optional[str] = None,
+        postal_code: Optional[str] = None,
+        results_per_page: int = 100,
+        register_number: Optional[str] = None,
+        register_court: Optional[str] = None,
     ) -> Iterator[SearchResult]:
         """
         Search for companies matching criteria.
 
+        Supports keyword-free search: the portal requires at least one search
+        parameter (keywords, city, legal_form_code, state, etc.) but keywords
+        are NOT mandatory.
+
         Args:
-            keywords: Search terms for company name
+            keywords: Search terms for company name (optional if other params set)
             keyword_mode: 'all' (contain all keywords), 'min' (at least one), or 'exact'
             states: List of state codes (e.g., ['by', 'be']) - maps to full state names
             registry_types: List of registry types (HRA, HRB, GnR, PR, VR, GsR)
             include_deleted: Include deleted/dissolved companies
-            max_results: Maximum results to return
-            shareholder_name: Search by shareholder/participant name (Name des Beteiligten)
+            max_results: Maximum results to return (with pagination, can exceed 100)
+            shareholder_name: Search by shareholder/participant name
+            city: Filter by city name (max 30 chars, supports wildcards * and ?)
+            legal_form_code: Legal form code (e.g., '8' for GmbH — see LEGAL_FORM_CODES)
+            postal_code: Filter by postal code (max 5 chars)
+            results_per_page: Results per page (10, 25, 50, or 100)
+            register_number: Registration number (supports wildcards * and ?, e.g., '283*')
+            register_court: Registry court code (e.g., 'F1103' for Berlin Charlottenburg)
 
         Yields:
             SearchResult objects
@@ -335,6 +383,30 @@ class BundesAPISource:
         if shareholder_name:
             form_data['form:beteiligter'] = shareholder_name
 
+        # City filter (form:ort) — max 30 chars, supports wildcards * and ?
+        if city:
+            form_data['form:ort'] = city[:30]
+
+        # Legal form filter — PrimeFaces SelectOneMenu uses _input suffix
+        if legal_form_code:
+            form_data['form:rechtsform_input'] = legal_form_code
+
+        # Postal code filter (form:postleitzahl) — max 5 chars
+        if postal_code:
+            form_data['form:postleitzahl'] = postal_code[:5]
+
+        # Registration number (form:registerNummer) — supports wildcards * and ?
+        if register_number:
+            form_data['form:registerNummer'] = register_number[:10]
+
+        # Registry court (form:registergericht) — PrimeFaces uses _input suffix
+        if register_court:
+            form_data['form:registergericht_input'] = register_court
+
+        # Results per page — PrimeFaces SelectOneMenu uses _input suffix
+        if results_per_page in (10, 25, 50, 100):
+            form_data['form:ergebnisseProSeite_input'] = str(results_per_page)
+
         # Registry type - use select dropdown value
         # For 'all' mode, we can leave it empty (all types)
         # For 'min' mode, a specific type may be required
@@ -364,7 +436,14 @@ class BundesAPISource:
             return
 
         try:
-            print(f"Submitting search for: {' '.join(keywords)}")
+            search_desc = ' '.join(keywords) if keywords else '[no keywords]'
+            if city:
+                search_desc += f" city={city}"
+            if legal_form_code:
+                search_desc += f" rechtsform={legal_form_code}"
+            if postal_code:
+                search_desc += f" plz={postal_code}"
+            print(f"Submitting search for: {search_desc}")
 
             # Submit search with proper headers for form submission
             response = self._make_request(
@@ -393,14 +472,39 @@ class BundesAPISource:
                     for msg in error_msgs[:3]:
                         print(f"  Error: {msg.get_text(strip=True)[:100]}")
 
-            # Parse results (now includes row_index for VÖ fetching)
+            # Parse first page of results
             results = self._parse_search_results(response.text)
-            print(f"Found {len(results)} results")
+            total_yielded = 0
+            print(f"Found {len(results)} results on page 1")
 
-            for i, result in enumerate(results):
-                if i >= max_results:
-                    break
+            for result in results:
+                if total_yielded >= max_results:
+                    return
                 yield result
+                total_yielded += 1
+
+            # Pagination: fetch additional pages if needed
+            if total_yielded < max_results and len(results) >= results_per_page:
+                page_num = 1
+                current_response = response
+                while total_yielded < max_results:
+                    page_num += 1
+                    page_results = self._fetch_next_page(
+                        current_response, page_num, results_per_page
+                    )
+                    if not page_results:
+                        break  # No more pages or pagination failed
+                    print(f"Found {len(page_results)} results on page {page_num}")
+                    for result in page_results:
+                        if total_yielded >= max_results:
+                            return
+                        yield result
+                        total_yielded += 1
+                    # If we got fewer results than page size, we're on the last page
+                    if len(page_results) < results_per_page:
+                        break
+
+            print(f"Total results yielded: {total_yielded}")
 
         except requests.RequestException as e:
             print(f"Search request error: {e}")
@@ -429,6 +533,15 @@ class BundesAPISource:
             table = soup.find('table', class_=lambda c: c and 'dataTable' in c)
 
         if not table:
+            # Check if there's a "too many results" error
+            too_many = soup.find(string=re.compile(
+                r'zu viele|too many|ergebnismenge.*zu groß|eingrenzen|narrow',
+                re.IGNORECASE
+            ))
+            if too_many:
+                print("Too many results — narrow your search (add postal_code or keywords)")
+                return results
+
             # Check if there's an error or no results message
             no_results = soup.find(string=re.compile(r'keine.*(treffer|ergebnis)|no.*result', re.IGNORECASE))
             if no_results:
@@ -531,6 +644,151 @@ class BundesAPISource:
                 continue
 
         return results
+
+    def _fetch_next_page(
+        self,
+        current_response: requests.Response,
+        page_num: int,
+        rows_per_page: int,
+    ) -> List['SearchResult']:
+        """
+        Fetch the next page of search results using PrimeFaces AJAX pagination.
+
+        PrimeFaces DataTable sends an AJAX POST with partial rendering params.
+        The exact component IDs are extracted from the initial response HTML.
+
+        Args:
+            current_response: The response from the previous page
+            page_num: The page number to fetch (1-based, page 1 already fetched)
+            rows_per_page: Number of rows per page
+
+        Returns:
+            List of SearchResult objects, or empty list if pagination fails
+        """
+        # Acquire rate limit token
+        if not self.rate_limiter.acquire():
+            print("Rate limit timeout during pagination")
+            return []
+
+        try:
+            soup = BeautifulSoup(current_response.text, 'lxml')
+
+            # Find the DataTable component ID from the grid table
+            table = soup.find('table', {'role': 'grid'})
+            if not table:
+                print("No DataTable found for pagination")
+                return []
+
+            # The table's parent container typically has the PrimeFaces widget ID
+            # Look for the paginator element to find the DataTable ID
+            datatable_id = None
+
+            # PrimeFaces DataTable has id like "form:ergebnisListe" or "form:data"
+            # The table itself or its parent div usually has an id
+            if table.get('id'):
+                datatable_id = table['id'].replace('_data', '')
+            else:
+                # Check parent elements
+                parent = table.parent
+                while parent and not datatable_id:
+                    if parent.get('id') and 'data' in parent.get('class', []):
+                        datatable_id = parent['id']
+                        break
+                    parent = parent.parent if parent.parent else None
+
+            # Also try to find paginator elements
+            paginator = soup.find('div', class_=lambda c: c and 'ui-paginator' in c)
+            if paginator:
+                # Extract DataTable ID from paginator's id (e.g., "form:ergebnisListe_paginator_top")
+                pag_id = paginator.get('id', '')
+                if '_paginator' in pag_id:
+                    datatable_id = pag_id.split('_paginator')[0]
+
+            if not datatable_id:
+                # Fallback: search for common PrimeFaces DataTable IDs
+                for candidate_id in ['form:ergebnisListe', 'form:dataList', 'form:data', 'form:suchergebnisseForm']:
+                    if soup.find(id=candidate_id) or soup.find(id=f'{candidate_id}_data'):
+                        datatable_id = candidate_id
+                        break
+
+            if not datatable_id:
+                print("Could not determine DataTable component ID for pagination")
+                return []
+
+            print(f"Pagination: DataTable ID = {datatable_id}, fetching page {page_num}")
+
+            # Get current ViewState
+            viewstate = soup.find('input', {'name': 'javax.faces.ViewState'})
+            viewstate_value = viewstate.get('value', '') if viewstate else ''
+
+            # Calculate first row offset (0-based)
+            first_row = (page_num - 1) * rows_per_page
+
+            # Build PrimeFaces AJAX pagination request
+            # The form on the results page is 'ergebnissForm', not 'form'
+            form_name = datatable_id.split(':')[0] if ':' in datatable_id else 'ergebnissForm'
+            ajax_data = {
+                'javax.faces.partial.ajax': 'true',
+                'javax.faces.source': datatable_id,
+                'javax.faces.partial.execute': datatable_id,
+                'javax.faces.partial.render': datatable_id,
+                f'{datatable_id}_pagination': 'true',
+                f'{datatable_id}_first': str(first_row),
+                f'{datatable_id}_rows': str(rows_per_page),
+                form_name: form_name,
+                'javax.faces.ViewState': viewstate_value,
+            }
+
+            # Submit AJAX request with appropriate headers
+            response = self._make_request(
+                'post',
+                current_response.url,
+                data=ajax_data,
+                headers={
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                    'Origin': self.config.base_url,
+                    'Referer': current_response.url,
+                    'Faces-Request': 'partial/ajax',
+                    'X-Requested-With': 'XMLHttpRequest',
+                }
+            )
+
+            # PrimeFaces AJAX returns XML with partial HTML updates
+            # Format: <partial-response><changes><update id="..."><![CDATA[...html...]]></update></changes></partial-response>
+            # There are multiple CDATA sections — find the DataTable one (largest)
+            response_text = response.text
+
+            # Parse all update sections with their IDs
+            all_updates = re.findall(
+                r'<update id="([^"]+)"><!\[CDATA\[(.*?)\]\]></update>',
+                response_text, re.DOTALL
+            )
+
+            # Find the DataTable update (matches our datatable_id)
+            html_content = None
+            for update_id, content in all_updates:
+                if update_id == datatable_id:
+                    html_content = content
+                    break
+
+            if not html_content:
+                # Fallback: use the largest CDATA section (likely the DataTable)
+                if all_updates:
+                    html_content = max(all_updates, key=lambda x: len(x[1]))[1]
+                else:
+                    # Not an AJAX response — try parsing as regular HTML
+                    html_content = response_text
+
+            # Parse the results from this page
+            results = self._parse_search_results(html_content)
+            return results
+
+        except requests.RequestException as e:
+            print(f"Pagination request error (page {page_num}): {e}")
+            return []
+        except Exception as e:
+            print(f"Pagination parsing error (page {page_num}): {e}")
+            return []
 
     def get_rate_limit_status(self) -> Dict[str, Any]:
         """Get current rate limit status."""
@@ -940,12 +1198,19 @@ class BundesAPISource:
             # Map category to our standard types
             announcement_type = self._classify_announcement_type(category)
 
+            # Extract state from court_info (first word(s) before "Amtsgericht")
+            state_match = re.match(r'^(.+?)\s+(?:Amtsgericht|District court)', court_info)
+            state_from_court = state_match.group(1).strip() if state_match else None
+
             announcements.append(Announcement(
                 company_name=company_name,
                 native_company_number=native_number,
                 announcement_date=announcement_date,
                 announcement_type=announcement_type,
                 text=text,
+                city=city if city else None,
+                state=state_from_court,
+                registry_type=registry_type if registry_type else None,
             ))
 
         return announcements

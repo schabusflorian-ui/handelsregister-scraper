@@ -35,6 +35,7 @@ from scheduler.jobs.news_job import NewsMonitoringJob
 from scheduler.jobs.website_job import WebsiteFinderJob
 from scheduler.jobs.website_scrape_job import WebsiteScrapeJob
 from scheduler.jobs.officer_linkedin_job import OfficerLinkedInEnrichmentJob
+from scheduler.jobs.registration_scan_job import RegistrationScanJob
 
 logger = logging.getLogger(__name__)
 
@@ -55,6 +56,7 @@ class HandelsregisterScheduler:
         discovery_interval_hours: int = 2,
         discovery_max_requests: int = 25,
         backfill_max_requests: int = 50,
+        registration_scan_max_requests: int = 40,
     ):
         """
         Initialize scheduler.
@@ -64,11 +66,13 @@ class HandelsregisterScheduler:
             discovery_interval_hours: Hours between discovery job runs
             discovery_max_requests: Max requests per discovery run
             backfill_max_requests: Max requests per backfill run
+            registration_scan_max_requests: Max requests per registration scan run
         """
         self.db_path = db_path
         self.discovery_interval_hours = discovery_interval_hours
         self.discovery_max_requests = discovery_max_requests
         self.backfill_max_requests = backfill_max_requests
+        self.registration_scan_max_requests = registration_scan_max_requests
 
         # Don't create DB connection here - create fresh connections in each job
         # to avoid SQLite thread safety issues with APScheduler's ThreadPoolExecutor
@@ -367,6 +371,32 @@ class HandelsregisterScheduler:
         finally:
             db.close()
 
+    def _run_registration_scan_job(self):
+        """Execute registration scan job wrapper."""
+        logger.info("Starting registration scan job")
+
+        db = Database(self.db_path)
+        try:
+            job = RegistrationScanJob(
+                db=db,
+                rate_limiter=self.rate_limiter,
+                max_requests=self.registration_scan_max_requests,
+            )
+            stats = job.run()
+
+            logger.info(
+                "Registration scan completed: %d found, %d new, %d requests",
+                stats['companies_found'], stats['companies_new'],
+                stats['requests_used'],
+            )
+
+            self._log_job_completion('registration_scan', stats, db)
+
+        except Exception as e:
+            logger.exception("Registration scan job failed: %s", e)
+        finally:
+            db.close()
+
     # Map each job type's stat keys → generic logging columns.
     # Each tuple: (key for companies_found, key for companies_new, key for requests_used)
     _STAT_KEY_MAP: Dict[str, tuple] = {
@@ -379,6 +409,7 @@ class HandelsregisterScheduler:
         'website_finder':     ('companies_checked',  'websites_found',   'requests_used'),
         'website_scrape':     ('companies_checked',  'companies_enriched', 'requests_used'),
         'officer_linkedin':   ('officers_processed', 'officers_enriched', 'requests_used'),
+        'registration_scan':  ('companies_found',    'companies_new',    'requests_used'),
     }
 
     def _log_job_completion(self, job_type: str, stats: Dict[str, Any], db: Database):
@@ -503,10 +534,21 @@ class HandelsregisterScheduler:
             replace_existing=True,
         )
 
+        # Registration scan job: every 4 hours (offset from discovery's even hours)
+        # Scans sequential HRB numbers to find newest company registrations
+        self.scheduler.add_job(
+            self._run_registration_scan_job,
+            trigger=CronTrigger(hour='1,5,9,13,17,21', minute=30),
+            id='registration_scan_job',
+            name='Registration Scan Job',
+            replace_existing=True,
+        )
+
         logger.info(
             "Jobs configured: discovery every %d hours, backfill 3AM+3PM, enrichment 4AM, "
             "announcements 5AM, CSV export 6AM, investor detection 7AM, news monitoring 8AM, "
-            "website finder 9AM, website scrape 10AM, officer LinkedIn 11AM",
+            "website finder 9AM, website scrape 10AM, officer LinkedIn 11AM, "
+            "registration scan every 4h (1:30/5:30/9:30/13:30/17:30/21:30)",
             self.discovery_interval_hours
         )
 

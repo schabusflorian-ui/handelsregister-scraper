@@ -8,6 +8,7 @@ from .enrichment_job import EnrichmentJob
 from .announcement_job import AnnouncementMonitoringJob
 from .csv_export_job import CSVExportJob
 from .investor_detection_job import InvestorDetectionJob
+from .registration_scan_job import RegistrationScanJob
 
 __all__ = [
     'DiscoveryJob',
@@ -15,5 +16,6 @@ __all__ = [
     'EnrichmentJob',
     'AnnouncementMonitoringJob',
     'CSVExportJob',
-    'InvestorDetectionJob'
+    'InvestorDetectionJob',
+    'RegistrationScanJob',
 ]
