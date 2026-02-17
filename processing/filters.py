@@ -72,11 +72,11 @@ NAME_AI_KEYWORDS = [
     "lidar",
     "videoanalyse",
 
-    # === NLP — short terms / German compounds in names ===
+    # === NLP / Language — German compounds in names ===
+    # NOTE: "nlp" removed — nearly 100% false positives (Neuro-Linguistic Programming)
     "sprachverarbeitung",
     "spracherkennung",
     "chatbot",
-    "nlp",
     "textanalyse",
 
     # === Automation — compound forms only ===
@@ -280,8 +280,24 @@ DEFAULT_CLIMATE_KEYWORDS = [
 
 # Standalone patterns that need special regex handling
 # These catch "AI" as standalone word and .ai domains
+#
+# DESIGN: \bAI\b is split into two patterns to reduce false positives:
+# 1. AI NOT at start of name — very reliable (e.g., "Generative AI Studio")
+# 2. AI at start of name — often false positives (company initials like
+#    "AI Baumanagement", "AI Beauty Management", "AI Auto- und Industrie-Leasing",
+#    Italian "AI Teatro", ~250 false positives in DB)
+#    So we only match start-of-name AI when followed by a tech context word.
 STANDALONE_AI_PATTERNS = [
-    r'\bAI\b',           # Matches " AI " but not "HAIR" or "FAIR"
+    # AI in middle/end of name — very reliable signal
+    # (?<=\s) ensures AI is preceded by whitespace (not at start of text)
+    r'(?<=\s)AI\b',
+    # AI at start — only if followed by tech-context word
+    # Also handles "AI &" / "AI -" separators (e.g., "AI & Cognitive Computing")
+    r'^AI[\s&\-]+(?:Solutions|Software|Platform|Consulting|Analytics|Analytical|'
+    r'Robotics|Systems|Technologies|Technology|Labs?|Studio|Vision|Innovations?|'
+    r'Research|Data|Cloud|Ventures|Machine|Deep|Neural|Tech|Digital|Intelligence|'
+    r'Intelligent|Cognitive|Automation|Startup|Development|Engineering|Agent|'
+    r'Agents|Computing|Science|Learning)',
     r'\.ai\b',           # Matches .ai domains (e.g., "company.ai")
     r'\brobot\b',        # Standalone "robot"
 ]
@@ -299,7 +315,6 @@ HIGH_SIGNAL_KEYWORDS = [
     "robotics",
     "computer vision",
     "bildverarbeitung",
-    "nlp",
     "generative ai",
     "chatbot",
     "ai platform",
@@ -389,8 +404,10 @@ TECH_CATEGORIES = {
         'gesichtserkennung', 'lidar', 'machine vision',
     ],
     'nlp': [
-        'sprachverarbeitung', 'nlp', 'chatbot', 'sprachmodell',
-        'textanalyse', 'spracherkennung', 'llm',
+        'sprachverarbeitung', 'chatbot', 'sprachmodell',
+        'textanalyse', 'spracherkennung',
+        # NOTE: 'nlp' removed — nearly 100% false positives (Neuro-Linguistic Programming)
+        # NOTE: 'llm' removed — false positives (LLM Ledermanufaktur, LLM Stahlbau, etc.)
     ],
     'robotics': [
         'robotik', 'robotics', 'robot', 'drone', 'drohne', 'drohnen',
@@ -404,7 +421,8 @@ TECH_CATEGORIES = {
         'mustererkennung', 'mlops', 'automl', 'analytics',
     ],
     'generative_ai': [
-        'generative ai', 'generative ki', 'llm',
+        'generative ai', 'generative ki',
+        # NOTE: 'llm' removed — false positives (company initials/abbreviations)
     ],
     'autonomous_systems': [
         'autonomes fahren', 'selbstfahrend',
@@ -543,10 +561,22 @@ class AIRoboticsFilter:
                 score += 1  # Bonus point for high-signal match
 
         # Check standalone AI/robot patterns (strong signals)
+        # Group patterns by concept to avoid double-counting
+        # (e.g., mid-AI and start-AI patterns shouldn't both add +2)
+        standalone_groups_matched = set()
         for pattern_name, pattern in self._standalone_patterns:
             if pattern.search(text):
-                matched_keywords.add(pattern_name)
-                score += 2  # Strong signal for standalone AI/.ai/robot
+                # Determine which group this pattern belongs to
+                if 'AI' in pattern_name and '.ai' not in pattern_name:
+                    group = 'AI'
+                elif '.ai' in pattern_name:
+                    group = '.ai'
+                else:
+                    group = pattern_name  # e.g., robot
+                if group not in standalone_groups_matched:
+                    standalone_groups_matched.add(group)
+                    matched_keywords.add(pattern_name)
+                    score += 2  # Strong signal for standalone AI/.ai/robot
 
         return score
 
@@ -591,10 +621,22 @@ class AIRoboticsFilter:
                 matched.append(keyword)
 
         # Also check standalone patterns
+        # Track which pattern "groups" matched to avoid duplicates
+        standalone_matched = set()
         for pattern_name, pattern in self._standalone_patterns:
             if pattern.search(text):
-                readable = pattern_name.replace(r'\b', '').upper()
-                matched.append(f"[{readable}]")
+                # Map pattern to readable label
+                if 'AI' in pattern_name:
+                    label = 'AI'
+                elif '.ai' in pattern_name:
+                    label = '.AI'
+                elif 'robot' in pattern_name.lower():
+                    label = 'ROBOT'
+                else:
+                    label = pattern_name.replace(r'\b', '').upper()
+                if label not in standalone_matched:
+                    standalone_matched.add(label)
+                    matched.append(f"[{label}]")
 
         # Also include climate keyword matches (tagged)
         for keyword, pattern in self._climate_keyword_patterns:

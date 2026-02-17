@@ -34,8 +34,8 @@ TRUE_POSITIVES = [
     ("Bildverarbeitung Systems AG", True, 2, ["computer_vision"]),
     ("Bilderkennung AI UG", True, 3, ["computer_vision"]),
 
-    # NLP / Language AI
-    ("NLP Solutions GmbH", True, 2, ["nlp"]),
+    # Language AI
+    # NOTE: "NLP Solutions GmbH" removed — nlp keyword dropped (Neuro-Linguistic Programming FPs)
     ("Chatbot Development AG", True, 2, ["nlp"]),
     ("Sprachverarbeitung Systeme UG", True, 1, ["nlp"]),
 

@@ -164,9 +164,9 @@ class TestAIRoboticsFilterCategories:
             assert "computer_vision" in categories, f"'{name}' should be computer_vision"
 
     def test_nlp_classification(self, filter_instance):
-        """NLP keywords -> nlp category."""
+        """Language AI keywords -> nlp category."""
         names = [
-            "NLP Solutions GmbH",
+            # NOTE: "NLP Solutions GmbH" removed — nlp keyword dropped
             "Chatbot Development AG",
             "Sprachverarbeitung Systems GmbH",
         ]
@@ -408,9 +408,9 @@ class TestFilterConfiguration:
         config = FilterConfig(allowed_statuses=["active", "pending"])
         custom_filter = AIRoboticsFilter(config)
 
-        result_active = custom_filter.filter_company(name="AI GmbH", status="active")
-        result_pending = custom_filter.filter_company(name="AI GmbH", status="pending")
-        result_liquidated = custom_filter.filter_company(name="AI GmbH", status="liquidated")
+        result_active = custom_filter.filter_company(name="AI Solutions GmbH", status="active")
+        result_pending = custom_filter.filter_company(name="AI Solutions GmbH", status="pending")
+        result_liquidated = custom_filter.filter_company(name="AI Solutions GmbH", status="liquidated")
 
         assert result_active.passes is True
         assert result_pending.passes is True
