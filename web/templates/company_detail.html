@@ -104,10 +104,31 @@
                         <dd class="mt-1 text-sm text-gray-900">
                             <a href="{{ company.website }}" target="_blank" class="text-indigo-600 hover:text-indigo-900">
                                 {{ company.website }}
+                                <svg class="inline w-3 h-3 ml-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
                             </a>
                         </dd>
                     </div>
                     {% endif %}
+                    <div class="sm:col-span-2">
+                        <dt class="text-sm font-medium text-gray-500">External Links</dt>
+                        <dd class="mt-1 flex flex-wrap gap-2">
+                            <a href="https://www.handelsregister.de/rp_web/erweitertesuche/welcome.xhtml" target="_blank"
+                                class="inline-flex items-center rounded-md bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-700 hover:bg-gray-200">
+                                Handelsregister
+                                <svg class="ml-1 w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
+                            </a>
+                            <a href="https://www.northdata.com/{{ company.name|urlencode }}" target="_blank"
+                                class="inline-flex items-center rounded-md bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-700 hover:bg-gray-200">
+                                North Data
+                                <svg class="ml-1 w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
+                            </a>
+                            <a href="https://www.google.com/search?q={{ (company.name + ' Handelsregister')|urlencode }}" target="_blank"
+                                class="inline-flex items-center rounded-md bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-700 hover:bg-gray-200">
+                                Google
+                                <svg class="ml-1 w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
+                            </a>
+                        </dd>
+                    </div>
                     {% if company.street %}
                     <div class="sm:col-span-2">
                         <dt class="text-sm font-medium text-gray-500">Address</dt>
