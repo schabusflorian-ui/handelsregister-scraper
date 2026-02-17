@@ -1023,13 +1023,14 @@ class DdgsLibraryScraper:
             return cleaned
         return None
 
-    def search_query(self, query: str, max_pages: int = 3) -> List[SearchResult]:
+    def search_query(self, query: str, max_pages: int = 3, timelimit: Optional[str] = None) -> List[SearchResult]:
         """
         Execute a search query using the ddgs library.
 
         Args:
             query: Search query (supports site: operator)
             max_pages: Ignored — ddgs handles pagination via max_results
+            timelimit: Time filter — 'd' (day), 'w' (week), 'm' (month), or None (all time)
 
         Returns:
             List of SearchResult with LinkedIn profile URLs
@@ -1046,16 +1047,20 @@ class DdgsLibraryScraper:
                 TimeoutException,
             )
 
-        logger.info(f"DDGs Library Search: {query[:60]}...")
+        time_label = f" [timelimit={timelimit}]" if timelimit else ""
+        logger.info(f"DDGs Library Search: {query[:60]}...{time_label}")
 
         raw_results = None
         for attempt in range(3):
             try:
                 ddgs = DDGS(proxy=self.proxy, timeout=30)
-                raw_results = ddgs.text(
+                search_kwargs = dict(
                     query=query,
                     max_results=self.max_results_per_query,
                 )
+                if timelimit:
+                    search_kwargs['timelimit'] = timelimit
+                raw_results = ddgs.text(**search_kwargs)
                 break
             except RatelimitException:
                 logger.warning("ddgs rate limited — skipping to next query")
@@ -1145,18 +1150,20 @@ class SerperSearchScraper:
             return cleaned
         return None
 
-    def search_query(self, query: str, max_pages: int = 1) -> List[SearchResult]:
+    def search_query(self, query: str, max_pages: int = 1, tbs: Optional[str] = None) -> List[SearchResult]:
         """
         Execute search via Serper.dev API.
 
         Args:
             query: Search query (Google syntax, supports site: operator)
             max_pages: Ignored — Serper returns up to 100 results per request
+            tbs: Google time filter — 'qdr:d' (day), 'qdr:w' (week), 'qdr:m' (month), or None (all time)
 
         Returns:
             List of SearchResult with LinkedIn profile URLs
         """
-        logger.info(f"Serper Search: {query[:60]}...")
+        time_label = f" [tbs={tbs}]" if tbs else ""
+        logger.info(f"Serper Search: {query[:60]}...{time_label}")
 
         num = min(self.max_results_per_query, 100)
 
@@ -1169,6 +1176,9 @@ class SerperSearchScraper:
             "q": query,
             "num": num,
         }
+
+        if tbs:
+            payload["tbs"] = tbs
 
         try:
             response = requests.post(

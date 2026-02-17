@@ -150,6 +150,8 @@ class SlowStealthScraper:
         scrape_delay: int = 90,  # Seconds between LinkedIn scrapes
         jitter: float = 0.3,     # Random jitter (0.3 = ±30%)
         search_engine: str = 'brave',  # 'brave', 'ddg', or 'rotate'
+        fresh_mode: bool = False,  # Only find recently indexed profiles
+        include_officers: bool = True,  # Cross-reference new GmbH officers with LinkedIn
     ):
         self.db = db
         self.state_file = state_file
@@ -157,6 +159,8 @@ class SlowStealthScraper:
         self.scrape_delay = scrape_delay
         self.jitter = jitter
         self.search_engine = search_engine
+        self.fresh_mode = fresh_mode
+        self.include_officers = include_officers
         self.consecutive_failures = 0
 
         self.state = self._load_state()
@@ -520,6 +524,162 @@ class SlowStealthScraper:
         logger.info(f"  Excluding {len(names)} known names to surface new profiles")
         return enhanced
 
+    def _search_new_officers(self, batch_size: int = 5) -> int:
+        """
+        Layer 3: Cross-reference new GmbH registrations with LinkedIn.
+
+        Searches LinkedIn for officers of recently registered companies to discover
+        founders who never used "stealth" keywords but just registered a company.
+
+        Args:
+            batch_size: Number of companies to process per call
+
+        Returns:
+            Number of new founders found
+        """
+        from sources.google_search import DdgsLibraryScraper, SerperSearchScraper
+
+        logger.info("=== Officer cross-reference: searching for new GmbH officers on LinkedIn ===")
+
+        cursor = self.db.conn.cursor()
+
+        # Get recent companies (last 30 days) that haven't been officer-searched yet
+        # Track which companies we've already searched in state
+        searched_company_ids = set(self.state.get('officer_searched_companies', []))
+
+        cursor.execute('''
+            SELECT c.id, c.name, c.city, c.registration_date
+            FROM companies c
+            WHERE c.registration_date >= date('now', '-30 days')
+              AND c.id NOT IN ({})
+            ORDER BY c.registration_date DESC
+            LIMIT ?
+        '''.format(','.join('?' * len(searched_company_ids)) if searched_company_ids else '0'),
+            list(searched_company_ids) + [batch_size]
+        )
+
+        companies = cursor.fetchall()
+        if not companies:
+            logger.info("  No new companies to cross-reference (all recent ones already processed)")
+            return 0
+
+        total_found = 0
+        existing = self._get_existing_urls()
+
+        for company_row in companies:
+            company_id, company_name, city, reg_date = company_row
+            logger.info(f"  Company: {company_name} ({city}, registered {reg_date})")
+
+            # Get officers for this company
+            try:
+                officers = self.db.get_officers(company_id)
+            except Exception:
+                # Fallback: query directly
+                cursor.execute('''
+                    SELECT name, role FROM officers WHERE company_id = ?
+                ''', (company_id,))
+                officers = [{'name': row[0], 'role': row[1]} for row in cursor.fetchall()]
+
+            if not officers:
+                logger.debug(f"    No officers found for company {company_id}")
+                searched_company_ids.add(company_id)
+                continue
+
+            for officer in officers:
+                officer_name = officer.get('name', '')
+                if not officer_name or len(officer_name) < 5:
+                    continue
+
+                # Build search query for this officer
+                query = f'site:linkedin.com/in "{officer_name}" founder'
+
+                logger.info(f"    Searching: {officer_name} ({officer.get('role', 'officer')})")
+
+                try:
+                    # Use the configured search engine
+                    if self.search_engine == 'ddgs':
+                        scraper = DdgsLibraryScraper(delay_range=(1, 3))
+                        results = scraper.search_query(query, max_pages=1)
+                    elif self.search_engine == 'serper':
+                        scraper = SerperSearchScraper(delay_range=(0.5, 1.5))
+                        results = scraper.search_query(query)
+                    else:
+                        scraper = DdgsLibraryScraper(delay_range=(1, 3))
+                        results = scraper.search_query(query, max_pages=1)
+
+                    for r in results:
+                        if r.url not in existing:
+                            existing.add(r.url)
+                            # Store with special detection source
+                            self._store_officer_crossref_result(r, officer_name, company_name, company_id)
+                            total_found += 1
+
+                except Exception as e:
+                    logger.warning(f"    Officer search failed: {e}")
+
+                # Small delay between officer searches
+                time.sleep(random.uniform(2, 5))
+
+            # Mark company as searched
+            searched_company_ids.add(company_id)
+
+        # Save searched company IDs to state (keep bounded)
+        self.state['officer_searched_companies'] = list(searched_company_ids)[-500:]
+        self._save_state()
+
+        logger.info(f"=== Officer cross-reference complete: {total_found} new founders found ===")
+        return total_found
+
+    def _store_officer_crossref_result(self, result, officer_name: str, company_name: str, company_id: int):
+        """Store a founder found via Handelsregister officer cross-reference."""
+        from sources.linkedin_scraper import is_dach_location
+
+        name, headline = self._parse_search_title(result.title, result.url, result.snippet)
+        confidence, signals = self._calculate_snippet_confidence(result.title, result.snippet)
+
+        # Boost confidence for officer cross-ref (these are high-value leads)
+        confidence = min(confidence + 0.2, 1.0)
+        signals.append(f'handelsregister_officer:{officer_name}')
+        signals.append(f'company:{company_name}')
+
+        # Check if likely DACH
+        combined_text = f"{result.title} {result.snippet}"
+        is_dach = is_dach_location(combined_text, headline, result.snippet)
+
+        if not is_dach:
+            logger.debug(f"    Skipping non-DACH: {name}")
+            return
+
+        cursor = self.db.conn.cursor()
+        now = datetime.now().isoformat()
+
+        cursor.execute('''
+            INSERT OR IGNORE INTO stealth_founders (
+                linkedin_url, name, headline, summary,
+                detection_source, search_query, stealth_signals,
+                confidence_score, first_seen_at, last_checked_at, created_at,
+                company_id
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (
+            result.url,
+            name,
+            headline,
+            result.snippet,
+            'handelsregister_crossref',
+            f'officer:{officer_name}',
+            json.dumps(signals) if signals else None,
+            confidence,
+            now,
+            now,
+            now,
+            company_id,
+        ))
+
+        if cursor.rowcount > 0:
+            self.db.conn.commit()
+            self.state['total_founders_found'] = self.state.get('total_founders_found', 0) + 1
+            logger.info(f"    Stored (crossref): {name} ← officer of {company_name} (conf={confidence:.2f})")
+
     def _do_search(self, max_pages: int = 2) -> List[str]:
         """
         Perform one search query and return new URLs found.
@@ -542,13 +702,21 @@ class SlowStealthScraper:
         logger.info(f"[{engine_name}] Searching: {base_query}")
 
         try:
+            # Build time filter kwargs for fresh mode
+            ddgs_time_kwargs = {}
+            serper_time_kwargs = {}
+            if self.fresh_mode:
+                ddgs_time_kwargs = {'timelimit': 'm'}  # Past month
+                serper_time_kwargs = {'tbs': 'qdr:m'}  # Past month
+                logger.info(f"  Fresh mode: filtering for past month only")
+
             # Select search engine based on preference
             if self.search_engine == 'ddgs':
                 scraper = DdgsLibraryScraper(delay_range=(1, 3))
-                results = scraper.search_query(query, max_pages=max_pages)
+                results = scraper.search_query(query, max_pages=max_pages, **ddgs_time_kwargs)
             elif self.search_engine == 'serper':
                 scraper = SerperSearchScraper(delay_range=(0.5, 1.5))
-                results = scraper.search_query(query)
+                results = scraper.search_query(query, **serper_time_kwargs)
             elif self.search_engine == 'curl':
                 scraper = CurlCffiSearchScraper(delay_range=(2, 5))
                 results = scraper.search_query(query, max_pages=max_pages)
@@ -804,8 +972,21 @@ class SlowStealthScraper:
             'details': {},
         }
 
-        # Every 10 iterations, re-check an existing founder
+        # Every 10 iterations, run officer cross-reference and re-check
         if iteration > 0 and iteration % 10 == 0:
+            # Layer 3: Cross-reference new GmbH officers with LinkedIn
+            if self.include_officers:
+                try:
+                    officer_found = self._search_new_officers(batch_size=3)
+                    if officer_found > 0:
+                        stats['action'] = 'officer_crossref'
+                        stats['success'] = True
+                        stats['details'] = {'new_founders': officer_found}
+                        return stats
+                except Exception as e:
+                    logger.warning(f"Officer cross-reference failed: {e}")
+
+            # Re-check existing founders
             result = self._do_recheck()
             if result:
                 stats['action'] = 'recheck'
@@ -842,6 +1023,8 @@ class SlowStealthScraper:
         logger.info(f"  Search engine: {self.search_engine}")
         logger.info(f"  Search delay: {self.search_delay}s (±{self.jitter*100:.0f}%)")
         logger.info(f"  Scrape delay: {self.scrape_delay}s (±{self.jitter*100:.0f}%)")
+        logger.info(f"  Fresh mode: {'ON (past month only)' if self.fresh_mode else 'OFF (all time)'}")
+        logger.info(f"  Officer crossref: {'ON' if self.include_officers else 'OFF'}")
         logger.info(f"  State file: {self.state_file}")
         logger.info(f"  Pending URLs: {len(self.state['pending_urls'])}")
 

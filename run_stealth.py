@@ -44,6 +44,14 @@ def main():
         "--report", action="store_true",
         help="Print query yield report and exit (no scraping)"
     )
+    parser.add_argument(
+        "--fresh", action="store_true",
+        help="Only find recently indexed profiles (past month). Use for incremental runs."
+    )
+    parser.add_argument(
+        "--no-officers", action="store_true",
+        help="Disable Handelsregister officer cross-reference (enabled by default)"
+    )
     args = parser.parse_args()
 
     logging.basicConfig(
@@ -75,6 +83,8 @@ def main():
     print(f"State file: {state_file}")
     print(f"Search delay: {args.delay}s")
     print(f"Search engine: {args.engine}")
+    print(f"Fresh mode: {'ON (past month only)' if args.fresh else 'OFF (all time)'}")
+    print(f"Officer crossref: {'OFF' if args.no_officers else 'ON'}")
     print(f"Iterations: {'unlimited' if args.iterations is None else args.iterations}")
     print()
     from scheduler.jobs.slow_stealth_scraper import SlowStealthScraper, STEALTH_QUERIES
@@ -94,6 +104,8 @@ def main():
             search_delay=args.delay,
             scrape_delay=120,  # LinkedIn scraping mostly disabled
             search_engine=args.engine,
+            fresh_mode=args.fresh,
+            include_officers=not args.no_officers,
         )
 
         # Report mode: print query yield stats and exit
@@ -122,7 +134,7 @@ def main():
             print("="*50)
             print(f"  Queries run: {stats.get('total_searches', 0)}")
             print(f"  Founders found: {stats.get('total_founders_found', 0)}")
-            print(f"  Next query: #{stats.get('query_index', 0) + 1}/98")
+            print(f"  Next query: #{stats.get('query_index', 0) + 1}/{len(STEALTH_QUERIES)}")
             print("="*50)
         except:
             pass

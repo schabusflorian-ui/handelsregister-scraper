@@ -321,6 +321,7 @@ async def companies_list(
         if contacted: filter_params["contacted"] = contacted
         if viewed: filter_params["viewed"] = viewed
         if relevance: filter_params["relevance"] = relevance
+        if per_page != 25: filter_params["per_page"] = per_page
         from urllib.parse import urlencode
         # filter_qs excludes sort/page so sort links and pagination can set them
         filter_qs = urlencode(filter_params)

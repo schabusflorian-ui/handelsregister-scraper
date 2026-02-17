@@ -71,11 +71,6 @@ DEFAULT_RSS_FEEDS = [
         'type': 'startup_news',
     },
     {
-        'name': 'Startup Valley',
-        'url': 'https://www.startupvalley.news/de/feed/',
-        'type': 'startup_news',
-    },
-    {
         'name': 'Sonnenseite',
         'url': 'https://www.sonnenseite.com/feed/',
         'type': 'climate_news',
@@ -137,11 +132,6 @@ DEFAULT_RSS_FEEDS = [
         'type': 'energy_news',
     },
     {
-        'name': 'GreenBiz',
-        'url': 'https://www.greenbiz.com/rss.xml',
-        'type': 'climate_news',
-    },
-    {
         'name': 'PV Magazine DE',
         'url': 'https://www.pv-magazine.de/feed/',
         'type': 'energy_news',
@@ -158,11 +148,6 @@ DEFAULT_RSS_FEEDS = [
     },
 
     # === European Startup Ecosystem ===
-    {
-        'name': 'EU-Startups',
-        'url': 'https://www.eu-startups.com/feed/',
-        'type': 'startup_news',
-    },
     {
         'name': 'Tech.eu',
         'url': 'https://tech.eu/feed/',

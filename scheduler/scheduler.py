@@ -367,9 +367,31 @@ class HandelsregisterScheduler:
         finally:
             db.close()
 
+    # Map each job type's stat keys → generic logging columns.
+    # Each tuple: (key for companies_found, key for companies_new, key for requests_used)
+    _STAT_KEY_MAP: Dict[str, tuple] = {
+        'discovery':          ('companies_found',    'companies_new',    'requests_used'),
+        'backfill':           ('companies_found',    'companies_new',    'requests_used'),
+        'enrichment':         ('companies_processed', 'events_detected', 'requests_used'),
+        'announcement':       ('announcements_fetched', 'new_companies', 'requests_used'),
+        'investor_detection': ('investments_found',  'investments_new',  'requests_used'),
+        'news_monitoring':    ('articles_fetched',   'companies_created', 'requests_used'),
+        'website_finder':     ('companies_checked',  'websites_found',   'requests_used'),
+        'website_scrape':     ('companies_checked',  'companies_enriched', 'requests_used'),
+        'officer_linkedin':   ('officers_processed', 'officers_enriched', 'requests_used'),
+    }
+
     def _log_job_completion(self, job_type: str, stats: Dict[str, Any], db: Database):
-        """Log job completion to database."""
+        """Log job completion to database.
+
+        Uses per-job-type key mapping so each job's specific stat names
+        are correctly stored into the generic companies_found / companies_new /
+        requests_used columns.
+        """
         try:
+            found_key, new_key, req_key = self._STAT_KEY_MAP.get(
+                job_type, ('companies_found', 'companies_new', 'requests_used')
+            )
             db.conn.execute("""
                 INSERT INTO job_runs (job_type, started_at, completed_at, status,
                                      companies_found, companies_new, requests_used)
@@ -378,9 +400,9 @@ class HandelsregisterScheduler:
                 job_type,
                 datetime.utcnow().isoformat(),
                 datetime.utcnow().isoformat(),
-                stats.get('companies_found', 0),
-                stats.get('companies_new', 0),
-                stats.get('requests_used', 0),
+                stats.get(found_key, 0),
+                stats.get(new_key, 0),
+                stats.get(req_key, 0),
             ))
             db.conn.commit()
         except Exception as e:
