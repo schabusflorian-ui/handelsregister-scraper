@@ -25,14 +25,8 @@ python3 -m scheduler.main \
 SCHEDULER_PID=$!
 echo "Scheduler started with PID: $SCHEDULER_PID"
 
-# Start stealth scraper in background (founder discovery)
-echo "Starting stealth scraper (background)..."
-python3 -u run_stealth.py \
-    --engine "${STEALTH_ENGINE:-brave}" \
-    --delay "${STEALTH_DELAY:-90}" \
-    2>&1 &
-STEALTH_PID=$!
-echo "Stealth scraper started with PID: $STEALTH_PID"
+# Stealth scraper: search engines block cloud IPs, run locally instead:
+#   caffeinate -i python3 run_stealth.py --engine curl --delay 90
 
 # Start web UI in foreground (this is the main process)
 echo "Starting web UI on port ${PORT:-8000}..."
