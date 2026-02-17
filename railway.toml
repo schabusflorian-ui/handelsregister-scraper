@@ -8,7 +8,7 @@ dockerfilePath = "Dockerfile"
 [deploy]
 startCommand = "bash /app/deployment/start.sh"
 healthcheckPath = "/health"
-healthcheckTimeout = 30
+healthcheckTimeout = 120
 
 [[mounts]]
 source = "handelsregister-data"

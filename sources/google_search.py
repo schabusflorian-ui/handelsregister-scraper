@@ -652,6 +652,185 @@ def find_stealth_founders(
     return all_results
 
 
+class CurlCffiSearchScraper:
+    """
+    DuckDuckGo search using curl_cffi for TLS fingerprint impersonation.
+
+    Much more reliable than cloudscraper or Playwright because DDG primarily
+    detects bots via TLS fingerprint, not JavaScript. curl_cffi impersonates
+    Chrome's TLS handshake at the libcurl level.
+
+    Lightweight (~5MB) - no browser download needed. Cloud-friendly.
+    """
+
+    def __init__(self, delay_range: tuple = (3, 8), impersonate: str = "chrome"):
+        self.delay_range = delay_range
+        self.impersonate = impersonate
+        self.found_urls: Set[str] = set()
+
+    def _get_headers(self) -> Dict[str, str]:
+        return {
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+            'Accept-Language': 'en-US,en;q=0.9,de;q=0.8',
+            'Referer': 'https://duckduckgo.com/',
+            'DNT': '1',
+        }
+
+    def _delay(self):
+        time.sleep(random.uniform(*self.delay_range))
+
+    def _search_ddg(self, query: str, retries: int = 2, page_data: dict = None) -> tuple:
+        """Execute DuckDuckGo search via curl_cffi."""
+        from curl_cffi import requests as curl_requests
+
+        headers = self._get_headers()
+
+        for attempt in range(retries + 1):
+            try:
+                if page_data:
+                    response = curl_requests.post(
+                        "https://html.duckduckgo.com/html/",
+                        data=page_data,
+                        headers=headers,
+                        impersonate=self.impersonate,
+                        timeout=30,
+                    )
+                else:
+                    response = curl_requests.get(
+                        f"https://html.duckduckgo.com/html/?q={quote_plus(query)}",
+                        headers=headers,
+                        impersonate=self.impersonate,
+                        timeout=30,
+                    )
+
+                if response.status_code == 200:
+                    next_data = self._extract_next_page_data(response.text)
+                    return response.text, next_data
+
+                if response.status_code == 202:
+                    wait_time = 30 * (2 ** attempt)
+                    logger.warning(f"DDG rate limit (202), waiting {wait_time}s...")
+                    time.sleep(wait_time)
+                    continue
+
+                logger.warning(f"DuckDuckGo returned {response.status_code}")
+                return None, None
+
+            except Exception as e:
+                logger.error(f"curl_cffi request failed: {e}")
+                if attempt < retries:
+                    time.sleep(5)
+                    continue
+                return None, None
+
+        return None, None
+
+    def _extract_next_page_data(self, html: str) -> Optional[dict]:
+        """Extract form data needed to fetch the next page of results."""
+        soup = BeautifulSoup(html, 'html.parser')
+        next_form = soup.find('input', {'value': 'Next'})
+        if not next_form:
+            return None
+        form = next_form.find_parent('form')
+        if not form:
+            return None
+        form_data = {}
+        for inp in form.find_all('input'):
+            name = inp.get('name')
+            value = inp.get('value', '')
+            if name:
+                form_data[name] = value
+        return form_data if form_data else None
+
+    def _parse_results(self, html: str, query: str) -> List[SearchResult]:
+        """Parse DuckDuckGo search results."""
+        from urllib.parse import unquote
+
+        results = []
+        soup = BeautifulSoup(html, 'html.parser')
+
+        for result in soup.find_all('a', class_='result__a'):
+            try:
+                href = result.get('href', '')
+                decoded_href = unquote(href)
+
+                if 'linkedin.com/in/' not in decoded_href:
+                    continue
+
+                url = self._clean_linkedin_url(href)
+                if not url:
+                    continue
+
+                title = result.get_text(strip=True)
+
+                snippet = ''
+                snippet_elem = result.find_next('a', class_='result__snippet')
+                if snippet_elem:
+                    snippet = snippet_elem.get_text(strip=True)
+
+                results.append(SearchResult(url=url, title=title, snippet=snippet, query=query))
+            except Exception as e:
+                logger.debug(f"Error parsing DDG result: {e}")
+                continue
+
+        return results
+
+    def _clean_linkedin_url(self, url: str) -> Optional[str]:
+        """Clean LinkedIn URL from DuckDuckGo redirect."""
+        from urllib.parse import unquote
+
+        if 'uddg=' in url:
+            parsed = urlparse(url)
+            params = parse_qs(parsed.query)
+            if 'uddg' in params:
+                url = unquote(params['uddg'][0])
+
+        match = re.search(r'(https?://(?:[a-z]{2}\.)?(?:www\.)?linkedin\.com/in/[^/?&#]+)', url)
+        if match:
+            cleaned = match.group(1)
+            cleaned = re.sub(r'https?://[a-z]{2}\.linkedin\.com', 'https://www.linkedin.com', cleaned)
+            return cleaned
+        return None
+
+    def search_query(self, query: str, max_pages: int = 3) -> List[SearchResult]:
+        """Execute a search query with pagination."""
+        logger.info(f"DDG (curl_cffi) Search: {query[:60]}...")
+
+        all_results = []
+        page = 1
+        next_page_data = None
+
+        while page <= max_pages:
+            html, next_page_data = self._search_ddg(query, page_data=next_page_data)
+            if not html:
+                break
+
+            results = self._parse_results(html, query)
+
+            new_results = []
+            for r in results:
+                if r.url not in self.found_urls:
+                    self.found_urls.add(r.url)
+                    new_results.append(r)
+
+            all_results.extend(new_results)
+
+            if page == 1:
+                logger.info(f"  Page {page}: {len(new_results)} new URLs")
+            else:
+                logger.info(f"  Page {page}: +{len(new_results)} new URLs (total: {len(all_results)})")
+
+            if not next_page_data or len(new_results) == 0:
+                break
+
+            page += 1
+            if page <= max_pages:
+                self._delay()
+
+        logger.info(f"  Found {len(all_results)} total LinkedIn URLs")
+        return all_results
+
+
 class BraveSearchScraper:
     """
     Brave Search scraper - good alternative with less aggressive blocking.
@@ -806,7 +985,7 @@ class MultiSearchScraper:
 
     def __init__(self, delay_range: tuple = (5, 10)):
         self.delay_range = delay_range
-        self.ddg = DuckDuckGoSearchScraper(delay_range=delay_range)
+        self.ddg = CurlCffiSearchScraper(delay_range=delay_range)
         self.brave = BraveSearchScraper(delay_range=delay_range)
         self.found_urls: Set[str] = set()
         self.engine_index = 0
@@ -821,11 +1000,11 @@ class MultiSearchScraper:
     def search_query(self, query: str, max_pages: int = 2) -> List[SearchResult]:
         """Search using rotating engines."""
         engine = self._get_next_engine()
-        engine_name = "DuckDuckGo" if isinstance(engine, DuckDuckGoSearchScraper) else "Brave"
+        engine_name = "DDG (curl_cffi)" if isinstance(engine, CurlCffiSearchScraper) else "Brave"
 
         logger.info(f"[{engine_name}] Searching: {query[:50]}...")
 
-        if isinstance(engine, DuckDuckGoSearchScraper):
+        if isinstance(engine, CurlCffiSearchScraper):
             results = engine.search_query(query, max_pages=max_pages)
         else:
             results = engine.search_query(query)
@@ -843,7 +1022,7 @@ class MultiSearchScraper:
         """Search all engines for the same query (more coverage)."""
         all_results = []
 
-        # DuckDuckGo
+        # DuckDuckGo (via curl_cffi)
         try:
             results = self.ddg.search_query(query, max_pages=2)
             for r in results:
@@ -852,7 +1031,7 @@ class MultiSearchScraper:
                     all_results.append(r)
             time.sleep(random.uniform(*self.delay_range))
         except Exception as e:
-            logger.warning(f"DuckDuckGo failed: {e}")
+            logger.warning(f"DuckDuckGo (curl_cffi) failed: {e}")
 
         # Brave
         try:

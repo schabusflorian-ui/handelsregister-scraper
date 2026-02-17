@@ -53,7 +53,7 @@ FALSE_POSITIVE_DOMAINS = {
 LEGAL_FORMS = [
     'gmbh & co. kg', 'gmbh & co kg', 'gmbh & co. ohg',
     'ug (haftungsbeschränkt)', 'ug haftungsbeschränkt',
-    'gmbh', 'ug', 'ag', 'se', 'kg', 'ohg', 'gbr', 'e.v.', 'e.v',
+    'ggmbh', 'gmbh', 'ug', 'ag', 'se', 'kg', 'ohg', 'gbr', 'e.v.', 'e.v',
     'mbh', 'eg', 'partg', 'kgaa',
 ]
 
@@ -144,8 +144,11 @@ def generate_domain_candidates(name: str) -> List[str]:
     candidates = []
 
     def _add(domain: str):
-        if domain not in candidates:
-            candidates.append(domain)
+        # Skip absurdly long domains (label max is 63 chars per DNS spec)
+        label = domain.split('.')[0]
+        if len(label) > 40 or domain in candidates:
+            return
+        candidates.append(domain)
 
     tlds = ['.de', '.com', '.io', '.tech', '.ai']
 
@@ -522,10 +525,13 @@ def _search_duckduckgo(company_name: str, max_results: int = 5) -> List[Tuple[st
     Returns list of (url, title) tuples, filtered for false positives.
     """
     try:
-        from duckduckgo_search import DDGS
+        from ddgs import DDGS
     except ImportError:
-        logger.warning("duckduckgo-search not installed, skipping web search")
-        return []
+        try:
+            from duckduckgo_search import DDGS
+        except ImportError:
+            logger.warning("ddgs/duckduckgo-search not installed, skipping web search")
+            return []
 
     results = []
     queries = [

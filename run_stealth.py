@@ -36,9 +36,9 @@ def main():
         help="Clear state and start fresh"
     )
     parser.add_argument(
-        "--engine", "-e", type=str, default="brave",
-        choices=["brave", "ddg", "rotate"],
-        help="Search engine: brave (default, less blocking), ddg, or rotate"
+        "--engine", "-e", type=str, default="curl",
+        choices=["brave", "ddg", "curl", "rotate"],
+        help="Search engine: curl (default, TLS fingerprint), brave, ddg, or rotate"
     )
     args = parser.parse_args()
 

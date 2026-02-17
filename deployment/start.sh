@@ -25,6 +25,15 @@ python3 -m scheduler.main \
 SCHEDULER_PID=$!
 echo "Scheduler started with PID: $SCHEDULER_PID"
 
+# Start stealth scraper in background (founder discovery)
+echo "Starting stealth scraper (background)..."
+python3 run_stealth.py \
+    --engine curl \
+    --delay "${STEALTH_DELAY:-90}" \
+    &> /tmp/stealth_scraper.log &
+STEALTH_PID=$!
+echo "Stealth scraper started with PID: $STEALTH_PID"
+
 # Start web UI in foreground (this is the main process)
 echo "Starting web UI on port ${PORT:-8000}..."
 exec python3 -m uvicorn web.app:app \

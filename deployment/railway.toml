@@ -15,7 +15,7 @@ numReplicas = 1
 
 # Health check endpoint
 healthcheckPath = "/health"
-healthcheckTimeout = 30
+healthcheckTimeout = 120
 
 # Volume for persistent SQLite database
 [[volumes]]

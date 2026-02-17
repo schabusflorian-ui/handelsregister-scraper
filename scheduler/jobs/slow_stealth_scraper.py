@@ -506,7 +506,7 @@ class SlowStealthScraper:
         Args:
             max_pages: Number of result pages to fetch (default 2 = ~60 results)
         """
-        from sources.google_search import DuckDuckGoSearchScraper, BraveSearchScraper, MultiSearchScraper
+        from sources.google_search import DuckDuckGoSearchScraper, BraveSearchScraper, MultiSearchScraper, CurlCffiSearchScraper
 
         # Get current query
         query = STEALTH_QUERIES[self.state['query_index']]
@@ -516,7 +516,10 @@ class SlowStealthScraper:
 
         try:
             # Select search engine based on preference
-            if self.search_engine == 'brave':
+            if self.search_engine == 'curl':
+                scraper = CurlCffiSearchScraper(delay_range=(2, 5))
+                results = scraper.search_query(query, max_pages=max_pages)
+            elif self.search_engine == 'brave':
                 scraper = BraveSearchScraper(delay_range=(2, 5), use_cloudscraper=True)
                 results = scraper.search_query(query)
             elif self.search_engine == 'ddg':
