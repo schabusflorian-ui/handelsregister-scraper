@@ -152,24 +152,50 @@
 
 <!-- Results Table -->
 <div class="bg-white shadow rounded-lg overflow-hidden">
+    <!-- Column Selector -->
+    <div class="px-4 py-2 border-b border-gray-200 flex items-center justify-between bg-gray-50">
+        <span class="text-xs text-gray-500" id="col-count"></span>
+        <div class="relative" id="col-selector">
+            <button type="button" onclick="toggleColMenu()" class="inline-flex items-center gap-1 rounded-md bg-white px-2.5 py-1.5 text-xs font-medium text-gray-700 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4h18M3 8h18M3 12h18M3 16h18M3 20h18"/></svg>
+                Columns
+            </button>
+            <div id="col-menu" class="hidden absolute right-0 z-20 mt-1 w-56 rounded-md bg-white shadow-lg ring-1 ring-black ring-opacity-5 max-h-80 overflow-y-auto">
+                <div class="p-2 border-b border-gray-100 flex justify-between">
+                    <button onclick="colSelectAll()" class="text-xs text-indigo-600 hover:text-indigo-800">All</button>
+                    <button onclick="colSelectDefaults()" class="text-xs text-gray-500 hover:text-gray-700">Defaults</button>
+                </div>
+                <div class="py-1" id="col-checkboxes"></div>
+            </div>
+        </div>
+    </div>
+
     <div class="overflow-x-auto">
-        <table class="min-w-full divide-y divide-gray-200">
+        <table class="min-w-full divide-y divide-gray-200" id="companies-table">
             <thead class="bg-gray-50">
                 <tr>
-                    <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Company</th>
-                    <th scope="col" class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Legal Form</th>
-                    <th scope="col" class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">City</th>
-                    <th scope="col" class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">State</th>
-                    <th scope="col" class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Year</th>
-                    <th scope="col" class="px-3 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Web</th>
-                    <th scope="col" class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">AI</th>
-                    <th scope="col" class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                    <th data-col="company" scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Company</th>
+                    <th data-col="legal_form" scope="col" class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Legal Form</th>
+                    <th data-col="city" scope="col" class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">City</th>
+                    <th data-col="state" scope="col" class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">State</th>
+                    <th data-col="year" scope="col" class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Year</th>
+                    <th data-col="website" scope="col" class="px-3 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Web</th>
+                    <th data-col="ai_score" scope="col" class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">AI</th>
+                    <th data-col="status" scope="col" class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                    <th data-col="classification" scope="col" class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Class</th>
+                    <th data-col="startup_score" scope="col" class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Startup</th>
+                    <th data-col="capital" scope="col" class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Capital</th>
+                    <th data-col="registry" scope="col" class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Registry</th>
+                    <th data-col="reg_date" scope="col" class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Reg. Date</th>
+                    <th data-col="purpose" scope="col" class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Purpose</th>
+                    <th data-col="source" scope="col" class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Source</th>
+                    <th data-col="keywords" scope="col" class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Keywords</th>
                 </tr>
             </thead>
             <tbody class="bg-white divide-y divide-gray-200">
                 {% for company in companies %}
                 <tr class="hover:bg-gray-50 {% if company.contacted %}bg-green-50{% endif %}">
-                    <td class="px-4 py-3">
+                    <td data-col="company" class="px-4 py-3">
                         <a href="/companies/{{ company.id }}" class="text-sm font-medium text-indigo-600 hover:text-indigo-900">
                             {{ company.name[:50] }}{% if company.name|length > 50 %}...{% endif %}
                         </a>
@@ -182,19 +208,19 @@
                         </span>
                         {% endif %}
                     </td>
-                    <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-500">
+                    <td data-col="legal_form" class="px-3 py-3 whitespace-nowrap text-sm text-gray-500">
                         {{ company.legal_form or '-' }}
                     </td>
-                    <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-500">
+                    <td data-col="city" class="px-3 py-3 whitespace-nowrap text-sm text-gray-500">
                         {{ company.city or '-' }}
                     </td>
-                    <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-500">
+                    <td data-col="state" class="px-3 py-3 whitespace-nowrap text-sm text-gray-500">
                         {{ company.state[:15] if company.state else '-' }}{% if company.state and company.state|length > 15 %}...{% endif %}
                     </td>
-                    <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-500">
+                    <td data-col="year" class="px-3 py-3 whitespace-nowrap text-sm text-gray-500">
                         {{ company.first_seen_date[:4] if company.first_seen_date else '-' }}
                     </td>
-                    <td class="px-3 py-3 whitespace-nowrap text-center">
+                    <td data-col="website" class="px-3 py-3 whitespace-nowrap text-center">
                         {% if company.website %}
                         <a href="{{ company.website }}" target="_blank" class="text-green-600 hover:text-green-800" title="{{ company.website }}">
                             <svg class="w-4 h-4 inline" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M4.083 9h1.946c.089-1.546.383-2.97.837-4.118A6.004 6.004 0 004.083 9zM10 2a8 8 0 100 16 8 8 0 000-16zm0 2c-.076 0-.232.032-.465.262-.238.234-.497.623-.737 1.182-.389.907-.673 2.142-.766 3.556h3.936c-.093-1.414-.377-2.649-.766-3.556-.24-.56-.5-.948-.737-1.182C10.232 4.032 10.076 4 10 4zm3.971 5c-.089-1.546-.383-2.97-.837-4.118A6.004 6.004 0 0115.917 9h-1.946zm-2.003 2H8.032c.093 1.414.377 2.649.766 3.556.24.56.5.948.737 1.182.233.23.389.262.465.262.076 0 .232-.032.465-.262.238-.234.498-.623.737-1.182.389-.907.673-2.142.766-3.556zm1.166 4.118c.454-1.147.748-2.572.837-4.118h1.946a6.004 6.004 0 01-2.783 4.118zm-6.268 0C6.412 13.97 6.118 12.546 6.03 11H4.083a6.004 6.004 0 002.783 4.118z" clip-rule="evenodd"/></svg>
@@ -203,7 +229,7 @@
                         <span class="text-gray-300">-</span>
                         {% endif %}
                     </td>
-                    <td class="px-3 py-3 whitespace-nowrap">
+                    <td data-col="ai_score" class="px-3 py-3 whitespace-nowrap">
                         <span class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium
                             {% if company.ai_robotics_score >= 5 %}bg-green-100 text-green-800
                             {% elif company.ai_robotics_score >= 3 %}bg-yellow-100 text-yellow-800
@@ -211,7 +237,7 @@
                             {{ company.ai_robotics_score }}
                         </span>
                     </td>
-                    <td class="px-3 py-3 whitespace-nowrap">
+                    <td data-col="status" class="px-3 py-3 whitespace-nowrap">
                         <div class="flex space-x-1">
                             {% if company.viewed %}
                             <span class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-blue-100 text-blue-800" title="Viewed">
@@ -228,10 +254,36 @@
                             {% endif %}
                         </div>
                     </td>
+                    <td data-col="classification" class="px-3 py-3 whitespace-nowrap text-sm text-gray-500">
+                        {{ company.startup_classification or '-' }}
+                    </td>
+                    <td data-col="startup_score" class="px-3 py-3 whitespace-nowrap text-sm text-gray-500">
+                        {{ company.startup_score or '-' }}
+                    </td>
+                    <td data-col="capital" class="px-3 py-3 whitespace-nowrap text-sm text-gray-500">
+                        {% if company.capital_amount %}
+                            {{ company.capital_amount|currency(company.capital_currency or 'EUR') }}
+                        {% else %}-{% endif %}
+                    </td>
+                    <td data-col="registry" class="px-3 py-3 whitespace-nowrap text-sm text-gray-500">
+                        {{ company.registry_court or '-' }}
+                    </td>
+                    <td data-col="reg_date" class="px-3 py-3 whitespace-nowrap text-sm text-gray-500">
+                        {{ company.registration_date[:10] if company.registration_date else '-' }}
+                    </td>
+                    <td data-col="purpose" class="px-3 py-3 text-sm text-gray-500 max-w-xs truncate" title="{{ company.purpose or '' }}">
+                        {{ company.purpose[:60] if company.purpose else '-' }}{% if company.purpose and company.purpose|length > 60 %}...{% endif %}
+                    </td>
+                    <td data-col="source" class="px-3 py-3 whitespace-nowrap text-sm text-gray-500">
+                        {{ company.source or '-' }}
+                    </td>
+                    <td data-col="keywords" class="px-3 py-3 text-sm text-gray-500 max-w-xs truncate" title="{{ company.matched_keywords or '' }}">
+                        {{ company.matched_keywords[:40] if company.matched_keywords else '-' }}{% if company.matched_keywords and company.matched_keywords|length > 40 %}...{% endif %}
+                    </td>
                 </tr>
                 {% else %}
                 <tr>
-                    <td colspan="8" class="px-6 py-4 text-center text-sm text-gray-500">
+                    <td colspan="16" class="px-6 py-4 text-center text-sm text-gray-500">
                         No companies found matching your criteria.
                     </td>
                 </tr>
@@ -271,4 +323,101 @@
     </div>
     {% endif %}
 </div>
+
+<script>
+// Column configuration: key -> { label, defaultVisible }
+const COLUMNS = {
+    company:        { label: 'Company',        defaultVisible: true },
+    legal_form:     { label: 'Legal Form',     defaultVisible: true },
+    city:           { label: 'City',           defaultVisible: true },
+    state:          { label: 'State',          defaultVisible: true },
+    year:           { label: 'Year',           defaultVisible: true },
+    website:        { label: 'Website',        defaultVisible: true },
+    ai_score:       { label: 'AI Score',       defaultVisible: true },
+    status:         { label: 'Status',         defaultVisible: true },
+    classification: { label: 'Classification', defaultVisible: false },
+    startup_score:  { label: 'Startup Score',  defaultVisible: false },
+    capital:        { label: 'Capital',        defaultVisible: false },
+    registry:       { label: 'Registry Court', defaultVisible: false },
+    reg_date:       { label: 'Reg. Date',      defaultVisible: false },
+    purpose:        { label: 'Purpose',        defaultVisible: false },
+    source:         { label: 'Source',          defaultVisible: false },
+    keywords:       { label: 'Keywords',       defaultVisible: false },
+};
+
+const STORAGE_KEY = 'hr_visible_columns';
+
+function getVisibleCols() {
+    try {
+        const stored = localStorage.getItem(STORAGE_KEY);
+        if (stored) return JSON.parse(stored);
+    } catch (e) {}
+    return Object.entries(COLUMNS).filter(([_, c]) => c.defaultVisible).map(([k]) => k);
+}
+
+function saveVisibleCols(cols) {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(cols));
+}
+
+function applyColumns() {
+    const visible = new Set(getVisibleCols());
+    const allCells = document.querySelectorAll('[data-col]');
+    allCells.forEach(el => {
+        el.style.display = visible.has(el.dataset.col) ? '' : 'none';
+    });
+    // Update checkboxes
+    document.querySelectorAll('#col-checkboxes input[type=checkbox]').forEach(cb => {
+        cb.checked = visible.has(cb.value);
+    });
+    // Update count
+    document.getElementById('col-count').textContent = visible.size + ' of ' + Object.keys(COLUMNS).length + ' columns';
+}
+
+function toggleCol(colKey) {
+    const cols = getVisibleCols();
+    const idx = cols.indexOf(colKey);
+    if (idx >= 0) {
+        if (cols.length <= 1) return; // keep at least one
+        cols.splice(idx, 1);
+    } else {
+        cols.push(colKey);
+    }
+    saveVisibleCols(cols);
+    applyColumns();
+}
+
+function colSelectAll() {
+    saveVisibleCols(Object.keys(COLUMNS));
+    applyColumns();
+}
+
+function colSelectDefaults() {
+    saveVisibleCols(Object.entries(COLUMNS).filter(([_, c]) => c.defaultVisible).map(([k]) => k));
+    applyColumns();
+}
+
+function toggleColMenu() {
+    document.getElementById('col-menu').classList.toggle('hidden');
+}
+
+// Build checkbox list
+(function() {
+    const container = document.getElementById('col-checkboxes');
+    for (const [key, cfg] of Object.entries(COLUMNS)) {
+        const label = document.createElement('label');
+        label.className = 'flex items-center px-3 py-1 hover:bg-gray-50 cursor-pointer text-sm text-gray-700';
+        label.innerHTML = '<input type="checkbox" value="' + key + '" class="rounded border-gray-300 text-indigo-600 mr-2" onchange="toggleCol(\'' + key + '\')"> ' + cfg.label;
+        container.appendChild(label);
+    }
+    applyColumns();
+})();
+
+// Close menu on outside click
+document.addEventListener('click', function(e) {
+    const selector = document.getElementById('col-selector');
+    if (!selector.contains(e.target)) {
+        document.getElementById('col-menu').classList.add('hidden');
+    }
+});
+</script>
 {% endblock %}
