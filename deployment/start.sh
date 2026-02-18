@@ -17,18 +17,23 @@ export DB_PATH="${DATABASE_PATH:-/data/handelsregister.db}"
 mkdir -p /data
 
 # Start scheduler in background (Handelsregister scraping)
+# Redirect output so it doesn't interfere with the main process
 echo "Starting scheduler (background)..."
 python3 -m scheduler.main \
     --db "$DB_PATH" \
     --run-now \
-    --verbose &
+    --verbose 2>&1 &
 SCHEDULER_PID=$!
 echo "Scheduler started with PID: $SCHEDULER_PID"
+
+# Ensure background scheduler doesn't prevent clean shutdown
+disown $SCHEDULER_PID 2>/dev/null
 
 # Stealth scraper: search engines block cloud IPs, run locally instead:
 #   caffeinate -i python3 run_stealth.py --engine curl --delay 90
 
-# Start web UI in foreground (this is the main process)
+# Start web UI in foreground (this is the main process via exec)
+# exec replaces this shell - uvicorn becomes PID 1 and receives signals directly
 echo "Starting web UI on port ${PORT:-8000}..."
 exec python3 -m uvicorn web.app:app \
     --host 0.0.0.0 \

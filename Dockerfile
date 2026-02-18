@@ -39,9 +39,10 @@ ENV PORT=8000
 # Expose web UI port
 EXPOSE 8000
 
-# Health check via dedicated endpoint
-HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
-    CMD curl -f http://localhost:${PORT:-8000}/health || exit 1
+# Health check: Railway uses its own healthcheckPath from railway.toml
+# Docker HEALTHCHECK disabled to avoid conflicts with Railway's health check
+# HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
+#     CMD curl -f http://localhost:${PORT:-8000}/health || exit 1
 
 # Run both web UI and scheduler via bash
 CMD ["bash", "/app/deployment/start.sh"]

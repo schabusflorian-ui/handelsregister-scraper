@@ -9,6 +9,9 @@ dockerfilePath = "Dockerfile"
 startCommand = "bash /app/deployment/start.sh"
 healthcheckPath = "/health"
 healthcheckTimeout = 120
+restartPolicyType = "on-failure"
+restartPolicyMaxRetries = 5
+numReplicas = 1
 
 [[mounts]]
 source = "handelsregister-data"
