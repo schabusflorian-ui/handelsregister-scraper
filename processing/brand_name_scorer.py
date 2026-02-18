@@ -7,6 +7,13 @@ or surnames (Müller, Schmidt). Tech startups use English or invented brands
 
 Used by the new-registration scanner to discover startups whose names
 contain no AI/tech keywords.
+
+v2 improvements:
+- Stronger negative signals for shell/holding/Verwaltungs patterns
+- Detects numbered shell companies (aptus 2635., Lindentor 1307. V V)
+- Penalizes 2-4 letter abbreviation + number patterns (DFI 24, BRG 19)
+- Detects Vorratsgesellschaft (shelf company) patterns
+- Broader positive heuristics: English word detection, neologism patterns
 """
 
 import re
@@ -137,6 +144,98 @@ GERMAN_SURNAME_ENDINGS = [
 
 
 # ============================================================================
+# Shell / holding company detection (strong negative signals)
+# ============================================================================
+
+# Regex patterns for numbered shell companies (Vorratsgesellschaften)
+# Examples: "aptus 2635.", "Lindentor 1307. V V", "SCUR-Alpha 1971",
+#           "M&L 427", "firma.de Vorratsgesellschaft 1234"
+SHELL_COMPANY_PATTERNS = [
+    # "aptus NNNN." or "word NNNN." — mass-created shelf companies
+    (re.compile(r'^\w+\s+\d{2,5}\.?\s*$', re.IGNORECASE),
+     'numbered shell (word + number)'),
+    # "word NNNN. V V" — numbered shell with placeholder initials
+    (re.compile(r'\d{3,5}\.\s*[A-Z]\s+[A-Z]\b'),
+     'numbered shell with initials'),
+    # "SCUR-Alpha NNNN" — coded shelf company patterns
+    (re.compile(r'^[A-Z]{2,5}[\-\s]?(Alpha|Beta|Gamma|Delta)\s+\d+', re.IGNORECASE),
+     'coded shelf company'),
+    # Explicit Vorratsgesellschaft / shelf company
+    (re.compile(r'vorrats', re.IGNORECASE),
+     'Vorratsgesellschaft'),
+    (re.compile(r'shelf\s*compan', re.IGNORECASE),
+     'shelf company'),
+    # "firma.de Vorratsgesellschaft" pattern
+    (re.compile(r'firma\.de', re.IGNORECASE),
+     'firma.de shelf company'),
+]
+
+# Pattern: 2-4 uppercase letters + space + number (e.g., "DFI 24", "BRG 19", "VR 500")
+# These are typically abbreviated holding/investment vehicles, not startups
+ABBREVIATION_NUMBER_PATTERN = re.compile(
+    r'^[A-Z&]{1,4}[\s\-]+\d{1,4}\b'
+)
+
+# Words that indicate financial/administrative vehicles (not tech startups)
+# These get a stronger penalty than SME_NAME_PATTERNS
+VEHICLE_WORDS = [
+    'verwaltung', 'verwaltungs',
+    'holding',
+    'investment', 'investments',
+    'capital',
+    'beteiligungs', 'beteiligung',
+    'immobilien',
+    'vermögens', 'vermögensverwaltung',
+    'treuhand',
+    'vorratsgesellschaft',
+    'windpark', 'solarpark',
+    'grundbesitz',
+]
+
+
+# ============================================================================
+# English word detection (positive signal for false negative reduction)
+# ============================================================================
+
+# Common English words found in startup names — distinct from German
+# Only words that are clearly English and unlikely in traditional German names
+ENGLISH_STARTUP_WORDS = {
+    # Technology
+    'cloud', 'smart', 'cyber', 'deep', 'next', 'fast', 'flash',
+    'swift', 'flow', 'hub', 'hive', 'nest', 'core', 'forge',
+    'wave', 'spark', 'pulse', 'edge', 'grid', 'node',
+    'link', 'sync', 'loop', 'mesh', 'stack', 'scope',
+    # Business/Product
+    'scout', 'fleet', 'freight', 'trade', 'snap', 'shift',
+    'boost', 'craft', 'match', 'spot', 'sprint',
+    'dock', 'drop', 'pitch', 'dash', 'rush',
+    # Modern branding
+    'urban', 'fresh', 'bright', 'bold', 'pure', 'prime',
+    'vivid', 'rapid', 'agile', 'lean', 'flex',
+    'club', 'crew', 'tribe', 'space', 'world',
+    'group', 'systems', 'works', 'point',
+    # Compound starters
+    'insta', 'ever', 'super', 'hyper', 'ultra', 'meta',
+    'auto', 'open', 'true', 'real', 'clear',
+}
+
+# Startup-typical name endings (neologism suffixes)
+# These catch invented brand names like Spotify, Shopify, Brainly, etc.
+NEOLOGISM_SUFFIXES = [
+    'ify', 'fy',    # Spotify, Shopify, Testify
+    'ly',           # Brainly, Grammarly, Bitly
+    'oo',           # Bamboo, Shazoo
+    'io',           # Rubio, Twilio
+    'ia',           # Personia, Insignia
+    'ix',           # Nutanix, Citrix
+    'yx',           # Onyx-style
+    'eo',           # Cameo, Stereo
+    'ry',           # Foundry, Pantry
+    'er',           # (only for short coined words, handled separately)
+]
+
+
+# ============================================================================
 # Result dataclass
 # ============================================================================
 
@@ -150,6 +249,8 @@ class BrandNameScore:
     name_pattern_signal: int
     non_german_signal: int
     short_brand_signal: int
+    shell_penalty: int = 0
+    english_signal: int = 0
     signals: List[str] = field(default_factory=list)
     negative_signals: List[str] = field(default_factory=list)
     brand_part: str = ''
@@ -223,7 +324,12 @@ class BrandNameScorer:
         if legal_form_signal > 0:
             signals.append(f'Legal form: {legal_form} (+{legal_form_signal})')
 
-        # Step 3: Location signal
+        # Step 3: Shell company / vehicle detection (EARLY, strong negative)
+        shell_penalty = self._detect_shell_company(brand_part)
+        if shell_penalty < 0:
+            negative_signals.append(f'Shell/vehicle pattern ({shell_penalty})')
+
+        # Step 4: Location signal
         location_signal = 0
         if city:
             for hub_city, score in STARTUP_HUB_CITIES.items():
@@ -232,7 +338,7 @@ class BrandNameScorer:
                     signals.append(f'Startup hub: {hub_city} (+{score})')
                     break
 
-        # Step 4: Name pattern signal (reuse from StartupScorer)
+        # Step 5: Name pattern signal (reuse from StartupScorer)
         name_pattern_signal = 0
         for pattern, score, desc in self._startup_patterns:
             if pattern.search(name):
@@ -245,23 +351,29 @@ class BrandNameScorer:
                 name_pattern_signal += score
                 negative_signals.append(f'SME pattern: {desc} ({score})')
 
-        # Step 5: Non-German brand name detection
+        # Step 6: Non-German brand name detection
         non_german_signal = 0
         is_non_german, reasons = self._is_non_german_brand(brand_part)
         if is_non_german:
             non_german_signal = 3
             signals.append(f'Non-German brand (+3): {", ".join(reasons)}')
 
-        # Step 6: Short single-word brand signal
+        # Step 7: Short single-word brand signal
         short_brand_signal = 0
         brand_words = brand_part.split()
         if len(brand_words) == 1 and 3 <= len(brand_part) <= 12:
             short_brand_signal = 2
             signals.append(f'Short brand: "{brand_part}" (+2)')
 
+        # Step 8: English word / neologism detection (positive, false negative reduction)
+        english_signal = self._detect_english_brand(brand_part)
+        if english_signal > 0:
+            signals.append(f'English/neologism brand (+{english_signal})')
+
         # Calculate total
         total = (legal_form_signal + location_signal + name_pattern_signal
-                 + non_german_signal + short_brand_signal)
+                 + non_german_signal + short_brand_signal
+                 + shell_penalty + english_signal)
 
         return BrandNameScore(
             total_score=total,
@@ -271,6 +383,8 @@ class BrandNameScorer:
             name_pattern_signal=name_pattern_signal,
             non_german_signal=non_german_signal,
             short_brand_signal=short_brand_signal,
+            shell_penalty=shell_penalty,
+            english_signal=english_signal,
             signals=signals,
             negative_signals=negative_signals,
             brand_part=brand_part,
@@ -300,6 +414,91 @@ class BrandNameScorer:
                 return LEGAL_FORM_SCORES[form]
 
         return 0  # Unknown form — don't skip
+
+    def _detect_shell_company(self, brand_part: str) -> int:
+        """
+        Detect shell companies, Vorratsgesellschaften, and financial vehicles.
+
+        Returns a negative penalty (e.g., -8, -5, -3) or 0 if no match.
+        """
+        if not brand_part:
+            return 0
+
+        brand_lower = brand_part.lower()
+
+        # Check explicit shell company patterns (strongest penalty)
+        for pattern, desc in SHELL_COMPANY_PATTERNS:
+            if pattern.search(brand_part):
+                return -8  # Almost always kills the score
+
+        # Check abbreviation + number patterns: "DFI 24", "BRG 19", "VR 500"
+        if ABBREVIATION_NUMBER_PATTERN.match(brand_part):
+            return -5
+
+        # Check for vehicle words (Verwaltung, Holding, Investment, etc.)
+        # Stronger penalty than the SME patterns from StartupScorer
+        vehicle_count = 0
+        matched_vehicles = []
+        for word in VEHICLE_WORDS:
+            if word in brand_lower:
+                vehicle_count += 1
+                matched_vehicles.append(word)
+
+        if vehicle_count >= 2:
+            return -6  # Multiple vehicle words = very likely not a startup
+        elif vehicle_count == 1:
+            # Stronger penalty if brand = abbreviation + vehicle word
+            # (e.g., "DMN Investment", "JRI Holding", "ALE Verwaltungs")
+            brand_words = brand_part.split()
+            if (len(brand_words) == 2
+                    and len(brand_words[0]) <= 4
+                    and brand_words[0].upper() == brand_words[0]):
+                return -5  # Abbreviation + vehicle word = very likely a vehicle
+            return -3  # Single vehicle word = moderate penalty
+
+        # Check for names that are purely numbers/codes: "1234", "42"
+        stripped = re.sub(r'[\s\.\-&]', '', brand_part)
+        if stripped.isdigit():
+            return -8
+
+        return 0
+
+    def _detect_english_brand(self, brand_part: str) -> int:
+        """
+        Detect English words and neologism patterns in brand names.
+
+        This is a positive signal that helps catch startups whose names
+        don't trigger the "non-German" detector but still look startup-ish.
+
+        Returns 0-2 bonus points.
+        """
+        if not brand_part or len(brand_part) < 3:
+            return 0
+
+        brand_lower = brand_part.lower()
+        words = brand_lower.split()
+
+        signal = 0
+
+        # Check for English startup words in the brand
+        for word in words:
+            # Check both exact match and as substring (for compounds like InstaFreight)
+            if word in ENGLISH_STARTUP_WORDS:
+                signal = max(signal, 2)
+                break
+            # Check if any English word appears as prefix/suffix in compound words
+            for eng_word in ENGLISH_STARTUP_WORDS:
+                if len(eng_word) >= 4 and eng_word in word and word != eng_word:
+                    signal = max(signal, 1)
+
+        # Check for neologism suffixes (invented brand endings)
+        if len(words) == 1 and len(brand_part) >= 4:
+            for suffix in NEOLOGISM_SUFFIXES:
+                if brand_lower.endswith(suffix) and len(brand_lower) > len(suffix) + 2:
+                    signal = max(signal, 1)
+                    break
+
+        return signal
 
     def _is_non_german_brand(self, brand_part: str) -> Tuple[bool, List[str]]:
         """
