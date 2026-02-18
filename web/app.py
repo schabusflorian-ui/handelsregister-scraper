@@ -734,25 +734,121 @@ async def stealth_founders_redirect():
 
 
 @app.get("/founders", response_class=HTMLResponse)
-async def founders_list(request: Request, page: int = 1, per_page: int = 25):
+async def founders_list(
+    request: Request,
+    q: Optional[str] = None,
+    location: Optional[str] = None,
+    emerged: Optional[str] = None,       # 'yes', 'no', or None
+    contacted: Optional[str] = None,     # 'yes', 'no', or None
+    viewed: Optional[str] = None,        # 'yes', 'no', or None
+    relevance: Optional[str] = None,     # 'relevant', 'irrelevant', 'unscreened', or None
+    min_confidence: Optional[str] = None,
+    sort: Optional[str] = None,
+    sort_dir: Optional[str] = None,
+    page: int = 1,
+    per_page: int = 25,
+):
     """Stealth founders page."""
+    min_confidence_int = int(min_confidence) if min_confidence and min_confidence.isdigit() else None
+
     db = get_db()
     try:
         offset = (page - 1) * per_page
 
+        # Build query
+        conditions = []
+        params = []
+
+        if q:
+            conditions.append("(sf.name LIKE ? OR sf.headline LIKE ? OR sf.current_company LIKE ?)")
+            params.extend([f"%{q}%", f"%{q}%", f"%{q}%"])
+        if location:
+            conditions.append("sf.location = ?")
+            params.append(location)
+        if emerged == 'yes':
+            conditions.append("sf.company_id IS NOT NULL")
+        elif emerged == 'no':
+            conditions.append("sf.company_id IS NULL")
+        if contacted == 'yes':
+            conditions.append("sf.contacted = 1")
+        elif contacted == 'no':
+            conditions.append("(sf.contacted = 0 OR sf.contacted IS NULL)")
+        if viewed == 'yes':
+            conditions.append("sf.viewed = 1")
+        elif viewed == 'no':
+            conditions.append("(sf.viewed = 0 OR sf.viewed IS NULL)")
+        if relevance == 'relevant':
+            conditions.append("sf.relevance = 'relevant'")
+        elif relevance == 'irrelevant':
+            conditions.append("sf.relevance = 'irrelevant'")
+        elif relevance == 'unscreened':
+            conditions.append("(sf.relevance IS NULL)")
+        if min_confidence_int is not None:
+            conditions.append("sf.confidence_score >= ?")
+            params.append(min_confidence_int / 100.0)
+
+        where_clause = " AND ".join(conditions) if conditions else "1=1"
+
+        # Sorting
+        allowed_sort_cols = {
+            'name': 'sf.name',
+            'headline': 'sf.headline',
+            'location': 'sf.location',
+            'confidence': 'sf.confidence_score',
+            'emerged': 'sf.company_id',
+            'first_seen': 'sf.first_seen_at',
+            'relevance': 'sf.relevance',
+        }
+        sort_column = allowed_sort_cols.get(sort)
+        sort_direction = 'ASC' if sort_dir == 'asc' else 'DESC'
+        if sort_column:
+            order_clause = f"{sort_column} {sort_direction} NULLS LAST, sf.name"
+        else:
+            order_clause = "sf.confidence_score DESC, sf.first_seen_at DESC"
+
+        # Get total count
+        count_query = f"SELECT COUNT(*) FROM stealth_founders sf WHERE {where_clause}"
+        total = db.conn.execute(count_query, params).fetchone()[0]
+
         # Get founders
-        founders = db.conn.execute("""
+        query = f"""
             SELECT sf.*, c.name as company_name
             FROM stealth_founders sf
             LEFT JOIN companies c ON sf.company_id = c.id
-            ORDER BY sf.confidence_score DESC, sf.first_seen_at DESC
+            WHERE {where_clause}
+            ORDER BY {order_clause}
             LIMIT ? OFFSET ?
-        """, (per_page, offset)).fetchall()
+        """
+        founders = db.conn.execute(query, params + [per_page, offset]).fetchall()
         founders = [dict(row) for row in founders]
 
-        # Get total
-        total = db.conn.execute("SELECT COUNT(*) FROM stealth_founders").fetchone()[0]
         total_pages = (total + per_page - 1) // per_page
+
+        # Get filter options
+        locations = db.conn.execute("""
+            SELECT location, COUNT(*) as count
+            FROM stealth_founders
+            WHERE location IS NOT NULL AND location != ''
+            GROUP BY location
+            ORDER BY count DESC
+            LIMIT 20
+        """).fetchall()
+
+        # Build filter query string
+        from urllib.parse import urlencode
+        filter_params = {}
+        if q: filter_params["q"] = q
+        if location: filter_params["location"] = location
+        if emerged: filter_params["emerged"] = emerged
+        if contacted: filter_params["contacted"] = contacted
+        if viewed: filter_params["viewed"] = viewed
+        if relevance: filter_params["relevance"] = relevance
+        if min_confidence: filter_params["min_confidence"] = min_confidence
+        if per_page != 25: filter_params["per_page"] = per_page
+        filter_qs = urlencode(filter_params)
+        if sort: filter_params["sort"] = sort
+        if sort_dir: filter_params["sort_dir"] = sort_dir
+        filter_qs_with_sort = urlencode(filter_params)
 
         return templates.TemplateResponse("founders.html", {
             "request": request,
@@ -761,7 +857,109 @@ async def founders_list(request: Request, page: int = 1, per_page: int = 25):
             "page": page,
             "per_page": per_page,
             "total_pages": total_pages,
+            "q": q or "",
+            "location": location or "",
+            "emerged": emerged or "",
+            "contacted": contacted or "",
+            "viewed": viewed or "",
+            "relevance": relevance or "",
+            "min_confidence": min_confidence or "",
+            "sort": sort or "",
+            "sort_dir": sort_dir or "",
+            "filter_qs": filter_qs,
+            "filter_qs_with_sort": filter_qs_with_sort,
+            "locations": locations,
         })
+    finally:
+        db.close()
+
+
+@app.post("/founders/{founder_id}/toggle-contacted")
+async def toggle_founder_contacted(founder_id: int):
+    """Toggle contacted status for a founder."""
+    db = get_db()
+    try:
+        current = db.conn.execute(
+            "SELECT contacted FROM stealth_founders WHERE id = ?", (founder_id,)
+        ).fetchone()
+        if not current:
+            raise HTTPException(status_code=404, detail="Founder not found")
+
+        new_status = 0 if current[0] else 1
+        contacted_at = datetime.now().isoformat() if new_status else None
+
+        db.conn.execute("""
+            UPDATE stealth_founders SET contacted = ?, contacted_at = ?
+            WHERE id = ?
+        """, (new_status, contacted_at, founder_id))
+        db.conn.commit()
+
+        return {"success": True, "contacted": new_status}
+    finally:
+        db.close()
+
+
+@app.post("/founders/{founder_id}/relevance")
+async def set_founder_relevance(founder_id: int, request: Request):
+    """Set relevance for a founder."""
+    db = get_db()
+    try:
+        body = await request.json()
+        relevance = body.get("relevance")
+        if relevance not in ('relevant', 'irrelevant', None):
+            raise HTTPException(status_code=400, detail="Invalid relevance value")
+
+        db.conn.execute(
+            "UPDATE stealth_founders SET relevance = ? WHERE id = ?",
+            (relevance, founder_id)
+        )
+        db.conn.commit()
+
+        return {"success": True, "relevance": relevance}
+    finally:
+        db.close()
+
+
+@app.post("/founders/bulk-relevance")
+async def bulk_set_founder_relevance(request: Request):
+    """Set relevance for multiple founders at once."""
+    db = get_db()
+    try:
+        body = await request.json()
+        founder_ids = body.get("founder_ids", [])
+        relevance = body.get("relevance")
+        if relevance not in ('relevant', 'irrelevant', None):
+            raise HTTPException(status_code=400, detail="Invalid relevance value")
+        if not founder_ids or not isinstance(founder_ids, list):
+            raise HTTPException(status_code=400, detail="founder_ids must be a non-empty list")
+
+        placeholders = ",".join(["?"] * len(founder_ids))
+        db.conn.execute(
+            f"UPDATE stealth_founders SET relevance = ? WHERE id IN ({placeholders})",
+            [relevance] + founder_ids
+        )
+        db.conn.commit()
+
+        return {"success": True, "updated": len(founder_ids)}
+    finally:
+        db.close()
+
+
+@app.post("/founders/{founder_id}/notes")
+async def save_founder_notes(founder_id: int, request: Request):
+    """Save notes for a founder."""
+    db = get_db()
+    try:
+        body = await request.json()
+        notes = body.get("notes", "")
+
+        db.conn.execute(
+            "UPDATE stealth_founders SET notes = ? WHERE id = ?",
+            (notes, founder_id)
+        )
+        db.conn.commit()
+
+        return {"success": True}
     finally:
         db.close()
 
@@ -863,6 +1061,52 @@ async def api_companies_search(
         return templates.TemplateResponse("partials/company_list.html", {
             "request": request,
             "companies": companies,
+        })
+    finally:
+        db.close()
+
+
+@app.get("/api/companies/{company_id}/quick-view", response_class=HTMLResponse)
+async def company_quick_view(request: Request, company_id: int):
+    """Return a compact company detail partial for inline expansion in the companies table."""
+    db = get_db()
+    try:
+        company = db.get_company(company_id)
+        if not company:
+            raise HTTPException(status_code=404, detail="Company not found")
+
+        # Get officers (limit 3)
+        officers = db.get_officers(company_id)[:3] if hasattr(db, 'get_officers') else []
+
+        # Get investments
+        try:
+            investments = db.conn.execute("""
+                SELECT inv.*, i.canonical_name as investor_name, i.type as investor_type
+                FROM investments inv
+                JOIN investors i ON inv.investor_id = i.id
+                WHERE inv.company_id = ?
+                ORDER BY inv.confidence DESC
+                LIMIT 5
+            """, (company_id,)).fetchall()
+            investments = [dict(row) for row in investments]
+        except:
+            investments = []
+
+        # Mark as viewed
+        try:
+            db.conn.execute("""
+                UPDATE companies SET viewed = 1, viewed_at = COALESCE(viewed_at, datetime('now'))
+                WHERE id = ?
+            """, (company_id,))
+            db.conn.commit()
+        except:
+            pass
+
+        return templates.TemplateResponse("partials/company_quick_view.html", {
+            "request": request,
+            "company": company,
+            "officers": officers,
+            "investments": investments,
         })
     finally:
         db.close()

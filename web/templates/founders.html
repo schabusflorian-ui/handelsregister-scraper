@@ -12,30 +12,162 @@
 {% endblock %}
 
 {% block content %}
+<!-- Search and Filters -->
+<div class="bg-white shadow rounded-lg mb-6">
+    <div class="px-4 py-5 sm:p-6">
+        <form method="GET" action="/founders" class="space-y-4">
+            <div class="grid grid-cols-1 md:grid-cols-7 gap-4">
+                <!-- Search -->
+                <div class="md:col-span-2">
+                    <label for="q" class="block text-sm font-medium text-gray-700">Search</label>
+                    <input type="text" name="q" id="q" value="{{ q }}"
+                        class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                        placeholder="Name, headline, or company...">
+                </div>
+
+                <!-- Location Filter -->
+                <div>
+                    <label for="location" class="block text-sm font-medium text-gray-700">Location</label>
+                    <select name="location" id="location" onchange="this.form.submit()"
+                        class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+                        <option value="">All locations</option>
+                        {% for loc in locations %}
+                        <option value="{{ loc.location }}" {% if location == loc.location %}selected{% endif %}>
+                            {{ loc.location }} ({{ loc.count }})
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <!-- Min Confidence -->
+                <div>
+                    <label for="min_confidence" class="block text-sm font-medium text-gray-700">Min Confidence</label>
+                    <select name="min_confidence" id="min_confidence" onchange="this.form.submit()"
+                        class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+                        <option value="">Any</option>
+                        {% for score in [20, 40, 60, 70, 80, 90] %}
+                        <option value="{{ score }}" {% if min_confidence == score|string %}selected{% endif %}>{{ score }}%+</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <!-- Emerged Filter -->
+                <div>
+                    <label for="emerged" class="block text-sm font-medium text-gray-700">Emerged</label>
+                    <select name="emerged" id="emerged" onchange="this.form.submit()"
+                        class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+                        <option value="">All</option>
+                        <option value="yes" {% if emerged == 'yes' %}selected{% endif %}>Emerged</option>
+                        <option value="no" {% if emerged == 'no' %}selected{% endif %}>Stealth</option>
+                    </select>
+                </div>
+
+                <!-- Contacted Filter -->
+                <div>
+                    <label for="contacted" class="block text-sm font-medium text-gray-700">Contacted</label>
+                    <select name="contacted" id="contacted" onchange="this.form.submit()"
+                        class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+                        <option value="">All</option>
+                        <option value="yes" {% if contacted == 'yes' %}selected{% endif %}>Contacted</option>
+                        <option value="no" {% if contacted == 'no' %}selected{% endif %}>Not Contacted</option>
+                    </select>
+                </div>
+
+                <!-- Relevance Filter -->
+                <div>
+                    <label for="relevance" class="block text-sm font-medium text-gray-700">Relevance</label>
+                    <select name="relevance" id="relevance" onchange="this.form.submit()"
+                        class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+                        <option value="">All</option>
+                        <option value="relevant" {% if relevance == 'relevant' %}selected{% endif %}>Relevant</option>
+                        <option value="irrelevant" {% if relevance == 'irrelevant' %}selected{% endif %}>Irrelevant</option>
+                        <option value="unscreened" {% if relevance == 'unscreened' %}selected{% endif %}>Unscreened</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="flex items-end gap-3">
+                <button type="submit"
+                    class="inline-flex items-center rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600">
+                    Search
+                </button>
+                <a href="/founders" class="text-sm text-gray-500 hover:text-gray-700">Clear filters</a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Bulk Action Bar (hidden until selection) -->
+<div id="bulk-bar" class="hidden mb-4 bg-indigo-50 border border-indigo-200 rounded-lg px-4 py-2 flex items-center gap-3">
+    <span class="text-sm font-medium text-indigo-800"><span id="bulk-count">0</span> selected</span>
+    <button onclick="founderBulkSetRelevance('relevant')" class="inline-flex items-center rounded-md bg-green-600 px-3 py-1 text-xs font-semibold text-white hover:bg-green-500">Mark Relevant</button>
+    <button onclick="founderBulkSetRelevance('irrelevant')" class="inline-flex items-center rounded-md bg-red-600 px-3 py-1 text-xs font-semibold text-white hover:bg-red-500">Mark Irrelevant</button>
+    <button onclick="founderBulkSetRelevance(null)" class="inline-flex items-center rounded-md bg-gray-500 px-3 py-1 text-xs font-semibold text-white hover:bg-gray-400">Clear Relevance</button>
+    <button onclick="founderClearSelection()" class="ml-auto text-xs text-gray-500 hover:text-gray-700">Deselect all</button>
+</div>
+
+<!-- Results Table -->
 <div class="bg-white shadow rounded-lg overflow-hidden">
     <div class="overflow-x-auto">
-        <table class="min-w-full divide-y divide-gray-200">
+        <table class="min-w-full divide-y divide-gray-200" id="founders-table">
             <thead class="bg-gray-50">
                 <tr>
-                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
-                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Headline</th>
-                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Location</th>
-                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Confidence</th>
-                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Emerged?</th>
-                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">First Seen</th>
+                    {% macro sort_th(col_key, label, align='left', sort_key=None) %}
+                    {% set sk = sort_key or col_key %}
+                    {% set is_sorted = sort == sk %}
+                    {% set next_dir = 'asc' if (not is_sorted or sort_dir == 'desc') else 'desc' %}
+                    <th scope="col" class="px-3 py-3 text-{{ align }} text-xs font-medium uppercase tracking-wider">
+                        <a href="?{{ filter_qs }}&sort={{ sk }}&sort_dir={{ next_dir }}&page=1"
+                           class="group inline-flex items-center gap-1 {% if is_sorted %}text-indigo-600{% else %}text-gray-500 hover:text-gray-700{% endif %}">
+                            {{ label }}
+                            {% if is_sorted %}
+                            <svg class="w-3 h-3 {% if sort_dir == 'asc' %}rotate-180{% endif %}" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd"/></svg>
+                            {% else %}
+                            <svg class="w-3 h-3 opacity-0 group-hover:opacity-40" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd"/></svg>
+                            {% endif %}
+                        </a>
+                    </th>
+                    {% endmacro %}
+                    <th scope="col" class="px-3 py-3 w-8">
+                        <input type="checkbox" id="select-all" onchange="founderToggleSelectAll(this.checked)"
+                               class="rounded border-gray-300 text-indigo-600">
+                    </th>
+                    {{ sort_th('relevance', 'Rel.') }}
+                    {{ sort_th('name', 'Name') }}
+                    {{ sort_th('headline', 'Headline') }}
+                    {{ sort_th('location', 'Location') }}
+                    {{ sort_th('confidence', 'Confidence') }}
+                    <th scope="col" class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                    {{ sort_th('emerged', 'Emerged?') }}
+                    {{ sort_th('first_seen', 'First Seen') }}
                 </tr>
             </thead>
             <tbody class="bg-white divide-y divide-gray-200">
                 {% for founder in founders %}
-                <tr class="hover:bg-gray-50">
-                    <td class="px-6 py-4">
+                <tr class="hover:bg-gray-50 {% if founder.contacted %}bg-green-50{% endif %}" data-founder-id="{{ founder.id }}">
+                    <td class="px-3 py-3">
+                        <input type="checkbox" class="row-select rounded border-gray-300 text-indigo-600"
+                               value="{{ founder.id }}" onchange="founderUpdateBulkBar()">
+                    </td>
+                    <td class="px-3 py-3 whitespace-nowrap">
+                        <select onchange="setFounderRelevance({{ founder.id }}, this.value, this)"
+                                class="rounded-md border-gray-300 text-xs py-1 px-1.5
+                                {% if founder.relevance == 'relevant' %}bg-green-50 text-green-800 ring-1 ring-green-300
+                                {% elif founder.relevance == 'irrelevant' %}bg-red-50 text-red-800 ring-1 ring-red-300
+                                {% else %}bg-gray-50 text-gray-500{% endif %}">
+                            <option value="" {% if not founder.relevance %}selected{% endif %}>-</option>
+                            <option value="relevant" {% if founder.relevance == 'relevant' %}selected{% endif %}>Relevant</option>
+                            <option value="irrelevant" {% if founder.relevance == 'irrelevant' %}selected{% endif %}>Irrelevant</option>
+                        </select>
+                    </td>
+                    <td class="px-4 py-3">
                         <div class="flex items-center">
-                            <div class="flex-shrink-0 h-10 w-10">
-                                <span class="inline-flex h-10 w-10 items-center justify-center rounded-full bg-indigo-100">
-                                    <span class="font-medium text-indigo-600">{{ founder.name[0] if founder.name else '?' }}</span>
+                            <div class="flex-shrink-0 h-8 w-8">
+                                <span class="inline-flex h-8 w-8 items-center justify-center rounded-full bg-indigo-100">
+                                    <span class="text-sm font-medium text-indigo-600">{{ founder.name[0] if founder.name else '?' }}</span>
                                 </span>
                             </div>
-                            <div class="ml-4">
+                            <div class="ml-3">
                                 <div class="text-sm font-medium text-gray-900">{{ founder.name or 'Unknown' }}</div>
                                 {% if founder.linkedin_url %}
                                 <a href="{{ founder.linkedin_url }}" target="_blank" class="text-xs text-indigo-600 hover:text-indigo-900">LinkedIn</a>
@@ -43,16 +175,16 @@
                             </div>
                         </div>
                     </td>
-                    <td class="px-6 py-4">
+                    <td class="px-3 py-3">
                         <div class="text-sm text-gray-900 max-w-xs truncate">{{ founder.headline or '-' }}</div>
                         {% if founder.current_company %}
                         <div class="text-xs text-gray-500">{{ founder.current_company }}</div>
                         {% endif %}
                     </td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-500">
                         {{ founder.location or '-' }}
                     </td>
-                    <td class="px-6 py-4 whitespace-nowrap">
+                    <td class="px-3 py-3 whitespace-nowrap">
                         <div class="flex items-center">
                             <div class="w-16 bg-gray-200 rounded-full h-2 mr-2">
                                 <div class="h-2 rounded-full
@@ -64,10 +196,27 @@
                             <span class="text-xs text-gray-500">{{ ((founder.confidence_score or 0) * 100)|int }}%</span>
                         </div>
                     </td>
-                    <td class="px-6 py-4 whitespace-nowrap">
+                    <td class="px-3 py-3 whitespace-nowrap">
+                        <div class="flex space-x-1">
+                            {% if founder.viewed %}
+                            <span class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-blue-100 text-blue-800" title="Viewed">
+                                <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path d="M10 12a2 2 0 100-4 2 2 0 000 4z"/><path fill-rule="evenodd" d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clip-rule="evenodd"/></svg>
+                            </span>
+                            {% endif %}
+                            {% if founder.contacted %}
+                            <span class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-green-100 text-green-800" title="Contacted">
+                                <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg>
+                            </span>
+                            {% endif %}
+                            {% if not founder.viewed and not founder.contacted %}
+                            <span class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-yellow-100 text-yellow-800">New</span>
+                            {% endif %}
+                        </div>
+                    </td>
+                    <td class="px-3 py-3 whitespace-nowrap">
                         {% if founder.company_id %}
                         <a href="/companies/{{ founder.company_id }}" class="inline-flex items-center rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-800">
-                            {{ founder.company_name or 'Yes' }}
+                            {{ (founder.company_name or 'Yes')[:25] }}{% if founder.company_name and founder.company_name|length > 25 %}...{% endif %}
                         </a>
                         {% else %}
                         <span class="inline-flex items-center rounded-full bg-yellow-100 px-2.5 py-0.5 text-xs font-medium text-yellow-800">
@@ -75,14 +224,22 @@
                         </span>
                         {% endif %}
                     </td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-500">
                         {{ founder.first_seen_at|date }}
                     </td>
                 </tr>
                 {% else %}
                 <tr>
-                    <td colspan="6" class="px-6 py-4 text-center text-sm text-gray-500">
-                        No stealth founders detected yet. Run the stealth founder job to discover potential founders.
+                    <td colspan="9" class="px-6 py-12">
+                        <div class="text-center">
+                            <svg class="mx-auto h-12 w-12 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
+                            <h3 class="mt-2 text-sm font-semibold text-gray-900">No stealth founders found</h3>
+                            <p class="mt-1 text-sm text-gray-500">Try adjusting your filters or run the stealth founder job.</p>
+                            <div class="mt-3 flex justify-center gap-3">
+                                <a href="/founders" class="inline-flex items-center rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white hover:bg-indigo-500">Clear filters</a>
+                                <a href="/admin/stealth-job" class="inline-flex items-center rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50">Go to Admin</a>
+                            </div>
+                        </div>
                     </td>
                 </tr>
                 {% endfor %}
@@ -91,28 +248,248 @@
     </div>
 
     <!-- Pagination -->
-    {% if total_pages > 1 %}
     <div class="bg-white px-4 py-3 border-t border-gray-200 sm:px-6">
         <div class="flex items-center justify-between">
-            <div class="text-sm text-gray-700">
-                Page {{ page }} of {{ total_pages }}
-            </div>
-            <div class="flex space-x-2">
-                {% if page > 1 %}
-                <a href="?page={{ page - 1 }}"
-                    class="relative inline-flex items-center rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 ring-1 ring-inset ring-gray-300 hover:bg-gray-50">
-                    Previous
-                </a>
-                {% endif %}
-                {% if page < total_pages %}
-                <a href="?page={{ page + 1 }}"
-                    class="relative inline-flex items-center rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 ring-1 ring-inset ring-gray-300 hover:bg-gray-50">
-                    Next
-                </a>
-                {% endif %}
+            <div class="flex items-center gap-4">
+                <div class="text-sm text-gray-700">
+                    Showing
+                    <span class="font-medium">{{ (page - 1) * per_page + 1 }}</span>
+                    to
+                    <span class="font-medium">{{ [page * per_page, total]|min }}</span>
+                    of
+                    <span class="font-medium">{{ total }}</span>
+                    results
+                </div>
+                <div class="flex items-center gap-1 text-sm text-gray-500">
+                    <span>Per page:</span>
+                    {% for pp in [25, 50, 100, 200] %}
+                    <a href="?{{ filter_qs_with_sort }}&per_page={{ pp }}&page=1"
+                       class="px-2 py-0.5 rounded {% if per_page == pp %}bg-indigo-100 text-indigo-700 font-medium{% else %}hover:bg-gray-100{% endif %}">{{ pp }}</a>
+                    {% endfor %}
+                </div>
             </div>
         </div>
     </div>
-    {% endif %}
+    {% with base_qs=filter_qs_with_sort + '&per_page=' + per_page|string %}
+    {% include "partials/pagination.html" %}
+    {% endwith %}
 </div>
+
+<script>
+// ============================================================
+// Founders Page - Relevance Management
+// ============================================================
+
+async function setFounderRelevance(founderId, value, selectEl) {
+    try {
+        const resp = await fetch('/founders/' + founderId + '/relevance', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({relevance: value || null}),
+        });
+        if (!resp.ok) throw new Error('Failed');
+        if (selectEl) applyRelevanceStyle(selectEl, value);
+        showToast(value ? 'Marked as ' + value : 'Relevance cleared', 'success');
+    } catch (e) {
+        showToast('Error updating relevance', 'error');
+    }
+}
+
+// ============================================================
+// Founders Page - Bulk Selection
+// ============================================================
+
+function founderGetSelectedIds() {
+    return Array.from(document.querySelectorAll('.row-select:checked')).map(cb => parseInt(cb.value));
+}
+
+function founderUpdateBulkBar() {
+    const ids = founderGetSelectedIds();
+    const bar = document.getElementById('bulk-bar');
+    const count = document.getElementById('bulk-count');
+    if (!bar) return;
+    if (ids.length > 0) {
+        bar.classList.remove('hidden');
+        count.textContent = ids.length;
+    } else {
+        bar.classList.add('hidden');
+    }
+    const allBoxes = document.querySelectorAll('.row-select');
+    const allChecked = allBoxes.length > 0 && ids.length === allBoxes.length;
+    const selectAll = document.getElementById('select-all');
+    if (selectAll) {
+        selectAll.checked = allChecked;
+        selectAll.indeterminate = ids.length > 0 && !allChecked;
+    }
+}
+
+function founderToggleSelectAll(checked) {
+    document.querySelectorAll('.row-select').forEach(cb => cb.checked = checked);
+    founderUpdateBulkBar();
+}
+
+function founderClearSelection() {
+    founderToggleSelectAll(false);
+}
+
+async function founderBulkSetRelevance(value) {
+    const ids = founderGetSelectedIds();
+    if (!ids.length) return;
+    try {
+        const resp = await fetch('/founders/bulk-relevance', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({founder_ids: ids, relevance: value}),
+        });
+        if (!resp.ok) throw new Error('Failed');
+        ids.forEach(id => {
+            const row = document.querySelector('tr[data-founder-id="' + id + '"]');
+            if (!row) return;
+            const select = row.querySelector('select');
+            if (select) {
+                select.value = value || '';
+                applyRelevanceStyle(select, value);
+            }
+        });
+        founderClearSelection();
+        showToast(ids.length + ' founders updated', 'success');
+    } catch (e) {
+        showToast('Error updating relevance', 'error');
+    }
+}
+
+// ============================================================
+// Founders Page - Contacted Toggle (via keyboard)
+// ============================================================
+
+async function toggleFounderContacted(founderId) {
+    try {
+        const resp = await fetch('/founders/' + founderId + '/toggle-contacted', { method: 'POST' });
+        const data = await resp.json();
+        if (data.success) {
+            const row = document.querySelector('tr[data-founder-id="' + founderId + '"]');
+            if (row) {
+                if (data.contacted) {
+                    row.classList.add('bg-green-50');
+                    showToast('Marked as contacted', 'success');
+                } else {
+                    row.classList.remove('bg-green-50');
+                    showToast('Removed contacted status', 'info');
+                }
+                // Update status badges
+                const statusCell = row.querySelectorAll('td')[6]; // Status column
+                if (statusCell) {
+                    const div = statusCell.querySelector('div');
+                    if (data.contacted) {
+                        // Add contacted badge if not present
+                        if (!div.querySelector('.bg-green-100')) {
+                            const badge = document.createElement('span');
+                            badge.className = 'inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-green-100 text-green-800';
+                            badge.title = 'Contacted';
+                            badge.innerHTML = '<svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg>';
+                            div.appendChild(badge);
+                        }
+                        // Remove "New" badge
+                        const newBadge = div.querySelector('.bg-yellow-100');
+                        if (newBadge) newBadge.remove();
+                    } else {
+                        // Remove contacted badge
+                        const contactedBadge = div.querySelector('.bg-green-100');
+                        if (contactedBadge) contactedBadge.remove();
+                    }
+                }
+            }
+        }
+    } catch (e) {
+        showToast('Failed to toggle contacted', 'error');
+    }
+}
+
+// ============================================================
+// Founders Page - Keyboard Navigation
+// ============================================================
+
+let founderFocusedRowIndex = -1;
+
+function getFounderRows() {
+    return Array.from(document.querySelectorAll('#founders-table tbody tr[data-founder-id]'));
+}
+
+function setFounderFocusedRow(index) {
+    const rows = getFounderRows();
+    if (rows.length === 0) return;
+    rows.forEach(r => r.classList.remove('bg-indigo-50', 'ring-1', 'ring-indigo-200'));
+    if (index < 0) index = 0;
+    if (index >= rows.length) index = rows.length - 1;
+    founderFocusedRowIndex = index;
+    const row = rows[index];
+    row.classList.add('bg-indigo-50', 'ring-1', 'ring-indigo-200');
+    row.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+}
+
+document.addEventListener('keydown', function(e) {
+    if (!document.getElementById('founders-table')) return;
+    const tag = document.activeElement?.tagName?.toLowerCase();
+    if (tag === 'input' || tag === 'textarea' || tag === 'select') return;
+
+    const rows = getFounderRows();
+    if (rows.length === 0) return;
+
+    switch (e.key) {
+        case 'j':
+            e.preventDefault();
+            setFounderFocusedRow(founderFocusedRowIndex + 1);
+            break;
+        case 'k':
+            e.preventDefault();
+            setFounderFocusedRow(founderFocusedRowIndex - 1);
+            break;
+        case 'r': // Cycle relevance
+            e.preventDefault();
+            if (founderFocusedRowIndex >= 0 && founderFocusedRowIndex < rows.length) {
+                const row = rows[founderFocusedRowIndex];
+                const select = row.querySelector('select');
+                if (select) {
+                    const cycle = ['', 'relevant', 'irrelevant'];
+                    const currentIdx = cycle.indexOf(select.value);
+                    const nextVal = cycle[(currentIdx + 1) % cycle.length];
+                    select.value = nextVal;
+                    setFounderRelevance(row.dataset.founderId, nextVal, select);
+                }
+            }
+            break;
+        case 'c': // Toggle contacted
+            e.preventDefault();
+            if (founderFocusedRowIndex >= 0 && founderFocusedRowIndex < rows.length) {
+                const row = rows[founderFocusedRowIndex];
+                toggleFounderContacted(row.dataset.founderId);
+            }
+            break;
+        case 'o': // Open LinkedIn in new tab
+            e.preventDefault();
+            if (founderFocusedRowIndex >= 0 && founderFocusedRowIndex < rows.length) {
+                const row = rows[founderFocusedRowIndex];
+                const link = row.querySelector('a[href*="linkedin"]');
+                if (link) window.open(link.href, '_blank');
+            }
+            break;
+    }
+});
+
+// Loading overlay for sort/pagination clicks
+document.addEventListener('click', function(e) {
+    const link = e.target.closest('a[href*="page="], a[href*="sort="], a[href*="per_page="]');
+    if (link && link.closest('#founders-table, .pagination-controls')) {
+        const table = document.getElementById('founders-table');
+        if (!table) return;
+        const container = table.closest('.overflow-x-auto');
+        if (!container) return;
+        container.style.position = 'relative';
+        const overlay = document.createElement('div');
+        overlay.className = 'absolute inset-0 bg-white/60 flex items-center justify-center z-10';
+        overlay.innerHTML = '<div class="animate-spin h-8 w-8 border-4 border-indigo-600 border-t-transparent rounded-full"></div>';
+        container.appendChild(overlay);
+    }
+});
+</script>
 {% endblock %}
