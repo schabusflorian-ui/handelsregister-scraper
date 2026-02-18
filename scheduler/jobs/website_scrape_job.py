@@ -4,6 +4,9 @@ Website Scrape Job - Enrich company data by scraping their websites.
 Runs after website finder job. For companies that have a website URL but
 are missing key data (purpose, description), fetches and parses the website
 to extract structured information.
+
+Investor mentions found on websites are matched against known VCs/investors
+and persisted to the investments table.
 """
 
 import json
@@ -11,6 +14,7 @@ import logging
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 
+from processing.investor_matcher import InvestorMatcher
 from sources.website_scraper import WebsiteScraper, ScrapedWebsiteData
 
 logger = logging.getLogger(__name__)
@@ -45,6 +49,10 @@ class WebsiteScrapeJob:
         self.min_scrape_interval_days = min_scrape_interval_days
         self.scraper = WebsiteScraper(fetch_subpages=fetch_subpages)
 
+        # Initialize investor matcher for resolving investor mentions
+        self.investor_matcher = InvestorMatcher(db=db)
+        self._ensure_investors_seeded()
+
     def run(self) -> Dict[str, Any]:
         """Execute the website scraping job."""
         stats = {
@@ -53,6 +61,7 @@ class WebsiteScrapeJob:
             'descriptions_added': 0,
             'tech_keywords_added': 0,
             'investors_detected': 0,
+            'investments_created': 0,
             'linkedin_found': 0,
             'errors': 0,
         }
@@ -78,6 +87,7 @@ class WebsiteScrapeJob:
                         stats['tech_keywords_added'] += 1
                     if result.get('investors_detected'):
                         stats['investors_detected'] += result['investors_detected']
+                    stats['investments_created'] += result.get('investments_created', 0)
                     if result.get('linkedin_found'):
                         stats['linkedin_found'] += 1
 
@@ -86,11 +96,13 @@ class WebsiteScrapeJob:
                 stats['errors'] += 1
 
         logger.info(
-            "Website scrape complete: %d checked, %d enriched, %d descriptions, %d investors",
+            "Website scrape complete: %d checked, %d enriched, %d descriptions, "
+            "%d investors detected, %d investment records created",
             stats['companies_checked'],
             stats['companies_enriched'],
             stats['descriptions_added'],
             stats['investors_detected'],
+            stats['investments_created'],
         )
 
         return stats
@@ -107,6 +119,7 @@ class WebsiteScrapeJob:
                 ('linkedin_url', 'TEXT'),
                 ('twitter_url', 'TEXT'),
                 ('website_scrape_quality', 'REAL'),
+                ('funding_mentions', 'TEXT'),
             ]
 
             for col, col_type in new_columns:
@@ -196,17 +209,40 @@ class WebsiteScrapeJob:
                 update['matched_keywords'] = json.dumps(merged[:50])  # Cap at 50
                 result['tech_keywords_added'] = True
 
-        # Store investors mentioned (as JSON in a separate field or process separately)
+        # Match investor mentions against known VCs and persist investment records
         if data.investors_mentioned:
             result['investors_detected'] = len(data.investors_mentioned)
-            # TODO: Create investment records for detected investors
-            logger.info(
-                "Investors mentioned for %s: %s",
-                company['name'], data.investors_mentioned
-            )
+            investments_created = 0
+            for investor_name in data.investors_mentioned:
+                matches = self.investor_matcher.match(
+                    investor_name, min_confidence=0.8
+                )
+                if matches:
+                    best = matches[0]  # Highest confidence first
+                    created = self._record_investment(
+                        company_id=company_id,
+                        investor_id=best.investor_id,
+                        source='website',
+                        # Slightly discount website mentions vs direct capital events
+                        confidence=best.confidence * 0.9,
+                        notes=f"Mentioned on website: '{best.matched_text}'"
+                    )
+                    if created:
+                        investments_created += 1
+                        logger.info(
+                            "Investment recorded: %s → %s (confidence=%.2f)",
+                            company['name'], best.investor_name, best.confidence
+                        )
+                else:
+                    logger.debug(
+                        "No investor match for '%s' mentioned on %s",
+                        investor_name, company['name']
+                    )
+            result['investments_created'] = investments_created
 
-        # Store funding mentions for review
+        # Store funding mentions as JSON for later analysis
         if data.funding_mentions:
+            update['funding_mentions'] = json.dumps(data.funding_mentions[:5])
             logger.info(
                 "Funding mentions for %s: %s",
                 company['name'], data.funding_mentions
@@ -217,11 +253,76 @@ class WebsiteScrapeJob:
 
         if result['description_added'] or result['linkedin_found'] or result['investors_detected']:
             logger.info(
-                "Enriched %s: desc=%s, linkedin=%s, investors=%d",
+                "Enriched %s: desc=%s, linkedin=%s, investors=%d, investments=%d",
                 company['name'],
                 'yes' if result['description_added'] else 'no',
                 'yes' if result['linkedin_found'] else 'no',
                 result['investors_detected'],
+                result.get('investments_created', 0),
             )
 
         return result
+
+    def _ensure_investors_seeded(self):
+        """Ensure investor data is in the database (needed for matching)."""
+        try:
+            count = self.db.conn.execute(
+                "SELECT COUNT(*) FROM investors"
+            ).fetchone()[0]
+            if count == 0:
+                logger.info("Seeding investor data from YAML...")
+                self.investor_matcher.seed_to_database(self.db)
+        except Exception as e:
+            logger.warning("Could not check/seed investors: %s", e)
+
+    def _record_investment(
+        self,
+        company_id: int,
+        investor_id: int,
+        source: str,
+        confidence: float,
+        notes: Optional[str] = None,
+    ) -> bool:
+        """
+        Record an investment in the database, skipping if duplicate exists.
+
+        Returns:
+            True if a new record was created, False if already exists.
+        """
+        conn = self.db.conn
+        try:
+            # Check if already exists (same company, investor, source)
+            existing = conn.execute("""
+                SELECT id FROM investments
+                WHERE company_id = ? AND investor_id = ?
+                  AND detection_source = ?
+            """, (company_id, investor_id, source)).fetchone()
+
+            if existing:
+                # Update confidence if this match is better
+                conn.execute("""
+                    UPDATE investments
+                    SET confidence = MAX(confidence, ?)
+                    WHERE id = ?
+                """, (confidence, existing['id']))
+                conn.commit()
+                return False
+
+            # Insert new investment record
+            # round_type, amount, investment_date are NULL for website mentions
+            # — they can be enriched later from capital events or announcements
+            conn.execute("""
+                INSERT INTO investments
+                (company_id, investor_id, round_type, amount, currency,
+                 investment_date, detection_source, confidence, notes)
+                VALUES (?, ?, NULL, NULL, 'EUR', NULL, ?, ?, ?)
+            """, (company_id, investor_id, source, confidence, notes))
+            conn.commit()
+            return True
+
+        except Exception as e:
+            logger.error(
+                "Error recording investment for company %d, investor %d: %s",
+                company_id, investor_id, e
+            )
+            return False

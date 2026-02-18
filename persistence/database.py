@@ -509,6 +509,9 @@ class Database:
             for col, col_type in [
                 ('website_confidence', 'REAL'),
                 ('website_lookup_at', 'TEXT'),
+                ('website_scraped_at', 'TEXT'),
+                ('website_scrape_quality', 'TEXT'),
+                ('funding_mentions', 'TEXT'),
                 ('contacted', 'INTEGER DEFAULT 0'),
                 ('contacted_at', 'TEXT'),
                 ('viewed', 'INTEGER DEFAULT 0'),
