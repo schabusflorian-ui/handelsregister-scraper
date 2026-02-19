@@ -74,6 +74,9 @@ templates.env.filters["currency"] = format_currency
 templates.env.filters["date"] = format_date
 templates.env.filters["split"] = lambda s, sep=",": s.split(sep) if s else []
 
+import json as _json
+templates.env.filters["from_json"] = lambda s: _json.loads(s) if s else []
+
 
 @app.get("/health")
 async def health_check():
@@ -743,6 +746,13 @@ async def founders_list(
     viewed: Optional[str] = None,        # 'yes', 'no', or None
     relevance: Optional[str] = None,     # 'relevant', 'irrelevant', 'unscreened', or None
     min_confidence: Optional[str] = None,
+    # Tag filters
+    data_quality: Optional[str] = None,
+    stealth_strength: Optional[str] = None,
+    founder_role: Optional[str] = None,
+    ex_company_tier: Optional[str] = None,
+    geo_region: Optional[str] = None,
+    sector: Optional[str] = None,
     sort: Optional[str] = None,
     sort_dir: Optional[str] = None,
     page: int = 1,
@@ -786,6 +796,28 @@ async def founders_list(
         if min_confidence_int is not None:
             conditions.append("sf.confidence_score >= ?")
             params.append(min_confidence_int / 100.0)
+        # Tag filters
+        if data_quality:
+            conditions.append("sf.data_quality = ?")
+            params.append(data_quality)
+        if stealth_strength:
+            conditions.append("sf.stealth_strength = ?")
+            params.append(stealth_strength)
+        if founder_role:
+            conditions.append("sf.founder_role = ?")
+            params.append(founder_role)
+        if ex_company_tier:
+            if ex_company_tier == 'any':
+                conditions.append("sf.ex_company_tier IS NOT NULL")
+            else:
+                conditions.append("sf.ex_company_tier = ?")
+                params.append(ex_company_tier)
+        if geo_region:
+            conditions.append("sf.geo_region = ?")
+            params.append(geo_region)
+        if sector:
+            conditions.append("sf.sector_tags LIKE ?")
+            params.append(f'%"{sector}"%')
 
         where_clause = " AND ".join(conditions) if conditions else "1=1"
 
@@ -798,6 +830,10 @@ async def founders_list(
             'emerged': 'sf.company_id',
             'first_seen': 'sf.first_seen_at',
             'relevance': 'sf.relevance',
+            'stealth_strength': 'sf.stealth_strength',
+            'data_quality': 'sf.data_quality',
+            'ex_company_tier': 'sf.ex_company_tier',
+            'geo_region': 'sf.geo_region',
         }
         sort_column = allowed_sort_cols.get(sort)
         sort_direction = 'ASC' if sort_dir == 'asc' else 'DESC'
@@ -844,6 +880,12 @@ async def founders_list(
         if viewed: filter_params["viewed"] = viewed
         if relevance: filter_params["relevance"] = relevance
         if min_confidence: filter_params["min_confidence"] = min_confidence
+        if data_quality: filter_params["data_quality"] = data_quality
+        if stealth_strength: filter_params["stealth_strength"] = stealth_strength
+        if founder_role: filter_params["founder_role"] = founder_role
+        if ex_company_tier: filter_params["ex_company_tier"] = ex_company_tier
+        if geo_region: filter_params["geo_region"] = geo_region
+        if sector: filter_params["sector"] = sector
         if per_page != 25: filter_params["per_page"] = per_page
         filter_qs = urlencode(filter_params)
         if sort: filter_params["sort"] = sort
@@ -864,6 +906,12 @@ async def founders_list(
             "viewed": viewed or "",
             "relevance": relevance or "",
             "min_confidence": min_confidence or "",
+            "data_quality": data_quality or "",
+            "stealth_strength": stealth_strength or "",
+            "founder_role": founder_role or "",
+            "ex_company_tier": ex_company_tier or "",
+            "geo_region": geo_region or "",
+            "sector": sector or "",
             "sort": sort or "",
             "sort_dir": sort_dir or "",
             "filter_qs": filter_qs,

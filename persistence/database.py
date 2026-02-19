@@ -552,17 +552,26 @@ class Database:
             pass
 
     def _migrate_stealth_founders_table(self, cursor):
-        """Add contacted/viewed/notes/relevance columns to stealth_founders table."""
+        """Add screening and tag columns to stealth_founders table."""
         try:
             cursor.execute("PRAGMA table_info(stealth_founders)")
             columns = [row[1] for row in cursor.fetchall()]
             for col, col_type in [
+                # Screening columns
                 ('contacted', 'INTEGER DEFAULT 0'),
                 ('contacted_at', 'TEXT'),
                 ('viewed', 'INTEGER DEFAULT 0'),
                 ('viewed_at', 'TEXT'),
                 ('notes', 'TEXT'),
                 ('relevance', 'TEXT'),
+                # Auto-computed tag columns
+                ('founder_role', 'TEXT'),       # founder, co-founder, cto, ceo, engineer, investor, other
+                ('ex_company_tier', 'TEXT'),     # faang, unicorn, top_vc, other, null
+                ('ex_companies', 'TEXT'),        # JSON list of parsed ex-companies
+                ('sector_tags', 'TEXT'),         # JSON list: ai, fintech, climate, saas, health, etc.
+                ('stealth_strength', 'TEXT'),    # confirmed, likely, weak
+                ('data_quality', 'TEXT'),        # clean, partial, junk
+                ('geo_region', 'TEXT'),          # berlin, munich, hamburg, dach_other, etc.
             ]:
                 if col not in columns and columns:
                     cursor.execute(f"ALTER TABLE stealth_founders ADD COLUMN {col} {col_type}")

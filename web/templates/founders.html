@@ -16,8 +16,8 @@
 <div class="bg-white shadow rounded-lg mb-6">
     <div class="px-4 py-5 sm:p-6">
         <form method="GET" action="/founders" class="space-y-4">
+            <!-- Row 1: Search + Basic filters -->
             <div class="grid grid-cols-1 md:grid-cols-7 gap-4">
-                <!-- Search -->
                 <div class="md:col-span-2">
                     <label for="q" class="block text-sm font-medium text-gray-700">Search</label>
                     <input type="text" name="q" id="q" value="{{ q }}"
@@ -25,21 +25,98 @@
                         placeholder="Name, headline, or company...">
                 </div>
 
-                <!-- Location Filter -->
                 <div>
-                    <label for="location" class="block text-sm font-medium text-gray-700">Location</label>
-                    <select name="location" id="location" onchange="this.form.submit()"
+                    <label for="data_quality" class="block text-sm font-medium text-gray-700">Quality</label>
+                    <select name="data_quality" id="data_quality" onchange="this.form.submit()"
                         class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
-                        <option value="">All locations</option>
-                        {% for loc in locations %}
-                        <option value="{{ loc.location }}" {% if location == loc.location %}selected{% endif %}>
-                            {{ loc.location }} ({{ loc.count }})
-                        </option>
-                        {% endfor %}
+                        <option value="">All</option>
+                        <option value="clean" {% if data_quality == 'clean' %}selected{% endif %}>Clean</option>
+                        <option value="partial" {% if data_quality == 'partial' %}selected{% endif %}>Partial</option>
+                        <option value="junk" {% if data_quality == 'junk' %}selected{% endif %}>Junk</option>
                     </select>
                 </div>
 
-                <!-- Min Confidence -->
+                <div>
+                    <label for="stealth_strength" class="block text-sm font-medium text-gray-700">Stealth</label>
+                    <select name="stealth_strength" id="stealth_strength" onchange="this.form.submit()"
+                        class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+                        <option value="">All</option>
+                        <option value="confirmed" {% if stealth_strength == 'confirmed' %}selected{% endif %}>Confirmed</option>
+                        <option value="likely" {% if stealth_strength == 'likely' %}selected{% endif %}>Likely</option>
+                        <option value="weak" {% if stealth_strength == 'weak' %}selected{% endif %}>Weak</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label for="founder_role" class="block text-sm font-medium text-gray-700">Role</label>
+                    <select name="founder_role" id="founder_role" onchange="this.form.submit()"
+                        class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+                        <option value="">All</option>
+                        <option value="founder" {% if founder_role == 'founder' %}selected{% endif %}>Founder</option>
+                        <option value="co-founder" {% if founder_role == 'co-founder' %}selected{% endif %}>Co-Founder</option>
+                        <option value="ceo" {% if founder_role == 'ceo' %}selected{% endif %}>CEO</option>
+                        <option value="cto" {% if founder_role == 'cto' %}selected{% endif %}>CTO</option>
+                        <option value="investor" {% if founder_role == 'investor' %}selected{% endif %}>Investor</option>
+                        <option value="executive" {% if founder_role == 'executive' %}selected{% endif %}>Executive</option>
+                        <option value="engineer" {% if founder_role == 'engineer' %}selected{% endif %}>Engineer</option>
+                        <option value="other" {% if founder_role == 'other' %}selected{% endif %}>Other</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label for="ex_company_tier" class="block text-sm font-medium text-gray-700">Ex-Company</label>
+                    <select name="ex_company_tier" id="ex_company_tier" onchange="this.form.submit()"
+                        class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+                        <option value="">All</option>
+                        <option value="any" {% if ex_company_tier == 'any' %}selected{% endif %}>Has Ex-Company</option>
+                        <option value="faang" {% if ex_company_tier == 'faang' %}selected{% endif %}>FAANG</option>
+                        <option value="unicorn" {% if ex_company_tier == 'unicorn' %}selected{% endif %}>Unicorn</option>
+                        <option value="consulting" {% if ex_company_tier == 'consulting' %}selected{% endif %}>Consulting</option>
+                        <option value="top_vc" {% if ex_company_tier == 'top_vc' %}selected{% endif %}>Top VC/Accelerator</option>
+                        <option value="other" {% if ex_company_tier == 'other' %}selected{% endif %}>Other</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label for="geo_region" class="block text-sm font-medium text-gray-700">Region</label>
+                    <select name="geo_region" id="geo_region" onchange="this.form.submit()"
+                        class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+                        <option value="">All</option>
+                        <option value="berlin" {% if geo_region == 'berlin' %}selected{% endif %}>Berlin</option>
+                        <option value="munich" {% if geo_region == 'munich' %}selected{% endif %}>Munich</option>
+                        <option value="hamburg" {% if geo_region == 'hamburg' %}selected{% endif %}>Hamburg</option>
+                        <option value="frankfurt" {% if geo_region == 'frankfurt' %}selected{% endif %}>Frankfurt</option>
+                        <option value="nrw" {% if geo_region == 'nrw' %}selected{% endif %}>NRW</option>
+                        <option value="stuttgart" {% if geo_region == 'stuttgart' %}selected{% endif %}>Stuttgart</option>
+                        <option value="germany_other" {% if geo_region == 'germany_other' %}selected{% endif %}>Germany (other)</option>
+                        <option value="zurich" {% if geo_region == 'zurich' %}selected{% endif %}>Zurich</option>
+                        <option value="switzerland" {% if geo_region == 'switzerland' %}selected{% endif %}>Switzerland (other)</option>
+                        <option value="vienna" {% if geo_region == 'vienna' %}selected{% endif %}>Vienna</option>
+                        <option value="austria" {% if geo_region == 'austria' %}selected{% endif %}>Austria (other)</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Row 2: More filters + actions -->
+            <div class="grid grid-cols-1 md:grid-cols-8 gap-4">
+                <div>
+                    <label for="sector" class="block text-sm font-medium text-gray-700">Sector</label>
+                    <select name="sector" id="sector" onchange="this.form.submit()"
+                        class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+                        <option value="">All</option>
+                        <option value="ai" {% if sector == 'ai' %}selected{% endif %}>AI/ML</option>
+                        <option value="fintech" {% if sector == 'fintech' %}selected{% endif %}>Fintech</option>
+                        <option value="health" {% if sector == 'health' %}selected{% endif %}>Health</option>
+                        <option value="climate" {% if sector == 'climate' %}selected{% endif %}>Climate</option>
+                        <option value="saas" {% if sector == 'saas' %}selected{% endif %}>SaaS</option>
+                        <option value="proptech" {% if sector == 'proptech' %}selected{% endif %}>Proptech</option>
+                        <option value="mobility" {% if sector == 'mobility' %}selected{% endif %}>Mobility</option>
+                        <option value="security" {% if sector == 'security' %}selected{% endif %}>Security</option>
+                        <option value="robotics" {% if sector == 'robotics' %}selected{% endif %}>Robotics</option>
+                        <option value="impact" {% if sector == 'impact' %}selected{% endif %}>Impact</option>
+                    </select>
+                </div>
+
                 <div>
                     <label for="min_confidence" class="block text-sm font-medium text-gray-700">Min Confidence</label>
                     <select name="min_confidence" id="min_confidence" onchange="this.form.submit()"
@@ -51,7 +128,6 @@
                     </select>
                 </div>
 
-                <!-- Emerged Filter -->
                 <div>
                     <label for="emerged" class="block text-sm font-medium text-gray-700">Emerged</label>
                     <select name="emerged" id="emerged" onchange="this.form.submit()"
@@ -62,7 +138,6 @@
                     </select>
                 </div>
 
-                <!-- Contacted Filter -->
                 <div>
                     <label for="contacted" class="block text-sm font-medium text-gray-700">Contacted</label>
                     <select name="contacted" id="contacted" onchange="this.form.submit()"
@@ -73,7 +148,6 @@
                     </select>
                 </div>
 
-                <!-- Relevance Filter -->
                 <div>
                     <label for="relevance" class="block text-sm font-medium text-gray-700">Relevance</label>
                     <select name="relevance" id="relevance" onchange="this.form.submit()"
@@ -84,14 +158,14 @@
                         <option value="unscreened" {% if relevance == 'unscreened' %}selected{% endif %}>Unscreened</option>
                     </select>
                 </div>
-            </div>
 
-            <div class="flex items-end gap-3">
-                <button type="submit"
-                    class="inline-flex items-center rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600">
-                    Search
-                </button>
-                <a href="/founders" class="text-sm text-gray-500 hover:text-gray-700">Clear filters</a>
+                <div class="flex items-end gap-3 md:col-span-3">
+                    <button type="submit"
+                        class="inline-flex items-center rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500">
+                        Search
+                    </button>
+                    <a href="/founders" class="text-sm text-gray-500 hover:text-gray-700">Clear filters</a>
+                </div>
             </div>
         </form>
     </div>
@@ -135,16 +209,17 @@
                     {{ sort_th('relevance', 'Rel.') }}
                     {{ sort_th('name', 'Name') }}
                     {{ sort_th('headline', 'Headline') }}
-                    {{ sort_th('location', 'Location') }}
-                    {{ sort_th('confidence', 'Confidence') }}
+                    <th scope="col" class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tags</th>
+                    {{ sort_th('confidence', 'Conf.') }}
                     <th scope="col" class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                    {{ sort_th('geo_region', 'Region') }}
                     {{ sort_th('emerged', 'Emerged?') }}
                     {{ sort_th('first_seen', 'First Seen') }}
                 </tr>
             </thead>
             <tbody class="bg-white divide-y divide-gray-200">
                 {% for founder in founders %}
-                <tr class="hover:bg-gray-50 {% if founder.contacted %}bg-green-50{% endif %}" data-founder-id="{{ founder.id }}">
+                <tr class="hover:bg-gray-50 {% if founder.contacted %}bg-green-50{% endif %} {% if founder.data_quality == 'junk' %}opacity-50{% endif %}" data-founder-id="{{ founder.id }}">
                     <td class="px-3 py-3">
                         <input type="checkbox" class="row-select rounded border-gray-300 text-indigo-600"
                                value="{{ founder.id }}" onchange="founderUpdateBulkBar()">
@@ -181,12 +256,43 @@
                         <div class="text-xs text-gray-500">{{ founder.current_company }}</div>
                         {% endif %}
                     </td>
-                    <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-500">
-                        {{ founder.location or '-' }}
+                    <td class="px-3 py-2 whitespace-nowrap">
+                        <div class="flex flex-wrap gap-1 max-w-[200px]">
+                            {# Stealth strength badge #}
+                            {% if founder.stealth_strength == 'confirmed' %}
+                            <span class="inline-flex items-center rounded-full px-1.5 py-0.5 text-xs font-medium bg-purple-100 text-purple-800">stealth</span>
+                            {% elif founder.stealth_strength == 'likely' %}
+                            <span class="inline-flex items-center rounded-full px-1.5 py-0.5 text-xs font-medium bg-violet-50 text-violet-700">likely</span>
+                            {% endif %}
+                            {# Role badge #}
+                            {% if founder.founder_role and founder.founder_role not in ('other',) %}
+                            <span class="inline-flex items-center rounded-full px-1.5 py-0.5 text-xs font-medium bg-blue-50 text-blue-700">{{ founder.founder_role }}</span>
+                            {% endif %}
+                            {# Ex-company tier #}
+                            {% if founder.ex_company_tier == 'faang' %}
+                            <span class="inline-flex items-center rounded-full px-1.5 py-0.5 text-xs font-medium bg-orange-100 text-orange-800">FAANG</span>
+                            {% elif founder.ex_company_tier == 'unicorn' %}
+                            <span class="inline-flex items-center rounded-full px-1.5 py-0.5 text-xs font-medium bg-amber-100 text-amber-800">unicorn</span>
+                            {% elif founder.ex_company_tier == 'consulting' %}
+                            <span class="inline-flex items-center rounded-full px-1.5 py-0.5 text-xs font-medium bg-slate-100 text-slate-700">consulting</span>
+                            {% elif founder.ex_company_tier == 'top_vc' %}
+                            <span class="inline-flex items-center rounded-full px-1.5 py-0.5 text-xs font-medium bg-cyan-100 text-cyan-800">VC/accel</span>
+                            {% endif %}
+                            {# Sector tags #}
+                            {% if founder.sector_tags %}
+                            {% for tag in founder.sector_tags|from_json %}
+                            <span class="inline-flex items-center rounded-full px-1.5 py-0.5 text-xs font-medium bg-emerald-50 text-emerald-700">{{ tag }}</span>
+                            {% endfor %}
+                            {% endif %}
+                            {# Data quality warning #}
+                            {% if founder.data_quality == 'junk' %}
+                            <span class="inline-flex items-center rounded-full px-1.5 py-0.5 text-xs font-medium bg-red-50 text-red-600">junk</span>
+                            {% endif %}
+                        </div>
                     </td>
                     <td class="px-3 py-3 whitespace-nowrap">
                         <div class="flex items-center">
-                            <div class="w-16 bg-gray-200 rounded-full h-2 mr-2">
+                            <div class="w-12 bg-gray-200 rounded-full h-2 mr-2">
                                 <div class="h-2 rounded-full
                                     {% if founder.confidence_score >= 0.7 %}bg-green-500
                                     {% elif founder.confidence_score >= 0.4 %}bg-yellow-500
@@ -213,6 +319,9 @@
                             {% endif %}
                         </div>
                     </td>
+                    <td class="px-3 py-3 whitespace-nowrap text-xs text-gray-500">
+                        {{ founder.geo_region or '-' }}
+                    </td>
                     <td class="px-3 py-3 whitespace-nowrap">
                         {% if founder.company_id %}
                         <a href="/companies/{{ founder.company_id }}" class="inline-flex items-center rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-800">
@@ -230,7 +339,7 @@
                 </tr>
                 {% else %}
                 <tr>
-                    <td colspan="9" class="px-6 py-12">
+                    <td colspan="10" class="px-6 py-12">
                         <div class="text-center">
                             <svg class="mx-auto h-12 w-12 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
                             <h3 class="mt-2 text-sm font-semibold text-gray-900">No stealth founders found</h3>
@@ -381,7 +490,6 @@ async function toggleFounderContacted(founderId) {
                 if (statusCell) {
                     const div = statusCell.querySelector('div');
                     if (data.contacted) {
-                        // Add contacted badge if not present
                         if (!div.querySelector('.bg-green-100')) {
                             const badge = document.createElement('span');
                             badge.className = 'inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-green-100 text-green-800';
@@ -389,11 +497,9 @@ async function toggleFounderContacted(founderId) {
                             badge.innerHTML = '<svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg>';
                             div.appendChild(badge);
                         }
-                        // Remove "New" badge
                         const newBadge = div.querySelector('.bg-yellow-100');
                         if (newBadge) newBadge.remove();
                     } else {
-                        // Remove contacted badge
                         const contactedBadge = div.querySelector('.bg-green-100');
                         if (contactedBadge) contactedBadge.remove();
                     }
@@ -444,7 +550,7 @@ document.addEventListener('keydown', function(e) {
             e.preventDefault();
             setFounderFocusedRow(founderFocusedRowIndex - 1);
             break;
-        case 'r': // Cycle relevance
+        case 'r':
             e.preventDefault();
             if (founderFocusedRowIndex >= 0 && founderFocusedRowIndex < rows.length) {
                 const row = rows[founderFocusedRowIndex];
@@ -458,14 +564,14 @@ document.addEventListener('keydown', function(e) {
                 }
             }
             break;
-        case 'c': // Toggle contacted
+        case 'c':
             e.preventDefault();
             if (founderFocusedRowIndex >= 0 && founderFocusedRowIndex < rows.length) {
                 const row = rows[founderFocusedRowIndex];
                 toggleFounderContacted(row.dataset.founderId);
             }
             break;
-        case 'o': // Open LinkedIn in new tab
+        case 'o':
             e.preventDefault();
             if (founderFocusedRowIndex >= 0 && founderFocusedRowIndex < rows.length) {
                 const row = rows[founderFocusedRowIndex];
