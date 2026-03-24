@@ -470,24 +470,38 @@ class StartupScorer:
         combined_relevance = ai_relevance_score + climate_score
         has_tech_categories = bool(tech_categories)
 
+        # --- Startup: strong structural + domain signals ---
+        #
         # Path A: strong structural signals + some domain relevance
         if score.total_score >= 5 and (combined_relevance >= 1 or has_tech_categories):
             return "startup"
 
         # Path B: moderate structural but strong domain signals with tech categories
-        # This catches climate/fintech/healthtech startups in non-hub cities
-        if score.total_score >= 3 and combined_relevance >= 3 and has_tech_categories:
+        # Catches climate/fintech/healthtech startups in non-hub cities
+        if score.total_score >= 3 and combined_relevance >= 2 and has_tech_categories:
             return "startup"
 
-        # Scaleup: moderate signals — tech-adjacent or growing
-        if score.total_score >= 2:
+        # Path C: strong domain relevance alone (score >= 4) with structural hints
+        # Catches companies with strong keyword matches even if not in hub cities
+        if combined_relevance >= 4 and score.total_score >= 2:
+            return "startup"
+
+        # --- Scaleup: has tech/growth signals but not full startup ---
+        #
+        # Must have EITHER domain relevance OR tech categories to be scaleup
+        # (prevents traditional companies with English names from being scaleup)
+        if score.total_score >= 3 and (combined_relevance >= 1 or has_tech_categories):
             return "scaleup"
 
-        # Also scaleup if has tech categories but low structural score
-        if has_tech_categories and score.total_score >= 0:
+        # Has tech categories but low structural score
+        if has_tech_categories:
             return "scaleup"
 
-        # Established: traditional SME
+        # Has some domain relevance but no structural signals
+        if combined_relevance >= 1 and score.total_score >= 1:
+            return "scaleup"
+
+        # --- Established: traditional SME ---
         return "established"
 
 

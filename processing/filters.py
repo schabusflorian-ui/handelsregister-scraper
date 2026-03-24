@@ -404,16 +404,19 @@ DEFAULT_CLIMATE_KEYWORDS = [
 #    Italian "AI Teatro", ~250 false positives in DB)
 #    So we only match start-of-name AI when followed by a tech context word.
 STANDALONE_AI_PATTERNS = [
-    # AI in middle/end of name — very reliable signal
-    # (?<=\s) ensures AI is preceded by whitespace (not at start of text)
-    r"(?<=\s)AI\b",
-    # AI at start — only if followed by tech-context word
-    # Also handles "AI &" / "AI -" separators (e.g., "AI & Cognitive Computing")
-    r"^AI[\s&\-]+(?:Solutions|Software|Platform|Consulting|Analytics|Analytical|"
+    # AI in middle/end of name — reliable signal ONLY with tech-context neighbor
+    # Requires AI to be preceded by a space and followed by a tech word, or
+    # preceded by a tech word and followed by word boundary.
+    # This avoids false positives like "Tae Kwon Do AI", "Associazione AIU"
+    r"(?:^|\s)AI[\s&\-]+(?:Solutions|Software|Platform|Consulting|Analytics|"
     r"Robotics|Systems|Technologies|Technology|Labs?|Studio|Vision|Innovations?|"
     r"Research|Data|Cloud|Ventures|Machine|Deep|Neural|Tech|Digital|Intelligence|"
     r"Intelligent|Cognitive|Automation|Startup|Development|Engineering|Agent|"
-    r"Agents|Computing|Science|Learning)",
+    r"Agents|Computing|Science|Learning|GmbH|UG|AG)\b",
+    # Tech word followed by AI (e.g., "Neural AI GmbH", "Data AI Solutions")
+    r"\b(?:Data|Deep|Neural|Machine|Smart|Edge|Generative)\s+AI\b",
+    # Compound with hyphen (e.g., "AI-driven", "AI-powered", "AI-basiert")
+    r"\bAI-(?:driven|powered|based|basiert|gestützt|native|first|enabled|augmented)\b",
     r"\.ai\b",  # Matches .ai domains (e.g., "company.ai")
     r"\brobot\b",  # Standalone "robot"
 ]
@@ -607,7 +610,7 @@ TECH_CATEGORIES = {
         "verschlüsselung",
         "encryption",
         "identity management",
-        "siem",
+        # NOTE: "siem" removed — substring match hits "Siemund" and similar names
     ],
     "healthtech": [
         "healthtech",
@@ -619,14 +622,15 @@ TECH_CATEGORIES = {
         "telemedicine",
         "medtech",
         "medizintechnik",
-        "medizinprodukt",
-        "diagnostik",
+        # NOTE: "medizinprodukt" alone removed — too broad (catches distributors)
+        # NOTE: "diagnostik" alone removed — too broad (catches traditional labs)
         "digital therapeutics",
         "gesundheitsplattform",
         "klinische studie",
         "clinical trial",
         "patientenportal",
         "electronic health",
+        "health platform",
     ],
     "biotech": [
         "biotechnologie",
@@ -641,8 +645,10 @@ TECH_CATEGORIES = {
         "synthetic biology",
         "drug discovery",
         "wirkstoffforschung",
-        "pharma",
+        # NOTE: "pharma" alone removed — too broad (catches distribution/logistics)
         "biopharma",
+        "pharmatech",
+        "pharmaforschung",
     ],
     "saas_cloud": [
         "saas",
@@ -665,8 +671,7 @@ TECH_CATEGORIES = {
         "learning platform",
         "online education",
         "online-bildung",
-        "tutoring",
-        "weiterbildung",
+        # NOTE: "tutoring" and "weiterbildung" removed — too broad (traditional training companies)
     ],
     "proptech": [
         "proptech",
@@ -675,7 +680,7 @@ TECH_CATEGORIES = {
         "smart building",
         "gebäudeautomation",
         "building automation",
-        "facility management",
+        # NOTE: "facility management" removed — 95%+ are cleaning/janitorial, not tech
         "digital real estate",
     ],
     "legaltech": [
@@ -940,7 +945,7 @@ class AIRoboticsFilter:
         return matched
 
     def classify_tech_categories(self, text: str) -> List[str]:
-        """Classify company into technology categories."""
+        """Classify company into technology categories using word-boundary matching."""
         if not text:
             return []
 
@@ -948,8 +953,17 @@ class AIRoboticsFilter:
         categories = []
 
         for category, keywords in TECH_CATEGORIES.items():
-            if any(kw in text_lower for kw in keywords):
-                categories.append(category)
+            for kw in keywords:
+                # Short keywords (<=4 chars) need word-boundary matching
+                # to avoid substring false positives (e.g., "defi" in "idefix")
+                if len(kw) <= 4:
+                    if re.search(rf"\b{re.escape(kw)}\b", text_lower):
+                        categories.append(category)
+                        break
+                else:
+                    if kw in text_lower:
+                        categories.append(category)
+                        break
 
         return categories
 
@@ -988,6 +1002,21 @@ class AIRoboticsFilter:
         climate_score = self.calculate_climate_score(text)
         matched_keywords = self.get_matched_keywords(text)
         tech_categories = self.classify_tech_categories(text)
+
+        # Boost relevance if tech categories matched but AI/climate score is 0
+        # This ensures fintech, cybersecurity, healthtech etc. get relevance
+        if tech_categories and score == 0 and climate_score == 0:
+            # Each non-AI/climate tech category adds +1 relevance
+            non_domain_cats = [
+                c for c in tech_categories
+                if c not in ("general_ai", "climate_tech", "robotics", "computer_vision",
+                             "nlp", "ml_analytics", "generative_ai", "autonomous_systems",
+                             "industry_40", "deeptech")
+            ]
+            if non_domain_cats:
+                score = len(non_domain_cats)
+                for cat in non_domain_cats:
+                    matched_keywords.append(f"[{cat}]")
 
         # Company passes if either AI or climate score meets threshold
         combined_score = score + climate_score
