@@ -11,31 +11,31 @@ Features:
 - Graceful shutdown handling
 """
 
+import logging
 import signal
 import sys
-import logging
 from datetime import datetime
-from typing import Optional, Dict, Any
+from typing import Any, Dict
 
-from apscheduler.schedulers.background import BackgroundScheduler
-from apscheduler.jobstores.memory import MemoryJobStore
 from apscheduler.executors.pool import ThreadPoolExecutor
-from apscheduler.triggers.interval import IntervalTrigger
+from apscheduler.jobstores.memory import MemoryJobStore
+from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
+from apscheduler.triggers.interval import IntervalTrigger
 
 from persistence.database import Database
-from scheduler.rate_limiter import PersistentRateLimiter
-from scheduler.jobs.discovery_job import DiscoveryJob
-from scheduler.jobs.backfill_job import BackfillJob
-from scheduler.jobs.enrichment_job import EnrichmentJob
 from scheduler.jobs.announcement_job import AnnouncementMonitoringJob
+from scheduler.jobs.backfill_job import BackfillJob
 from scheduler.jobs.csv_export_job import CSVExportJob
+from scheduler.jobs.discovery_job import DiscoveryJob
+from scheduler.jobs.enrichment_job import EnrichmentJob
 from scheduler.jobs.investor_detection_job import InvestorDetectionJob
 from scheduler.jobs.news_job import NewsMonitoringJob
-from scheduler.jobs.website_job import WebsiteFinderJob
-from scheduler.jobs.website_scrape_job import WebsiteScrapeJob
 from scheduler.jobs.officer_linkedin_job import OfficerLinkedInEnrichmentJob
 from scheduler.jobs.registration_scan_job import RegistrationScanJob
+from scheduler.jobs.website_job import WebsiteFinderJob
+from scheduler.jobs.website_scrape_job import WebsiteScrapeJob
+from scheduler.rate_limiter import PersistentRateLimiter
 
 logger = logging.getLogger(__name__)
 
@@ -81,23 +81,21 @@ class HandelsregisterScheduler:
         # Configure APScheduler
         # Use MemoryJobStore to avoid pickle issues with sqlite3.Connection
         # Jobs will be re-registered on restart, which is fine for our use case
-        jobstores = {
-            'default': MemoryJobStore()
-        }
+        jobstores = {"default": MemoryJobStore()}
         executors = {
-            'default': ThreadPoolExecutor(max_workers=1)  # One job at a time
+            "default": ThreadPoolExecutor(max_workers=1)  # One job at a time
         }
         job_defaults = {
-            'coalesce': True,  # Combine missed runs
-            'max_instances': 1,  # Only one instance at a time
-            'misfire_grace_time': 3600,  # 1 hour grace period
+            "coalesce": True,  # Combine missed runs
+            "max_instances": 1,  # Only one instance at a time
+            "misfire_grace_time": 3600,  # 1 hour grace period
         }
 
         self.scheduler = BackgroundScheduler(
             jobstores=jobstores,
             executors=executors,
             job_defaults=job_defaults,
-            timezone='UTC',
+            timezone="UTC",
         )
 
         self._running = False
@@ -118,11 +116,12 @@ class HandelsregisterScheduler:
 
             logger.info(
                 "Discovery job completed: %d new companies from %d found",
-                stats['companies_new'], stats['companies_found']
+                stats["companies_new"],
+                stats["companies_found"],
             )
 
             # Log to job history
-            self._log_job_completion('discovery', stats, db)
+            self._log_job_completion("discovery", stats, db)
 
         except Exception as e:
             logger.exception("Discovery job failed: %s", e)
@@ -145,11 +144,12 @@ class HandelsregisterScheduler:
 
             logger.info(
                 "Backfill job completed: %d new companies, %.1f%% progress",
-                stats['companies_new'], stats['progress_percent']
+                stats["companies_new"],
+                stats["progress_percent"],
             )
 
             # Log to job history
-            self._log_job_completion('backfill', stats, db)
+            self._log_job_completion("backfill", stats, db)
 
         except Exception as e:
             logger.exception("Backfill job failed: %s", e)
@@ -171,11 +171,12 @@ class HandelsregisterScheduler:
 
             logger.info(
                 "Enrichment job completed: %d processed, %d events detected",
-                stats['companies_processed'], stats['events_detected']
+                stats["companies_processed"],
+                stats["events_detected"],
             )
 
             # Log to job history
-            self._log_job_completion('enrichment', stats, db)
+            self._log_job_completion("enrichment", stats, db)
 
         except Exception as e:
             logger.exception("Enrichment job failed: %s", e)
@@ -198,13 +199,13 @@ class HandelsregisterScheduler:
 
             logger.info(
                 "Announcement job completed: %d fetched, %d new companies, %d capital events",
-                stats['announcements_fetched'],
-                stats['new_companies'],
-                stats['capital_events']
+                stats["announcements_fetched"],
+                stats["new_companies"],
+                stats["capital_events"],
             )
 
             # Log to job history
-            self._log_job_completion('announcement', stats, db)
+            self._log_job_completion("announcement", stats, db)
 
         except Exception as e:
             logger.exception("Announcement job failed: %s", e)
@@ -223,14 +224,14 @@ class HandelsregisterScheduler:
             job = CSVExportJob(db=db, export_dir=export_dir)
             stats = job.run()
 
-            if stats.get('status') == 'success':
+            if stats.get("status") == "success":
                 logger.info(
                     "CSV export completed: %d companies exported to %s",
-                    stats.get('total_exported', 0),
-                    stats.get('export_dir', export_dir)
+                    stats.get("total_exported", 0),
+                    stats.get("export_dir", export_dir),
                 )
             else:
-                logger.warning("CSV export failed: %s", stats.get('error', 'unknown'))
+                logger.warning("CSV export failed: %s", stats.get("error", "unknown"))
 
         except Exception as e:
             logger.exception("CSV export job failed: %s", e)
@@ -253,12 +254,12 @@ class HandelsregisterScheduler:
 
             logger.info(
                 "Investor detection completed: %d investments found, %d new",
-                stats['investments_found'],
-                stats['investments_new']
+                stats["investments_found"],
+                stats["investments_new"],
             )
 
             # Log to job history
-            self._log_job_completion('investor_detection', stats, db)
+            self._log_job_completion("investor_detection", stats, db)
 
         except Exception as e:
             logger.exception("Investor detection job failed: %s", e)
@@ -281,15 +282,15 @@ class HandelsregisterScheduler:
             logger.info(
                 "News monitoring completed: %d articles, %d funding, %d AI, %d early-stage, "
                 "%d companies created, %d HR-enriched",
-                stats['articles_fetched'],
-                stats['funding_mentions'],
-                stats['ai_articles'],
-                stats.get('early_stage_articles', 0),
-                stats.get('companies_created', 0),
-                stats.get('companies_enriched_hr', 0),
+                stats["articles_fetched"],
+                stats["funding_mentions"],
+                stats["ai_articles"],
+                stats.get("early_stage_articles", 0),
+                stats.get("companies_created", 0),
+                stats.get("companies_enriched_hr", 0),
             )
 
-            self._log_job_completion('news_monitoring', stats, db)
+            self._log_job_completion("news_monitoring", stats, db)
 
         except Exception as e:
             logger.exception("News monitoring job failed: %s", e)
@@ -307,13 +308,13 @@ class HandelsregisterScheduler:
 
             logger.info(
                 "Website finder completed: %d checked, %d found (%d guess, %d search)",
-                stats['companies_checked'],
-                stats['websites_found'],
-                stats.get('websites_by_guess', 0),
-                stats.get('websites_by_search', 0),
+                stats["companies_checked"],
+                stats["websites_found"],
+                stats.get("websites_by_guess", 0),
+                stats.get("websites_by_search", 0),
             )
 
-            self._log_job_completion('website_finder', stats, db)
+            self._log_job_completion("website_finder", stats, db)
 
         except Exception as e:
             logger.exception("Website finder job failed: %s", e)
@@ -331,13 +332,13 @@ class HandelsregisterScheduler:
 
             logger.info(
                 "Website scrape completed: %d checked, %d enriched, %d descriptions, %d investors",
-                stats['companies_checked'],
-                stats['companies_enriched'],
-                stats['descriptions_added'],
-                stats['investors_detected'],
+                stats["companies_checked"],
+                stats["companies_enriched"],
+                stats["descriptions_added"],
+                stats["investors_detected"],
             )
 
-            self._log_job_completion('website_scrape', stats, db)
+            self._log_job_completion("website_scrape", stats, db)
 
         except Exception as e:
             logger.exception("Website scrape job failed: %s", e)
@@ -352,19 +353,19 @@ class HandelsregisterScheduler:
         try:
             job = OfficerLinkedInEnrichmentJob(
                 db=db,
-                search_delay=180,       # 3 min between searches
+                search_delay=180,  # 3 min between searches
                 min_confidence=0.40,
             )
             stats = job.run_batch(batch_size=5)
 
             logger.info(
                 "Officer LinkedIn enrichment completed: %d processed, %d enriched, %d no match",
-                stats['officers_processed'],
-                stats['officers_enriched'],
-                stats['officers_no_match'],
+                stats["officers_processed"],
+                stats["officers_enriched"],
+                stats["officers_no_match"],
             )
 
-            self._log_job_completion('officer_linkedin', stats, db)
+            self._log_job_completion("officer_linkedin", stats, db)
 
         except Exception as e:
             logger.exception("Officer LinkedIn enrichment job failed: %s", e)
@@ -386,11 +387,12 @@ class HandelsregisterScheduler:
 
             logger.info(
                 "Registration scan completed: %d found, %d new, %d requests",
-                stats['companies_found'], stats['companies_new'],
-                stats['requests_used'],
+                stats["companies_found"],
+                stats["companies_new"],
+                stats["requests_used"],
             )
 
-            self._log_job_completion('registration_scan', stats, db)
+            self._log_job_completion("registration_scan", stats, db)
 
         except Exception as e:
             logger.exception("Registration scan job failed: %s", e)
@@ -400,16 +402,16 @@ class HandelsregisterScheduler:
     # Map each job type's stat keys → generic logging columns.
     # Each tuple: (key for companies_found, key for companies_new, key for requests_used)
     _STAT_KEY_MAP: Dict[str, tuple] = {
-        'discovery':          ('companies_found',    'companies_new',    'requests_used'),
-        'backfill':           ('companies_found',    'companies_new',    'requests_used'),
-        'enrichment':         ('companies_processed', 'events_detected', 'requests_used'),
-        'announcement':       ('announcements_fetched', 'new_companies', 'requests_used'),
-        'investor_detection': ('investments_found',  'investments_new',  'requests_used'),
-        'news_monitoring':    ('articles_fetched',   'companies_created', 'requests_used'),
-        'website_finder':     ('companies_checked',  'websites_found',   'requests_used'),
-        'website_scrape':     ('companies_checked',  'companies_enriched', 'requests_used'),
-        'officer_linkedin':   ('officers_processed', 'officers_enriched', 'requests_used'),
-        'registration_scan':  ('companies_found',    'companies_new',    'requests_used'),
+        "discovery": ("companies_found", "companies_new", "requests_used"),
+        "backfill": ("companies_found", "companies_new", "requests_used"),
+        "enrichment": ("companies_processed", "events_detected", "requests_used"),
+        "announcement": ("announcements_fetched", "new_companies", "requests_used"),
+        "investor_detection": ("investments_found", "investments_new", "requests_used"),
+        "news_monitoring": ("articles_fetched", "companies_created", "requests_used"),
+        "website_finder": ("companies_checked", "websites_found", "requests_used"),
+        "website_scrape": ("companies_checked", "companies_enriched", "requests_used"),
+        "officer_linkedin": ("officers_processed", "officers_enriched", "requests_used"),
+        "registration_scan": ("companies_found", "companies_new", "requests_used"),
     }
 
     def _log_job_completion(self, job_type: str, stats: Dict[str, Any], db: Database):
@@ -421,20 +423,23 @@ class HandelsregisterScheduler:
         """
         try:
             found_key, new_key, req_key = self._STAT_KEY_MAP.get(
-                job_type, ('companies_found', 'companies_new', 'requests_used')
+                job_type, ("companies_found", "companies_new", "requests_used")
             )
-            db.conn.execute("""
+            db.conn.execute(
+                """
                 INSERT INTO job_runs (job_type, started_at, completed_at, status,
                                      companies_found, companies_new, requests_used)
                 VALUES (?, ?, ?, 'completed', ?, ?, ?)
-            """, (
-                job_type,
-                datetime.utcnow().isoformat(),
-                datetime.utcnow().isoformat(),
-                stats.get(found_key, 0),
-                stats.get(new_key, 0),
-                stats.get(req_key, 0),
-            ))
+            """,
+                (
+                    job_type,
+                    datetime.utcnow().isoformat(),
+                    datetime.utcnow().isoformat(),
+                    stats.get(found_key, 0),
+                    stats.get(new_key, 0),
+                    stats.get(req_key, 0),
+                ),
+            )
             db.conn.commit()
         except Exception as e:
             logger.error("Failed to log job completion: %s", e)
@@ -445,17 +450,17 @@ class HandelsregisterScheduler:
         self.scheduler.add_job(
             self._run_discovery_job,
             trigger=IntervalTrigger(hours=self.discovery_interval_hours),
-            id='discovery_job',
-            name='Discovery Job',
+            id="discovery_job",
+            name="Discovery Job",
             replace_existing=True,
         )
 
         # Backfill job: twice daily at 3 AM and 3 PM UTC (use more of the budget)
         self.scheduler.add_job(
             self._run_backfill_job,
-            trigger=CronTrigger(hour='3,15', minute=0),
-            id='backfill_job',
-            name='Backfill Job',
+            trigger=CronTrigger(hour="3,15", minute=0),
+            id="backfill_job",
+            name="Backfill Job",
             replace_existing=True,
         )
 
@@ -463,8 +468,8 @@ class HandelsregisterScheduler:
         self.scheduler.add_job(
             self._run_enrichment_job,
             trigger=CronTrigger(hour=4, minute=0),
-            id='enrichment_job',
-            name='Enrichment Job',
+            id="enrichment_job",
+            name="Enrichment Job",
             replace_existing=True,
         )
 
@@ -472,8 +477,8 @@ class HandelsregisterScheduler:
         self.scheduler.add_job(
             self._run_announcement_job,
             trigger=CronTrigger(hour=5, minute=0),
-            id='announcement_job',
-            name='Announcement Monitoring Job',
+            id="announcement_job",
+            name="Announcement Monitoring Job",
             replace_existing=True,
         )
 
@@ -481,8 +486,8 @@ class HandelsregisterScheduler:
         self.scheduler.add_job(
             self._run_csv_export_job,
             trigger=CronTrigger(hour=6, minute=0),
-            id='csv_export_job',
-            name='CSV Export Job',
+            id="csv_export_job",
+            name="CSV Export Job",
             replace_existing=True,
         )
 
@@ -491,8 +496,8 @@ class HandelsregisterScheduler:
         self.scheduler.add_job(
             self._run_investor_detection_job,
             trigger=CronTrigger(hour=7, minute=0),
-            id='investor_detection_job',
-            name='Investor Detection Job',
+            id="investor_detection_job",
+            name="Investor Detection Job",
             replace_existing=True,
         )
 
@@ -500,8 +505,8 @@ class HandelsregisterScheduler:
         self.scheduler.add_job(
             self._run_news_monitoring_job,
             trigger=CronTrigger(hour=8, minute=0),
-            id='news_monitoring_job',
-            name='News Monitoring Job',
+            id="news_monitoring_job",
+            name="News Monitoring Job",
             replace_existing=True,
         )
 
@@ -509,8 +514,8 @@ class HandelsregisterScheduler:
         self.scheduler.add_job(
             self._run_website_finder_job,
             trigger=CronTrigger(hour=9, minute=0),
-            id='website_finder_job',
-            name='Website Finder Job',
+            id="website_finder_job",
+            name="Website Finder Job",
             replace_existing=True,
         )
 
@@ -519,8 +524,8 @@ class HandelsregisterScheduler:
         self.scheduler.add_job(
             self._run_website_scrape_job,
             trigger=CronTrigger(hour=10, minute=0),
-            id='website_scrape_job',
-            name='Website Scrape Job',
+            id="website_scrape_job",
+            name="Website Scrape Job",
             replace_existing=True,
         )
 
@@ -529,8 +534,8 @@ class HandelsregisterScheduler:
         self.scheduler.add_job(
             self._run_officer_linkedin_job,
             trigger=CronTrigger(hour=11, minute=0),
-            id='officer_linkedin_job',
-            name='Officer LinkedIn Enrichment Job',
+            id="officer_linkedin_job",
+            name="Officer LinkedIn Enrichment Job",
             replace_existing=True,
         )
 
@@ -538,9 +543,9 @@ class HandelsregisterScheduler:
         # Scans sequential HRB numbers to find newest company registrations
         self.scheduler.add_job(
             self._run_registration_scan_job,
-            trigger=CronTrigger(hour='1,5,9,13,17,21', minute=30),
-            id='registration_scan_job',
-            name='Registration Scan Job',
+            trigger=CronTrigger(hour="1,5,9,13,17,21", minute=30),
+            id="registration_scan_job",
+            name="Registration Scan Job",
             replace_existing=True,
         )
 
@@ -549,7 +554,7 @@ class HandelsregisterScheduler:
             "announcements 5AM, CSV export 6AM, investor detection 7AM, news monitoring 8AM, "
             "website finder 9AM, website scrape 10AM, officer LinkedIn 11AM, "
             "registration scan every 4h (1:30/5:30/9:30/13:30/17:30/21:30)",
-            self.discovery_interval_hours
+            self.discovery_interval_hours,
         )
 
     def start(self, run_discovery_now: bool = False, run_backfill_now: bool = False):
@@ -570,14 +575,14 @@ class HandelsregisterScheduler:
         if run_discovery_now:
             self.scheduler.add_job(
                 self._run_discovery_job,
-                id='discovery_immediate',
+                id="discovery_immediate",
                 replace_existing=True,
             )
 
         if run_backfill_now:
             self.scheduler.add_job(
                 self._run_backfill_job,
-                id='backfill_immediate',
+                id="backfill_immediate",
                 replace_existing=True,
             )
 
@@ -593,21 +598,23 @@ class HandelsregisterScheduler:
         """Get current scheduler status."""
         jobs = []
         for job in self.scheduler.get_jobs():
-            jobs.append({
-                'id': job.id,
-                'name': job.name,
-                'next_run': job.next_run_time.isoformat() if job.next_run_time else None,
-            })
+            jobs.append(
+                {
+                    "id": job.id,
+                    "name": job.name,
+                    "next_run": job.next_run_time.isoformat() if job.next_run_time else None,
+                }
+            )
 
         rate_state = self.rate_limiter.get_state()
 
         return {
-            'running': self._running,
-            'jobs': jobs,
-            'rate_limit': {
-                'tokens_available': rate_state.tokens_available,
-                'requests_this_hour': rate_state.requests_this_hour,
-                'can_request': rate_state.can_request,
+            "running": self._running,
+            "jobs": jobs,
+            "rate_limit": {
+                "tokens_available": rate_state.tokens_available,
+                "requests_this_hour": rate_state.requests_this_hour,
+                "can_request": rate_state.can_request,
             },
         }
 
@@ -630,7 +637,7 @@ def run_scheduler(
     # Set up logging
     logging.basicConfig(
         level=logging.INFO,
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     )
 
     scheduler = HandelsregisterScheduler(
@@ -657,15 +664,16 @@ def run_scheduler(
     try:
         while True:
             import time
+
             time.sleep(60)
 
             # Log status every hour
             status = scheduler.get_status()
-            if status['rate_limit']['requests_this_hour'] > 0:
+            if status["rate_limit"]["requests_this_hour"] > 0:
                 logger.info(
                     "Status: %d requests this hour, %.1f tokens available",
-                    status['rate_limit']['requests_this_hour'],
-                    status['rate_limit']['tokens_available'],
+                    status["rate_limit"]["requests_this_hour"],
+                    status["rate_limit"]["tokens_available"],
                 )
 
     except KeyboardInterrupt:

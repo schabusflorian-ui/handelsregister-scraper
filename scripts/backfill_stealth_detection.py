@@ -14,24 +14,24 @@ Usage:
 
 import argparse
 import logging
-import sys
 import os
+import sys
 
 # Add project root to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from persistence.database import Database
-from processing.emergence_matcher import EmergenceMatcher, run_emergence_detection
+from processing.emergence_matcher import EmergenceMatcher
 from sources.linkedin_scraper import (
-    STEALTH_KEYWORDS, TRANSITION_KEYWORDS, URGENCY_KEYWORDS,
-    TRACTION_KEYWORDS, REPEAT_FOUNDER_KEYWORDS, HIGH_VALUE_COMPANIES
+    HIGH_VALUE_COMPANIES,
+    REPEAT_FOUNDER_KEYWORDS,
+    STEALTH_KEYWORDS,
+    TRACTION_KEYWORDS,
+    TRANSITION_KEYWORDS,
+    URGENCY_KEYWORDS,
 )
 
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s %(levelname)s %(message)s',
-    datefmt='%H:%M:%S'
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s", datefmt="%H:%M:%S")
 logger = logging.getLogger(__name__)
 
 
@@ -42,55 +42,60 @@ def recalculate_confidence(founder: dict) -> tuple:
     Returns: (new_score, detected_signals)
     """
     # Combine text fields
-    text = ' '.join(filter(None, [
-        founder.get('headline', ''),
-        founder.get('summary', ''),
-        founder.get('name', ''),
-    ])).lower()
+    text = " ".join(
+        filter(
+            None,
+            [
+                founder.get("headline", ""),
+                founder.get("summary", ""),
+                founder.get("name", ""),
+            ],
+        )
+    ).lower()
 
     signals = {
-        'stealth': [],
-        'transition': [],
-        'urgency': [],
-        'traction': [],
-        'founder': [],
-        'background': [],
+        "stealth": [],
+        "transition": [],
+        "urgency": [],
+        "traction": [],
+        "founder": [],
+        "background": [],
     }
 
     # Detect signals
     for kw in STEALTH_KEYWORDS:
         if kw in text:
-            signals['stealth'].append(kw)
+            signals["stealth"].append(kw)
 
     for kw in TRANSITION_KEYWORDS:
         if kw in text:
-            signals['transition'].append(kw)
+            signals["transition"].append(kw)
 
     for kw in URGENCY_KEYWORDS:
         if kw in text:
-            signals['urgency'].append(kw)
+            signals["urgency"].append(kw)
 
     for kw in TRACTION_KEYWORDS:
         if kw in text:
-            signals['traction'].append(kw)
+            signals["traction"].append(kw)
 
-    founder_keywords = ['founder', 'co-founder', 'cofounder', 'gründer', 'ceo', 'entrepreneur']
+    founder_keywords = ["founder", "co-founder", "cofounder", "gründer", "ceo", "entrepreneur"]
     for kw in founder_keywords:
         if kw in text:
-            signals['founder'].append(kw)
+            signals["founder"].append(kw)
 
     for company in HIGH_VALUE_COMPANIES:
         if company in text:
-            signals['background'].append(company)
+            signals["background"].append(company)
 
     # Check repeat founder
     is_repeat = any(kw in text for kw in REPEAT_FOUNDER_KEYWORDS)
 
     # Calculate company tier
     tier = 0
-    faang = {'google', 'meta', 'facebook', 'amazon', 'apple', 'microsoft'}
-    unicorns = {'stripe', 'airbnb', 'uber', 'spotify', 'klarna', 'revolut', 'celonis'}
-    for company in signals['background']:
+    faang = {"google", "meta", "facebook", "amazon", "apple", "microsoft"}
+    unicorns = {"stripe", "airbnb", "uber", "spotify", "klarna", "revolut", "celonis"}
+    for company in signals["background"]:
         if company.lower() in faang:
             tier = max(tier, 4)
         elif company.lower() in unicorns:
@@ -102,41 +107,41 @@ def recalculate_confidence(founder: dict) -> tuple:
     score = 0.0
 
     # Tier 1: Direct stealth signals (0.35 max)
-    if signals['stealth']:
-        if any('stealth' in s for s in signals['stealth']):
+    if signals["stealth"]:
+        if any("stealth" in s for s in signals["stealth"]):
             score += 0.25
         else:
-            score += min(0.15, len(signals['stealth']) * 0.05)
+            score += min(0.15, len(signals["stealth"]) * 0.05)
         score = min(score, 0.35)
 
     # Tier 2: Career transition (0.20 max)
     tier2 = 0.0
-    if signals['transition']:
-        tier2 += min(0.10, len(signals['transition']) * 0.04)
+    if signals["transition"]:
+        tier2 += min(0.10, len(signals["transition"]) * 0.04)
     if is_repeat:
         tier2 += 0.10
-    if signals['founder']:
-        tier2 += min(0.08, len(signals['founder']) * 0.03)
+    if signals["founder"]:
+        tier2 += min(0.08, len(signals["founder"]) * 0.03)
     score += min(0.20, tier2)
 
     # Tier 3: Background (0.20 max)
     tier3 = tier * 0.04
-    if signals['background']:
+    if signals["background"]:
         tier3 += 0.04
     score += min(0.20, tier3)
 
     # Tier 4: Urgency (0.15 max)
     tier4 = 0.0
-    if signals['urgency']:
-        tier4 += min(0.07, len(signals['urgency']) * 0.03)
-    if signals['traction']:
-        tier4 += min(0.05, len(signals['traction']) * 0.02)
+    if signals["urgency"]:
+        tier4 += min(0.07, len(signals["urgency"]) * 0.03)
+    if signals["traction"]:
+        tier4 += min(0.05, len(signals["traction"]) * 0.02)
     score += min(0.15, tier4)
 
     # Tier 5: Location (0.10 max)
-    location = (founder.get('location') or '').lower()
-    dach_countries = ['germany', 'deutschland', 'austria', 'österreich', 'switzerland', 'schweiz']
-    dach_cities = ['berlin', 'munich', 'münchen', 'hamburg', 'frankfurt', 'vienna', 'wien', 'zurich', 'zürich']
+    location = (founder.get("location") or "").lower()
+    dach_countries = ["germany", "deutschland", "austria", "österreich", "switzerland", "schweiz"]
+    dach_cities = ["berlin", "munich", "münchen", "hamburg", "frankfurt", "vienna", "wien", "zurich", "zürich"]
 
     if any(x in location for x in dach_cities):
         score += 0.10
@@ -146,7 +151,7 @@ def recalculate_confidence(founder: dict) -> tuple:
     return min(1.0, score), signals
 
 
-def run_backfill(db_path: str = 'handelsregister.db', dry_run: bool = False):
+def run_backfill(db_path: str = "handelsregister.db", dry_run: bool = False):
     """Run the backfill process."""
     db = Database(db_path)
 
@@ -154,7 +159,7 @@ def run_backfill(db_path: str = 'handelsregister.db', dry_run: bool = False):
         cursor = db.conn.cursor()
 
         # Get all stealth founders
-        cursor.execute('SELECT * FROM stealth_founders')
+        cursor.execute("SELECT * FROM stealth_founders")
         founders = [dict(row) for row in cursor.fetchall()]
 
         logger.info(f"Found {len(founders)} stealth founders to process")
@@ -169,7 +174,7 @@ def run_backfill(db_path: str = 'handelsregister.db', dry_run: bool = False):
 
         updated_count = 0
         for founder in founders:
-            old_score = founder['confidence_score']
+            old_score = founder["confidence_score"]
             new_score, signals = recalculate_confidence(founder)
 
             # Count non-empty signal categories
@@ -181,8 +186,9 @@ def run_backfill(db_path: str = 'handelsregister.db', dry_run: bool = False):
                 if not dry_run:
                     # Update using our new method (which logs changes)
                     import json
+
                     db.update_stealth_founder(
-                        founder_id=founder['id'],
+                        founder_id=founder["id"],
                         confidence_score=new_score,
                         stealth_signals=json.dumps(signals),
                     )
@@ -210,22 +216,28 @@ def run_backfill(db_path: str = 'handelsregister.db', dry_run: bool = False):
 
             if matches:
                 best = matches[0]
-                logger.info(f"  {founder['name']} -> {best['company_name']} (similarity: {best['name_similarity']:.2f})")
+                logger.info(
+                    f"  {founder['name']} -> {best['company_name']} (similarity: {best['name_similarity']:.2f})"
+                )
 
-                if best['name_similarity'] >= 0.95:
+                if best["name_similarity"] >= 0.95:
                     if not dry_run:
-                        db.mark_founder_emerged(founder['id'], best['company_id'])
-                    auto_linked.append({
-                        'founder': founder['name'],
-                        'company': best['company_name'],
-                        'similarity': best['name_similarity'],
-                    })
+                        db.mark_founder_emerged(founder["id"], best["company_id"])
+                    auto_linked.append(
+                        {
+                            "founder": founder["name"],
+                            "company": best["company_name"],
+                            "similarity": best["name_similarity"],
+                        }
+                    )
                 else:
-                    candidates.append({
-                        'founder': founder['name'],
-                        'company': best['company_name'],
-                        'similarity': best['name_similarity'],
-                    })
+                    candidates.append(
+                        {
+                            "founder": founder["name"],
+                            "company": best["company_name"],
+                            "similarity": best["name_similarity"],
+                        }
+                    )
             else:
                 logger.info(f"  {founder['name']} -> No match found")
 
@@ -263,10 +275,10 @@ def run_backfill(db_path: str = 'handelsregister.db', dry_run: bool = False):
         db.close()
 
 
-if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='Backfill enhanced stealth detection')
-    parser.add_argument('--dry-run', action='store_true', help='Show what would be done without making changes')
-    parser.add_argument('--db', default='handelsregister.db', help='Database path')
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Backfill enhanced stealth detection")
+    parser.add_argument("--dry-run", action="store_true", help="Show what would be done without making changes")
+    parser.add_argument("--db", default="handelsregister.db", help="Database path")
     args = parser.parse_args()
 
     run_backfill(db_path=args.db, dry_run=args.dry_run)

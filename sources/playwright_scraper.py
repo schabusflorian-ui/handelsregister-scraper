@@ -4,17 +4,16 @@ Playwright-based scraper with stealth mode for LinkedIn profile discovery.
 Uses headless Chrome with anti-detection measures to bypass bot blocking.
 """
 
+import logging
+import random
 import re
 import time
-import random
-import logging
-import json
-from typing import List, Optional, Dict, Any, Set
 from dataclasses import dataclass, field
 from datetime import datetime
-from urllib.parse import quote_plus, urlparse, parse_qs, unquote
+from typing import Any, Dict, List, Optional, Set
+from urllib.parse import parse_qs, quote_plus, unquote, urlparse
 
-from playwright.sync_api import sync_playwright, Page, Browser, BrowserContext
+from playwright.sync_api import Browser, BrowserContext, Page, sync_playwright
 from playwright_stealth import Stealth
 
 logger = logging.getLogger(__name__)
@@ -23,6 +22,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class SearchResult:
     """A search result with LinkedIn URL."""
+
     url: str
     title: str
     snippet: str
@@ -33,6 +33,7 @@ class SearchResult:
 @dataclass
 class LinkedInProfile:
     """Extracted LinkedIn profile data."""
+
     url: str
     name: Optional[str] = None
     headline: Optional[str] = None
@@ -49,22 +50,50 @@ class LinkedInProfile:
 
 # Stealth detection keywords
 STEALTH_KEYWORDS = [
-    'stealth', 'stealth mode', 'building something',
-    'something new', 'exciting news soon', 'coming soon',
-    'new venture', 'working on', 'exploring opportunities',
-    'next chapter', 'what\'s next', 'in transition',
+    "stealth",
+    "stealth mode",
+    "building something",
+    "something new",
+    "exciting news soon",
+    "coming soon",
+    "new venture",
+    "working on",
+    "exploring opportunities",
+    "next chapter",
+    "what's next",
+    "in transition",
 ]
 
 HIGH_VALUE_COMPANIES = [
-    'google', 'meta', 'facebook', 'amazon', 'apple', 'microsoft',
-    'stripe', 'airbnb', 'uber', 'spotify', 'netflix',
-    'klarna', 'n26', 'revolut', 'wise',
-    'delivery hero', 'zalando', 'celonis', 'personio',
+    "google",
+    "meta",
+    "facebook",
+    "amazon",
+    "apple",
+    "microsoft",
+    "stripe",
+    "airbnb",
+    "uber",
+    "spotify",
+    "netflix",
+    "klarna",
+    "n26",
+    "revolut",
+    "wise",
+    "delivery hero",
+    "zalando",
+    "celonis",
+    "personio",
 ]
 
 FOUNDER_KEYWORDS = [
-    'founder', 'co-founder', 'cofounder', 'gründer',
-    'ceo', 'chief executive', 'entrepreneur',
+    "founder",
+    "co-founder",
+    "cofounder",
+    "gründer",
+    "ceo",
+    "chief executive",
+    "entrepreneur",
 ]
 
 
@@ -104,18 +133,18 @@ class PlaywrightStealthScraper:
             headless=self.headless,
             slow_mo=self.slow_mo,
             args=[
-                '--disable-blink-features=AutomationControlled',
-                '--no-sandbox',
-                '--disable-dev-shm-usage',
-            ]
+                "--disable-blink-features=AutomationControlled",
+                "--no-sandbox",
+                "--disable-dev-shm-usage",
+            ],
         )
 
         # Create context with realistic viewport and user agent
         self.context = self.browser.new_context(
-            viewport={'width': 1920, 'height': 1080},
-            user_agent='Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-            locale='en-US',
-            timezone_id='Europe/Berlin',
+            viewport={"width": 1920, "height": 1080},
+            user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            locale="en-US",
+            timezone_id="Europe/Berlin",
         )
 
         self.page = self.context.new_page()
@@ -163,7 +192,7 @@ class PlaywrightStealthScraper:
         logger.info(f"DDG Search: {query[:50]}...")
 
         try:
-            self.page.goto(url, wait_until='networkidle', timeout=30000)
+            self.page.goto(url, wait_until="networkidle", timeout=30000)
             self._random_mouse_move()
             time.sleep(2)  # Wait for JS to load results
 
@@ -180,8 +209,8 @@ class PlaywrightStealthScraper:
                     if not link_elem:
                         continue
 
-                    href = link_elem.get_attribute('href')
-                    if not href or 'linkedin.com/in/' not in href.lower():
+                    href = link_elem.get_attribute("href")
+                    if not href or "linkedin.com/in/" not in href.lower():
                         continue
 
                     # Clean the URL
@@ -194,17 +223,19 @@ class PlaywrightStealthScraper:
                     title = link_elem.inner_text()
 
                     # Get snippet
-                    snippet = ''
+                    snippet = ""
                     snippet_elem = elem.query_selector('[data-testid="result-snippet"]')
                     if snippet_elem:
                         snippet = snippet_elem.inner_text()
 
-                    results.append(SearchResult(
-                        url=clean_url,
-                        title=title,
-                        snippet=snippet,
-                        query=query,
-                    ))
+                    results.append(
+                        SearchResult(
+                            url=clean_url,
+                            title=title,
+                            snippet=snippet,
+                            query=query,
+                        )
+                    )
 
                 except Exception as e:
                     logger.debug(f"Error parsing result: {e}")
@@ -227,7 +258,7 @@ class PlaywrightStealthScraper:
         logger.info(f"Google Search: {query[:50]}...")
 
         try:
-            self.page.goto(url, wait_until='networkidle', timeout=30000)
+            self.page.goto(url, wait_until="networkidle", timeout=30000)
             self._random_mouse_move()
             time.sleep(2)
 
@@ -241,19 +272,19 @@ class PlaywrightStealthScraper:
                 pass
 
             # Wait for results
-            self.page.wait_for_selector('div.g', timeout=10000)
+            self.page.wait_for_selector("div.g", timeout=10000)
 
             # Extract results
-            result_elements = self.page.query_selector_all('div.g')
+            result_elements = self.page.query_selector_all("div.g")
 
             for elem in result_elements:
                 try:
-                    link_elem = elem.query_selector('a')
+                    link_elem = elem.query_selector("a")
                     if not link_elem:
                         continue
 
-                    href = link_elem.get_attribute('href')
-                    if not href or 'linkedin.com/in/' not in href.lower():
+                    href = link_elem.get_attribute("href")
+                    if not href or "linkedin.com/in/" not in href.lower():
                         continue
 
                     clean_url = self._clean_linkedin_url(href)
@@ -262,20 +293,22 @@ class PlaywrightStealthScraper:
 
                     self.found_urls.add(clean_url)
 
-                    title_elem = elem.query_selector('h3')
-                    title = title_elem.inner_text() if title_elem else ''
+                    title_elem = elem.query_selector("h3")
+                    title = title_elem.inner_text() if title_elem else ""
 
-                    snippet = ''
-                    snippet_elem = elem.query_selector('div[data-sncf]')
+                    snippet = ""
+                    snippet_elem = elem.query_selector("div[data-sncf]")
                     if snippet_elem:
                         snippet = snippet_elem.inner_text()
 
-                    results.append(SearchResult(
-                        url=clean_url,
-                        title=title,
-                        snippet=snippet,
-                        query=query,
-                    ))
+                    results.append(
+                        SearchResult(
+                            url=clean_url,
+                            title=title,
+                            snippet=snippet,
+                            query=query,
+                        )
+                    )
 
                 except Exception as e:
                     logger.debug(f"Error parsing Google result: {e}")
@@ -297,27 +330,27 @@ class PlaywrightStealthScraper:
         profile = LinkedInProfile(url=url)
 
         try:
-            self.page.goto(url, wait_until='networkidle', timeout=30000)
+            self.page.goto(url, wait_until="networkidle", timeout=30000)
             self._random_mouse_move()
             time.sleep(2)
 
             # Check for auth wall
-            if 'authwall' in self.page.url or 'login' in self.page.url:
+            if "authwall" in self.page.url or "login" in self.page.url:
                 logger.debug("Hit auth wall, extracting available data...")
 
             # Try to extract name
             name_selectors = [
-                'h1.top-card-layout__title',
-                'h1.text-heading-xlarge',
-                '.top-card__title',
-                'h1',
+                "h1.top-card-layout__title",
+                "h1.text-heading-xlarge",
+                ".top-card__title",
+                "h1",
             ]
             for selector in name_selectors:
                 try:
                     elem = self.page.query_selector(selector)
                     if elem:
                         text = elem.inner_text().strip()
-                        if text and len(text) < 100 and 'linkedin' not in text.lower():
+                        if text and len(text) < 100 and "linkedin" not in text.lower():
                             profile.name = text
                             break
                 except:
@@ -325,9 +358,9 @@ class PlaywrightStealthScraper:
 
             # Try to extract headline
             headline_selectors = [
-                '.top-card-layout__headline',
-                'h2.top-card-layout__headline',
-                '.text-body-medium',
+                ".top-card-layout__headline",
+                "h2.top-card-layout__headline",
+                ".text-body-medium",
             ]
             for selector in headline_selectors:
                 try:
@@ -342,15 +375,15 @@ class PlaywrightStealthScraper:
 
             # Try to extract location
             location_selectors = [
-                '.top-card-layout__first-subline',
-                '.top-card__subline-item',
+                ".top-card-layout__first-subline",
+                ".top-card__subline-item",
             ]
             for selector in location_selectors:
                 try:
                     elem = self.page.query_selector(selector)
                     if elem:
                         text = elem.inner_text().strip()
-                        if any(x in text.lower() for x in ['germany', 'berlin', 'munich', 'frankfurt']):
+                        if any(x in text.lower() for x in ["germany", "berlin", "munich", "frankfurt"]):
                             profile.location = text
                             break
                 except:
@@ -360,16 +393,16 @@ class PlaywrightStealthScraper:
             try:
                 og_title = self.page.query_selector('meta[property="og:title"]')
                 if og_title:
-                    content = og_title.get_attribute('content')
-                    if content and ' - ' in content:
-                        parts = content.split(' - ', 1)
+                    content = og_title.get_attribute("content")
+                    if content and " - " in content:
+                        parts = content.split(" - ", 1)
                         profile.name = profile.name or parts[0].strip()
                         if len(parts) > 1:
                             profile.headline = profile.headline or parts[1].strip()
 
                 og_desc = self.page.query_selector('meta[property="og:description"]')
                 if og_desc:
-                    profile.summary = og_desc.get_attribute('content')
+                    profile.summary = og_desc.get_attribute("content")
             except:
                 pass
 
@@ -387,28 +420,33 @@ class PlaywrightStealthScraper:
     def _clean_linkedin_url(self, url: str) -> Optional[str]:
         """Clean and normalize LinkedIn URL."""
         # Handle various URL formats
-        if 'uddg=' in url:
+        if "uddg=" in url:
             parsed = urlparse(url)
             params = parse_qs(parsed.query)
-            if 'uddg' in params:
-                url = unquote(params['uddg'][0])
+            if "uddg" in params:
+                url = unquote(params["uddg"][0])
 
-        match = re.search(r'(https?://(?:[a-z]{2}\.)?(?:www\.)?linkedin\.com/in/[^/?&#]+)', url)
+        match = re.search(r"(https?://(?:[a-z]{2}\.)?(?:www\.)?linkedin\.com/in/[^/?&#]+)", url)
         if match:
             cleaned = match.group(1)
             # Normalize to www.linkedin.com
-            cleaned = re.sub(r'https?://[a-z]{2}\.linkedin\.com', 'https://www.linkedin.com', cleaned)
+            cleaned = re.sub(r"https?://[a-z]{2}\.linkedin\.com", "https://www.linkedin.com", cleaned)
             return cleaned
 
         return None
 
     def _detect_signals(self, profile: LinkedInProfile) -> LinkedInProfile:
         """Detect stealth signals in profile."""
-        text = ' '.join(filter(None, [
-            profile.headline,
-            profile.summary,
-            profile.name,
-        ])).lower()
+        text = " ".join(
+            filter(
+                None,
+                [
+                    profile.headline,
+                    profile.summary,
+                    profile.name,
+                ],
+            )
+        ).lower()
 
         for keyword in STEALTH_KEYWORDS:
             if keyword in text:
@@ -430,7 +468,7 @@ class PlaywrightStealthScraper:
             score += min(0.3, len(profile.founder_signals) * 0.1)
         if profile.high_value_background:
             score += min(0.2, len(profile.high_value_background) * 0.1)
-        if profile.location and any(x in profile.location.lower() for x in ['germany', 'berlin', 'munich']):
+        if profile.location and any(x in profile.location.lower() for x in ["germany", "berlin", "munich"]):
             score += 0.1
 
         profile.confidence_score = min(1.0, score)
@@ -493,11 +531,11 @@ def run_stealth_discovery(
         Dictionary with discovery statistics and found profiles
     """
     stats = {
-        'queries_run': 0,
-        'urls_found': 0,
-        'profiles_scraped': 0,
-        'founders_found': 0,
-        'high_confidence': 0,
+        "queries_run": 0,
+        "urls_found": 0,
+        "profiles_scraped": 0,
+        "founders_found": 0,
+        "high_confidence": 0,
     }
 
     founders = []
@@ -511,8 +549,8 @@ def run_stealth_discovery(
             max_queries=max_queries,
         )
 
-        stats['queries_run'] = max_queries
-        stats['urls_found'] = len(scraper.found_urls)
+        stats["queries_run"] = max_queries
+        stats["urls_found"] = len(scraper.found_urls)
 
         # Phase 2: Scrape profiles
         logger.info(f"\nPhase 2: Scraping {min(len(results), max_profiles)} profiles...")
@@ -521,34 +559,36 @@ def run_stealth_discovery(
             scraper._delay()
 
             profile = scraper.scrape_linkedin_profile(result.url)
-            stats['profiles_scraped'] += 1
+            stats["profiles_scraped"] += 1
 
             if profile and profile.confidence_score > 0:
-                founders.append({
-                    'url': profile.url,
-                    'name': profile.name,
-                    'headline': profile.headline,
-                    'location': profile.location,
-                    'signals': profile.stealth_signals,
-                    'background': profile.high_value_background,
-                    'confidence': profile.confidence_score,
-                })
-                stats['founders_found'] += 1
+                founders.append(
+                    {
+                        "url": profile.url,
+                        "name": profile.name,
+                        "headline": profile.headline,
+                        "location": profile.location,
+                        "signals": profile.stealth_signals,
+                        "background": profile.high_value_background,
+                        "confidence": profile.confidence_score,
+                    }
+                )
+                stats["founders_found"] += 1
 
                 if profile.confidence_score >= 0.5:
-                    stats['high_confidence'] += 1
+                    stats["high_confidence"] += 1
 
     return {
-        'stats': stats,
-        'founders': sorted(founders, key=lambda x: x['confidence'], reverse=True),
+        "stats": stats,
+        "founders": sorted(founders, key=lambda x: x["confidence"], reverse=True),
     }
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     logging.basicConfig(
         level=logging.INFO,
-        format='%(asctime)s %(levelname)s %(message)s',
-        datefmt='%H:%M:%S',
+        format="%(asctime)s %(levelname)s %(message)s",
+        datefmt="%H:%M:%S",
     )
 
     print("=" * 60)
@@ -566,11 +606,11 @@ if __name__ == '__main__':
     print("RESULTS")
     print("=" * 60)
 
-    for k, v in result['stats'].items():
+    for k, v in result["stats"].items():
         print(f"  {k}: {v}")
 
     print("\nTOP FOUNDERS:")
-    for f in result['founders'][:10]:
+    for f in result["founders"][:10]:
         print(f"\n  {f['name']} (conf={f['confidence']:.2f})")
         print(f"    {f['headline']}")
         print(f"    {f['url']}")

@@ -15,9 +15,9 @@ Or limit to N iterations:
 State is saved to data/officer_linkedin_state.json - survives restarts.
 """
 
-import sys
-import logging
 import argparse
+import logging
+import sys
 from pathlib import Path
 
 # Add project root to path
@@ -28,36 +28,48 @@ sys.path.insert(0, str(project_root))
 def main():
     parser = argparse.ArgumentParser(description="Officer LinkedIn enrichment")
     parser.add_argument(
-        "--iterations", "-n", type=int, default=None,
+        "--iterations",
+        "-n",
+        type=int,
+        default=None,
         help="Max iterations (default: unlimited)",
     )
     parser.add_argument(
-        "--delay", "-d", type=int, default=150,
+        "--delay",
+        "-d",
+        type=int,
+        default=150,
         help="Seconds between searches (default: 150)",
     )
     parser.add_argument(
-        "--engine", "-e", type=str, default="curl",
+        "--engine",
+        "-e",
+        type=str,
+        default="curl",
         choices=["brave", "curl", "rotate"],
         help="Search engine: curl (default), brave, or rotate",
     )
     parser.add_argument(
-        "--min-confidence", type=float, default=0.40,
+        "--min-confidence",
+        type=float,
+        default=0.40,
         help="Minimum match confidence (default: 0.40)",
     )
     parser.add_argument(
-        "--stats", action="store_true",
+        "--stats",
+        action="store_true",
         help="Print enrichment stats and exit",
     )
     args = parser.parse_args()
 
     logging.basicConfig(
         level=logging.INFO,
-        format='%(asctime)s %(levelname)s %(message)s',
-        datefmt='%H:%M:%S',
+        format="%(asctime)s %(levelname)s %(message)s",
+        datefmt="%H:%M:%S",
     )
 
     # Silence noisy third-party loggers (rustls, h2, hyper from primp)
-    for noisy_logger in ('rustls', 'h2', 'hyper_util', 'cookie_store', 'primp'):
+    for noisy_logger in ("rustls", "h2", "hyper_util", "cookie_store", "primp"):
         logging.getLogger(noisy_logger).setLevel(logging.WARNING)
 
     db_path = project_root / "handelsregister.db"

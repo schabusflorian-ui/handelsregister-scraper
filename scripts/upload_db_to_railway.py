@@ -14,16 +14,16 @@ Usage:
 
 import argparse
 import base64
-import sys
 import os
+import sys
 
 
 def encode_db(db_path: str):
     """Encode database to base64 and print to stdout."""
-    with open(db_path, 'rb') as f:
+    with open(db_path, "rb") as f:
         data = f.read()
 
-    encoded = base64.b64encode(data).decode('ascii')
+    encoded = base64.b64encode(data).decode("ascii")
     print(encoded)
     print(f"Encoded {len(data)} bytes -> {len(encoded)} chars", file=sys.stderr)
 
@@ -32,7 +32,7 @@ def decode_db(db_path: str):
     """Read base64 from stdin and write to database file."""
     # Backup existing db if present
     if os.path.exists(db_path):
-        backup_path = db_path + '.backup'
+        backup_path = db_path + ".backup"
         os.rename(db_path, backup_path)
         print(f"Backed up existing db to {backup_path}", file=sys.stderr)
 
@@ -40,7 +40,7 @@ def decode_db(db_path: str):
     encoded = sys.stdin.read().strip()
     data = base64.b64decode(encoded)
 
-    with open(db_path, 'wb') as f:
+    with open(db_path, "wb") as f:
         f.write(data)
 
     print(f"Decoded {len(encoded)} chars -> {len(data)} bytes", file=sys.stderr)
@@ -48,20 +48,20 @@ def decode_db(db_path: str):
 
 
 def main():
-    parser = argparse.ArgumentParser(description='Upload database to Railway')
-    parser.add_argument('--encode', action='store_true', help='Encode local DB to base64')
-    parser.add_argument('--decode', action='store_true', help='Decode base64 from stdin to DB')
-    parser.add_argument('--db', default=None, help='Database path')
+    parser = argparse.ArgumentParser(description="Upload database to Railway")
+    parser.add_argument("--encode", action="store_true", help="Encode local DB to base64")
+    parser.add_argument("--decode", action="store_true", help="Decode base64 from stdin to DB")
+    parser.add_argument("--db", default=None, help="Database path")
 
     args = parser.parse_args()
 
     # Determine db path
     if args.db:
         db_path = args.db
-    elif os.environ.get('DATABASE_PATH'):
-        db_path = os.environ['DATABASE_PATH']
+    elif os.environ.get("DATABASE_PATH"):
+        db_path = os.environ["DATABASE_PATH"]
     else:
-        db_path = 'handelsregister.db'
+        db_path = "handelsregister.db"
 
     if args.encode:
         encode_db(db_path)
@@ -71,5 +71,5 @@ def main():
         parser.print_help()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

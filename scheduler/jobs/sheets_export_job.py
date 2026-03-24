@@ -9,12 +9,12 @@ Environment variables:
 - GOOGLE_SHEETS_ID: Target spreadsheet ID
 """
 
-import os
-import json
 import base64
+import json
 import logging
+import os
 from datetime import datetime, timedelta
-from typing import Dict, Any, List, Optional
+from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -22,6 +22,7 @@ logger = logging.getLogger(__name__)
 try:
     from google.oauth2.service_account import Credentials
     from googleapiclient.discovery import build
+
     SHEETS_AVAILABLE = True
 except ImportError:
     SHEETS_AVAILABLE = False
@@ -38,7 +39,7 @@ class SheetsExportJob:
     - Sheet 3: Statistics summary
     """
 
-    SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
+    SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 
     def __init__(
         self,
@@ -57,8 +58,8 @@ class SheetsExportJob:
         self.db = db
 
         # Load credentials from param or environment
-        self.credentials_json = credentials_json or os.getenv('GOOGLE_SHEETS_CREDENTIALS')
-        self.spreadsheet_id = spreadsheet_id or os.getenv('GOOGLE_SHEETS_ID')
+        self.credentials_json = credentials_json or os.getenv("GOOGLE_SHEETS_CREDENTIALS")
+        self.spreadsheet_id = spreadsheet_id or os.getenv("GOOGLE_SHEETS_ID")
 
         self.service = None
 
@@ -80,12 +81,9 @@ class SheetsExportJob:
             # Try as plain JSON
             creds_data = json.loads(self.credentials_json)
 
-        credentials = Credentials.from_service_account_info(
-            creds_data,
-            scopes=self.SCOPES
-        )
+        credentials = Credentials.from_service_account_info(creds_data, scopes=self.SCOPES)
 
-        self.service = build('sheets', 'v4', credentials=credentials)
+        self.service = build("sheets", "v4", credentials=credentials)
         logger.info("Google Sheets API initialized")
 
     def _get_all_companies(self) -> List[Dict]:
@@ -112,7 +110,8 @@ class SheetsExportJob:
         cutoff = (datetime.utcnow() - timedelta(days=days)).isoformat()
 
         conn = self.db._get_connection()
-        rows = conn.execute("""
+        rows = conn.execute(
+            """
             SELECT
                 name, register_number, register_court,
                 city, state, legal_form,
@@ -123,7 +122,9 @@ class SheetsExportJob:
             WHERE ai_robotics_score >= 1
               AND discovered_at >= ?
             ORDER BY discovered_at DESC
-        """, (cutoff,)).fetchall()
+        """,
+            (cutoff,),
+        ).fetchall()
 
         return [dict(row) for row in rows]
 
@@ -161,111 +162,134 @@ class SheetsExportJob:
         """).fetchall()
 
         return {
-            'total_companies': stats.get('total_companies', 0),
-            'ai_robotics_count': stats.get('ai_robotics_count', 0),
-            'score_distribution': [dict(r) for r in score_dist],
-            'classification_distribution': [dict(r) for r in class_dist],
-            'top_cities': [dict(r) for r in top_cities],
-            'last_updated': datetime.utcnow().isoformat(),
+            "total_companies": stats.get("total_companies", 0),
+            "ai_robotics_count": stats.get("ai_robotics_count", 0),
+            "score_distribution": [dict(r) for r in score_dist],
+            "classification_distribution": [dict(r) for r in class_dist],
+            "top_cities": [dict(r) for r in top_cities],
+            "last_updated": datetime.utcnow().isoformat(),
         }
 
     def _prepare_all_companies_sheet(self, companies: List[Dict]) -> List[List]:
         """Prepare data for all companies sheet."""
         headers = [
-            'Name', 'Register Number', 'Court', 'Type',
-            'City', 'State', 'Legal Form',
-            'AI Score', 'Tech Categories',
-            'Startup Score', 'Classification',
-            'Capital (€)', 'Status',
-            'Registration Date', 'Discovered At',
-            'Business Purpose'
+            "Name",
+            "Register Number",
+            "Court",
+            "Type",
+            "City",
+            "State",
+            "Legal Form",
+            "AI Score",
+            "Tech Categories",
+            "Startup Score",
+            "Classification",
+            "Capital (€)",
+            "Status",
+            "Registration Date",
+            "Discovered At",
+            "Business Purpose",
         ]
 
         rows = [headers]
         for c in companies:
-            rows.append([
-                c.get('name', ''),
-                c.get('register_number', ''),
-                c.get('register_court', ''),
-                c.get('register_type', ''),
-                c.get('city', ''),
-                c.get('state', ''),
-                c.get('legal_form', ''),
-                c.get('ai_robotics_score', 0),
-                c.get('tech_categories', ''),
-                c.get('startup_score', 0),
-                c.get('startup_classification', ''),
-                c.get('capital_amount', ''),
-                c.get('current_status', ''),
-                c.get('registration_date', ''),
-                c.get('discovered_at', ''),
-                (c.get('business_purpose', '') or '')[:500],  # Truncate
-            ])
+            rows.append(
+                [
+                    c.get("name", ""),
+                    c.get("register_number", ""),
+                    c.get("register_court", ""),
+                    c.get("register_type", ""),
+                    c.get("city", ""),
+                    c.get("state", ""),
+                    c.get("legal_form", ""),
+                    c.get("ai_robotics_score", 0),
+                    c.get("tech_categories", ""),
+                    c.get("startup_score", 0),
+                    c.get("startup_classification", ""),
+                    c.get("capital_amount", ""),
+                    c.get("current_status", ""),
+                    c.get("registration_date", ""),
+                    c.get("discovered_at", ""),
+                    (c.get("business_purpose", "") or "")[:500],  # Truncate
+                ]
+            )
 
         return rows
 
     def _prepare_new_companies_sheet(self, companies: List[Dict]) -> List[List]:
         """Prepare data for new companies sheet."""
         headers = [
-            'Name', 'Register Number', 'Court',
-            'City', 'State', 'Legal Form',
-            'AI Score', 'Tech Categories',
-            'Classification', 'Capital (€)',
-            'Discovered At'
+            "Name",
+            "Register Number",
+            "Court",
+            "City",
+            "State",
+            "Legal Form",
+            "AI Score",
+            "Tech Categories",
+            "Classification",
+            "Capital (€)",
+            "Discovered At",
         ]
 
         rows = [headers]
         for c in companies:
-            rows.append([
-                c.get('name', ''),
-                c.get('register_number', ''),
-                c.get('register_court', ''),
-                c.get('city', ''),
-                c.get('state', ''),
-                c.get('legal_form', ''),
-                c.get('ai_robotics_score', 0),
-                c.get('tech_categories', ''),
-                c.get('startup_classification', ''),
-                c.get('capital_amount', ''),
-                c.get('discovered_at', ''),
-            ])
+            rows.append(
+                [
+                    c.get("name", ""),
+                    c.get("register_number", ""),
+                    c.get("register_court", ""),
+                    c.get("city", ""),
+                    c.get("state", ""),
+                    c.get("legal_form", ""),
+                    c.get("ai_robotics_score", 0),
+                    c.get("tech_categories", ""),
+                    c.get("startup_classification", ""),
+                    c.get("capital_amount", ""),
+                    c.get("discovered_at", ""),
+                ]
+            )
 
         return rows
 
     def _prepare_stats_sheet(self, stats: Dict) -> List[List]:
         """Prepare data for statistics sheet."""
         rows = [
-            ['Handelsregister AI/Robotics Companies - Statistics'],
-            ['Last Updated', stats['last_updated']],
+            ["Handelsregister AI/Robotics Companies - Statistics"],
+            ["Last Updated", stats["last_updated"]],
             [],
-            ['Summary'],
-            ['Total Companies in Database', stats['total_companies']],
-            ['AI/Robotics Companies', stats['ai_robotics_count']],
+            ["Summary"],
+            ["Total Companies in Database", stats["total_companies"]],
+            ["AI/Robotics Companies", stats["ai_robotics_count"]],
             [],
-            ['Score Distribution'],
-            ['AI Score', 'Count'],
+            ["Score Distribution"],
+            ["AI Score", "Count"],
         ]
 
-        for item in stats['score_distribution']:
-            rows.append([item['ai_robotics_score'], item['count']])
+        for item in stats["score_distribution"]:
+            rows.append([item["ai_robotics_score"], item["count"]])
 
-        rows.extend([
-            [],
-            ['Classification Distribution'],
-            ['Classification', 'Count'],
-        ])
+        rows.extend(
+            [
+                [],
+                ["Classification Distribution"],
+                ["Classification", "Count"],
+            ]
+        )
 
-        for item in stats['classification_distribution']:
-            rows.append([item['startup_classification'] or 'Unknown', item['count']])
+        for item in stats["classification_distribution"]:
+            rows.append([item["startup_classification"] or "Unknown", item["count"]])
 
-        rows.extend([
-            [],
-            ['Top Cities'],
-            ['City', 'Count'],
-        ])
+        rows.extend(
+            [
+                [],
+                ["Top Cities"],
+                ["City", "Count"],
+            ]
+        )
 
-        for item in stats['top_cities']:
-            rows.append([item['city'], item['count']])
+        for item in stats["top_cities"]:
+            rows.append([item["city"], item["count"]])
 
         return rows
 
@@ -274,15 +298,15 @@ class SheetsExportJob:
         # Clear existing content
         self.service.spreadsheets().values().clear(
             spreadsheetId=self.spreadsheet_id,
-            range=f'{sheet_name}!A:Z',
+            range=f"{sheet_name}!A:Z",
         ).execute()
 
         # Write new data
         self.service.spreadsheets().values().update(
             spreadsheetId=self.spreadsheet_id,
-            range=f'{sheet_name}!A1',
-            valueInputOption='RAW',
-            body={'values': data},
+            range=f"{sheet_name}!A1",
+            valueInputOption="RAW",
+            body={"values": data},
         ).execute()
 
         logger.info(f"Updated sheet '{sheet_name}' with {len(data)} rows")
@@ -290,26 +314,19 @@ class SheetsExportJob:
     def _ensure_sheets_exist(self):
         """Ensure all required sheets exist."""
         # Get existing sheets
-        spreadsheet = self.service.spreadsheets().get(
-            spreadsheetId=self.spreadsheet_id
-        ).execute()
+        spreadsheet = self.service.spreadsheets().get(spreadsheetId=self.spreadsheet_id).execute()
 
-        existing = {s['properties']['title'] for s in spreadsheet['sheets']}
-        required = ['All Companies', 'New (7 days)', 'Statistics']
+        existing = {s["properties"]["title"] for s in spreadsheet["sheets"]}
+        required = ["All Companies", "New (7 days)", "Statistics"]
 
         requests = []
         for sheet_name in required:
             if sheet_name not in existing:
-                requests.append({
-                    'addSheet': {
-                        'properties': {'title': sheet_name}
-                    }
-                })
+                requests.append({"addSheet": {"properties": {"title": sheet_name}}})
 
         if requests:
             self.service.spreadsheets().batchUpdate(
-                spreadsheetId=self.spreadsheet_id,
-                body={'requests': requests}
+                spreadsheetId=self.spreadsheet_id, body={"requests": requests}
             ).execute()
             logger.info(f"Created sheets: {[r['addSheet']['properties']['title'] for r in requests]}")
 
@@ -322,11 +339,11 @@ class SheetsExportJob:
         """
         if not SHEETS_AVAILABLE:
             logger.warning("Google Sheets export skipped - API not available")
-            return {'status': 'skipped', 'reason': 'API not available'}
+            return {"status": "skipped", "reason": "API not available"}
 
         if not self.credentials_json or not self.spreadsheet_id:
             logger.warning("Google Sheets export skipped - credentials not configured")
-            return {'status': 'skipped', 'reason': 'credentials not configured'}
+            return {"status": "skipped", "reason": "credentials not configured"}
 
         try:
             self._init_service()
@@ -338,25 +355,22 @@ class SheetsExportJob:
             stats = self._get_statistics()
 
             # Update sheets
-            self._update_sheet('All Companies', self._prepare_all_companies_sheet(all_companies))
-            self._update_sheet('New (7 days)', self._prepare_new_companies_sheet(new_companies))
-            self._update_sheet('Statistics', self._prepare_stats_sheet(stats))
+            self._update_sheet("All Companies", self._prepare_all_companies_sheet(all_companies))
+            self._update_sheet("New (7 days)", self._prepare_new_companies_sheet(new_companies))
+            self._update_sheet("Statistics", self._prepare_stats_sheet(stats))
 
-            logger.info(
-                "Export complete: %d total companies, %d new",
-                len(all_companies), len(new_companies)
-            )
+            logger.info("Export complete: %d total companies, %d new", len(all_companies), len(new_companies))
 
             return {
-                'status': 'success',
-                'total_exported': len(all_companies),
-                'new_companies': len(new_companies),
-                'spreadsheet_id': self.spreadsheet_id,
+                "status": "success",
+                "total_exported": len(all_companies),
+                "new_companies": len(new_companies),
+                "spreadsheet_id": self.spreadsheet_id,
             }
 
         except Exception as e:
             logger.exception("Google Sheets export failed: %s", e)
-            return {'status': 'error', 'error': str(e)}
+            return {"status": "error", "error": str(e)}
 
 
 def run_sheets_export(db_path: str) -> Dict[str, Any]:

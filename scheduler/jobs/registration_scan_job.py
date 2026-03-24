@@ -13,14 +13,14 @@ binary search (~15 requests) to find the current frontier.
 """
 
 import logging
-from typing import Dict, List, Optional, Any, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from persistence.database import Database
-from sources.bundesapi import BundesAPISource
+from processing.brand_name_scorer import BrandNameScorer
 from processing.filters import AIRoboticsFilter, extract_legal_form
 from processing.startup_scorer import StartupScorer
-from processing.brand_name_scorer import BrandNameScorer
 from scheduler.rate_limiter import PersistentRateLimiter
+from sources.bundesapi import BundesAPISource
 
 logger = logging.getLogger(__name__)
 
@@ -36,15 +36,15 @@ class RegistrationScanJob:
 
     # Court configs — HRB numbers are sequential per court
     COURT_CONFIGS = {
-        'Berlin': {
-            'court_code': 'F1103',       # Amtsgericht Charlottenburg
-            'state': 'be',
-            'estimated_max_hrb': 285000,
+        "Berlin": {
+            "court_code": "F1103",  # Amtsgericht Charlottenburg
+            "state": "be",
+            "estimated_max_hrb": 285000,
         },
-        'München': {
-            'court_code': 'D2601',       # Amtsgericht München
-            'state': 'by',
-            'estimated_max_hrb': 310000,
+        "München": {
+            "court_code": "D2601",  # Amtsgericht München
+            "state": "by",
+            "estimated_max_hrb": 310000,
         },
     }
 
@@ -69,7 +69,7 @@ class RegistrationScanJob:
         self.db = db
         self.rate_limiter = rate_limiter
         self.max_requests = max_requests
-        self.courts = courts or ['Berlin', 'München']
+        self.courts = courts or ["Berlin", "München"]
         self.consecutive_misses = consecutive_misses
 
         self.ai_filter = AIRoboticsFilter()
@@ -91,11 +91,11 @@ class RegistrationScanJob:
         self.source = BundesAPISource()
 
         stats = {
-            'companies_found': 0,
-            'companies_new': 0,
-            'requests_used': 0,
-            'courts_scanned': 0,
-            'empty_lookups': 0,
+            "companies_found": 0,
+            "companies_new": 0,
+            "requests_used": 0,
+            "courts_scanned": 0,
+            "empty_lookups": 0,
         }
 
         requests_remaining = self.max_requests
@@ -103,8 +103,7 @@ class RegistrationScanJob:
         for court_name in self.courts:
             config = self.COURT_CONFIGS.get(court_name)
             if not config:
-                logger.warning("Unknown court: %s (known: %s)",
-                             court_name, list(self.COURT_CONFIGS.keys()))
+                logger.warning("Unknown court: %s (known: %s)", court_name, list(self.COURT_CONFIGS.keys()))
                 continue
 
             if requests_remaining <= 0:
@@ -112,23 +111,27 @@ class RegistrationScanJob:
                 break
 
             # Allocate requests evenly across remaining courts
-            remaining_courts = len(self.courts) - stats['courts_scanned']
+            remaining_courts = len(self.courts) - stats["courts_scanned"]
             court_budget = max(5, requests_remaining // max(1, remaining_courts))
 
             court_stats, court_requests = self._scan_court(
-                court_name, config, court_budget,
+                court_name,
+                config,
+                court_budget,
             )
 
-            stats['companies_found'] += court_stats['found']
-            stats['companies_new'] += court_stats['new']
-            stats['empty_lookups'] += court_stats['empty']
-            stats['requests_used'] += court_requests
-            stats['courts_scanned'] += 1
+            stats["companies_found"] += court_stats["found"]
+            stats["companies_new"] += court_stats["new"]
+            stats["empty_lookups"] += court_stats["empty"]
+            stats["requests_used"] += court_requests
+            stats["courts_scanned"] += 1
             requests_remaining -= court_requests
 
         logger.info(
             "Registration scan complete: %d found, %d new, %d requests used",
-            stats['companies_found'], stats['companies_new'], stats['requests_used'],
+            stats["companies_found"],
+            stats["companies_new"],
+            stats["requests_used"],
         )
 
         return stats
@@ -145,26 +148,27 @@ class RegistrationScanJob:
         Returns:
             (court_stats, requests_used)
         """
-        court_code = config['court_code']
-        court_stats = {'found': 0, 'new': 0, 'empty': 0}
+        court_code = config["court_code"]
+        court_stats = {"found": 0, "new": 0, "empty": 0}
         requests_used = 0
 
         # Load or bootstrap watermark
-        watermark = self.db.get_scan_watermark(court_code, 'HRB')
+        watermark = self.db.get_scan_watermark(court_code, "HRB")
 
         if watermark == 0:
-            logger.info("No watermark for %s (%s), auto-bootstrapping...",
-                       court_name, court_code)
+            logger.info("No watermark for %s (%s), auto-bootstrapping...", court_name, court_code)
 
             # Reserve up to 15 requests for binary search
             bootstrap_budget = min(15, max_requests)
             highest = self._find_highest_hrb(
-                court_code, config['estimated_max_hrb'], bootstrap_budget,
+                court_code,
+                config["estimated_max_hrb"],
+                bootstrap_budget,
             )
             requests_used += bootstrap_budget
 
             if highest > 0:
-                self.db.set_scan_watermark(court_code, highest, 'HRB')
+                self.db.set_scan_watermark(court_code, highest, "HRB")
                 watermark = highest
                 logger.info("Bootstrapped watermark for %s: HRB %d", court_name, highest)
             else:
@@ -180,15 +184,13 @@ class RegistrationScanJob:
         misses = 0
         highest_seen = watermark
 
-        logger.info("Scanning %s from HRB %d (budget: %d requests)",
-                    court_name, current_number, max_requests)
+        logger.info("Scanning %s from HRB %d (budget: %d requests)", court_name, current_number, max_requests)
 
         while requests_used < max_requests and misses < self.consecutive_misses:
             # Check shared rate limiter
             rate_state = self.rate_limiter.get_state()
             if rate_state.tokens_available < 1:
-                logger.info("Insufficient rate limit tokens (%.1f), pausing",
-                           rate_state.tokens_available)
+                logger.info("Insufficient rate limit tokens (%.1f), pausing", rate_state.tokens_available)
                 break
 
             if not self.rate_limiter.acquire(count=1, block=False):
@@ -196,16 +198,17 @@ class RegistrationScanJob:
                 break
 
             try:
-                results = list(self.source.search(
-                    register_number=str(current_number),
-                    register_court=court_code,
-                    registry_types=['HRB'],
-                    max_results=1,
-                ))
+                results = list(
+                    self.source.search(
+                        register_number=str(current_number),
+                        register_court=court_code,
+                        registry_types=["HRB"],
+                        max_results=1,
+                    )
+                )
                 requests_used += 1
             except Exception as e:
-                logger.error("Error looking up HRB %d at %s: %s",
-                           current_number, court_name, e)
+                logger.error("Error looking up HRB %d at %s: %s", current_number, court_name, e)
                 requests_used += 1
                 misses += 1
                 current_number += 1
@@ -214,27 +217,26 @@ class RegistrationScanJob:
             if results:
                 misses = 0
                 result = results[0]
-                court_stats['found'] += 1
+                court_stats["found"] += 1
                 highest_seen = current_number
 
-                logger.info("  HRB %d: %s | %s",
-                           current_number, result.name[:60], result.city or '?')
+                logger.info("  HRB %d: %s | %s", current_number, result.name[:60], result.city or "?")
 
                 is_new = self._score_and_insert(result)
                 if is_new:
-                    court_stats['new'] += 1
+                    court_stats["new"] += 1
             else:
                 misses += 1
-                court_stats['empty'] += 1
-                logger.debug("  HRB %d: empty (miss %d/%d)",
-                           current_number, misses, self.consecutive_misses)
+                court_stats["empty"] += 1
+                logger.debug("  HRB %d: empty (miss %d/%d)", current_number, misses, self.consecutive_misses)
 
             current_number += 1
 
         # Log reason for stopping
         if misses >= self.consecutive_misses:
-            logger.info("  %s: frontier reached (HRB %d, %d consecutive misses)",
-                       court_name, current_number - 1, misses)
+            logger.info(
+                "  %s: frontier reached (HRB %d, %d consecutive misses)", court_name, current_number - 1, misses
+            )
         elif requests_used >= max_requests:
             logger.info("  %s: budget exhausted", court_name)
 
@@ -243,13 +245,18 @@ class RegistrationScanJob:
             self.db.set_scan_watermark(
                 court_code=court_code,
                 last_scanned_number=highest_seen,
-                registry_type='HRB',
-                scanned_count=court_stats['found'] + court_stats['empty'],
-                found_count=court_stats['found'],
+                registry_type="HRB",
+                scanned_count=court_stats["found"] + court_stats["empty"],
+                found_count=court_stats["found"],
             )
-            logger.info("  %s: watermark %d → %d (%d found, %d new)",
-                       court_name, watermark, highest_seen,
-                       court_stats['found'], court_stats['new'])
+            logger.info(
+                "  %s: watermark %d → %d (%d found, %d new)",
+                court_name,
+                watermark,
+                highest_seen,
+                court_stats["found"],
+                court_stats["new"],
+            )
 
         return court_stats, requests_used
 
@@ -284,12 +291,14 @@ class RegistrationScanJob:
                 break
 
             try:
-                results = list(self.source.search(
-                    register_number=str(mid),
-                    register_court=court_code,
-                    registry_types=['HRB'],
-                    max_results=1,
-                ))
+                results = list(
+                    self.source.search(
+                        register_number=str(mid),
+                        register_court=court_code,
+                        registry_types=["HRB"],
+                        max_results=1,
+                    )
+                )
                 requests_used += 1
             except Exception as e:
                 logger.error("Binary search error at HRB %d: %s", mid, e)
@@ -305,8 +314,7 @@ class RegistrationScanJob:
                 high = mid - 1
                 logger.debug("  HRB %d does NOT exist", mid)
 
-        logger.info("Binary search result: highest HRB = %d (%d requests)",
-                    highest_found, requests_used)
+        logger.info("Binary search result: highest HRB = %d (%d requests)", highest_found, requests_used)
         return highest_found
 
     def _score_and_insert(self, result) -> bool:
@@ -316,7 +324,7 @@ class RegistrationScanJob:
         Returns True if company was newly inserted.
         """
         # Skip deleted/dissolved
-        if result.status and result.status in ('deleted', 'dissolved'):
+        if result.status and result.status in ("deleted", "dissolved"):
             return False
 
         # Dedup by native company number
@@ -333,7 +341,7 @@ class RegistrationScanJob:
         # Check AI keyword filter
         filter_result = self.ai_filter.filter_company(
             name=result.name,
-            status=result.status or 'currently registered',
+            status=result.status or "currently registered",
         )
 
         # Must pass at least one filter
@@ -349,16 +357,17 @@ class RegistrationScanJob:
             ai_relevance_score=ai_score,
         )
         classification = self.startup_scorer.classify(
-            startup_result, ai_relevance_score=ai_score,
+            startup_result,
+            ai_relevance_score=ai_score,
         )
 
         # Insert company
         company_id = self.db.insert_company(
             company_number=f"regscan_{hash(result.native_company_number) & 0xFFFFFFFF:08x}",
             name=result.name,
-            source='registration_scan',
+            source="registration_scan",
             native_company_number=result.native_company_number,
-            current_status=result.status or 'currently registered',
+            current_status=result.status or "currently registered",
             registry_court=result.registry_court,
             registry_type=result.registry_type,
             legal_form=legal_form,
@@ -375,15 +384,20 @@ class RegistrationScanJob:
 
         # Queue for enrichment — high priority for brand-name startups
         priority = 0 if brand_result.is_likely_tech_startup else 2
-        method = 'brand' if brand_result.is_likely_tech_startup else 'keyword'
+        method = "brand" if brand_result.is_likely_tech_startup else "keyword"
         self.db.add_to_enrichment_queue(
-            company_id, priority=priority, reason='new_from_registration_scan',
+            company_id,
+            priority=priority,
+            reason="new_from_registration_scan",
         )
 
         logger.info(
             "  NEW [%s] %s (brand=%d, AI=%d, startup=%s)",
-            method.upper(), result.name[:50],
-            brand_result.total_score, ai_score, classification,
+            method.upper(),
+            result.name[:50],
+            brand_result.total_score,
+            ai_score,
+            classification,
         )
 
         return True

@@ -5,17 +5,9 @@ Tests token bucket implementation, state persistence, and legal compliance
 with the 60 requests/hour limit.
 """
 
-import pytest
-import time
-import sys
-from pathlib import Path
 from datetime import datetime, timedelta
-from unittest.mock import patch, MagicMock
 
-# Add project root to path
-sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
-
-from scheduler.rate_limiter import PersistentRateLimiter, RateLimitState
+from scheduler.rate_limiter import PersistentRateLimiter
 
 
 class TestRateLimiterInitialization:
@@ -27,9 +19,7 @@ class TestRateLimiterInitialization:
 
         conn = limiter._get_connection()
         try:
-            cursor = conn.execute(
-                "SELECT name FROM sqlite_master WHERE type='table' AND name='rate_limiter_state'"
-            )
+            cursor = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='rate_limiter_state'")
             assert cursor.fetchone() is not None
         finally:
             conn.close()
@@ -138,10 +128,7 @@ class TestRateLimiterRegeneration:
         try:
             # Move last_updated back by 10 minutes (should regenerate ~10 tokens)
             past_time = (datetime.utcnow() - timedelta(minutes=10)).isoformat()
-            conn.execute(
-                "UPDATE rate_limiter_state SET last_updated = ? WHERE id = 1",
-                (past_time,)
-            )
+            conn.execute("UPDATE rate_limiter_state SET last_updated = ? WHERE id = 1", (past_time,))
             conn.commit()
         finally:
             conn.close()
@@ -158,10 +145,7 @@ class TestRateLimiterRegeneration:
         conn = limiter._get_connection()
         try:
             past_time = (datetime.utcnow() - timedelta(hours=2)).isoformat()
-            conn.execute(
-                "UPDATE rate_limiter_state SET last_updated = ? WHERE id = 1",
-                (past_time,)
-            )
+            conn.execute("UPDATE rate_limiter_state SET last_updated = ? WHERE id = 1", (past_time,))
             conn.commit()
         finally:
             conn.close()
@@ -184,8 +168,7 @@ class TestRateLimiterRegeneration:
         try:
             past_time = (datetime.utcnow() - timedelta(hours=2)).isoformat()
             conn.execute(
-                "UPDATE rate_limiter_state SET hour_started = ?, last_updated = ? WHERE id = 1",
-                (past_time, past_time)
+                "UPDATE rate_limiter_state SET hour_started = ?, last_updated = ? WHERE id = 1", (past_time, past_time)
             )
             conn.commit()
         finally:

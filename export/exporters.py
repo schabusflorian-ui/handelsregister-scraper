@@ -6,36 +6,36 @@ import csv
 import json
 from datetime import datetime
 from pathlib import Path
-from typing import List, Dict, Optional, Any
+from typing import Dict, List, Optional
 
 
 class CSVExporter:
     """Export company data to CSV files."""
 
     DEFAULT_FIELDS = [
-        'id',
-        'company_number',
-        'native_company_number',
-        'name',
-        'legal_form',
-        'current_status',
-        'registry_court',
-        'registry_type',
-        'registration_date',
-        'city',
-        'state',
-        'capital_amount',
-        'capital_currency',
-        'ai_robotics_score',
-        'matched_keywords',
-        'tech_categories',
-        'website',
-        'source',
-        'first_seen_date',
+        "id",
+        "company_number",
+        "native_company_number",
+        "name",
+        "legal_form",
+        "current_status",
+        "registry_court",
+        "registry_type",
+        "registration_date",
+        "city",
+        "state",
+        "capital_amount",
+        "capital_currency",
+        "ai_robotics_score",
+        "matched_keywords",
+        "tech_categories",
+        "website",
+        "source",
+        "first_seen_date",
     ]
 
     def __init__(self, output_dir: Path = None):
-        self.output_dir = Path(output_dir) if output_dir else Path('.')
+        self.output_dir = Path(output_dir) if output_dir else Path(".")
         self.output_dir.mkdir(parents=True, exist_ok=True)
 
     def export_companies(
@@ -62,17 +62,17 @@ class CSVExporter:
         filename = filename or f"companies_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
         filepath = self.output_dir / filename
 
-        with open(filepath, 'w', newline='', encoding='utf-8') as f:
-            writer = csv.DictWriter(f, fieldnames=fields, extrasaction='ignore')
+        with open(filepath, "w", newline="", encoding="utf-8") as f:
+            writer = csv.DictWriter(f, fieldnames=fields, extrasaction="ignore")
             writer.writeheader()
 
             for company in companies:
                 # Convert JSON fields to strings
                 row = company.copy()
-                if 'matched_keywords' in row and isinstance(row['matched_keywords'], list):
-                    row['matched_keywords'] = ', '.join(row['matched_keywords'])
-                if 'tech_categories' in row and isinstance(row['tech_categories'], list):
-                    row['tech_categories'] = ', '.join(row['tech_categories'])
+                if "matched_keywords" in row and isinstance(row["matched_keywords"], list):
+                    row["matched_keywords"] = ", ".join(row["matched_keywords"])
+                if "tech_categories" in row and isinstance(row["tech_categories"], list):
+                    row["tech_categories"] = ", ".join(row["tech_categories"])
 
                 writer.writerow(row)
 
@@ -88,23 +88,23 @@ class CSVExporter:
             raise ValueError("No events to export")
 
         fields = [
-            'company_name',
-            'event_type',
-            'event_date',
-            'previous_amount',
-            'new_amount',
-            'change_amount',
-            'currency',
-            'confidence_score',
-            'detected_at',
-            'city',
+            "company_name",
+            "event_type",
+            "event_date",
+            "previous_amount",
+            "new_amount",
+            "change_amount",
+            "currency",
+            "confidence_score",
+            "detected_at",
+            "city",
         ]
 
         filename = filename or f"capital_events_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
         filepath = self.output_dir / filename
 
-        with open(filepath, 'w', newline='', encoding='utf-8') as f:
-            writer = csv.DictWriter(f, fieldnames=fields, extrasaction='ignore')
+        with open(filepath, "w", newline="", encoding="utf-8") as f:
+            writer = csv.DictWriter(f, fieldnames=fields, extrasaction="ignore")
             writer.writeheader()
             writer.writerows(events)
 
@@ -115,7 +115,7 @@ class JSONExporter:
     """Export company data to JSON files."""
 
     def __init__(self, output_dir: Path = None):
-        self.output_dir = Path(output_dir) if output_dir else Path('.')
+        self.output_dir = Path(output_dir) if output_dir else Path(".")
         self.output_dir.mkdir(parents=True, exist_ok=True)
 
     def export_companies(
@@ -145,31 +145,31 @@ class JSONExporter:
 
         # Parse JSON string fields
         for company in companies:
-            if 'matched_keywords' in company and isinstance(company['matched_keywords'], str):
+            if "matched_keywords" in company and isinstance(company["matched_keywords"], str):
                 try:
-                    company['matched_keywords'] = json.loads(company['matched_keywords'])
+                    company["matched_keywords"] = json.loads(company["matched_keywords"])
                 except (json.JSONDecodeError, TypeError):
                     pass
-            if 'tech_categories' in company and isinstance(company['tech_categories'], str):
+            if "tech_categories" in company and isinstance(company["tech_categories"], str):
                 try:
-                    company['tech_categories'] = json.loads(company['tech_categories'])
+                    company["tech_categories"] = json.loads(company["tech_categories"])
                 except (json.JSONDecodeError, TypeError):
                     pass
 
         data = {
-            'exported_at': datetime.now().isoformat(),
-            'count': len(companies),
-            'companies': companies,
+            "exported_at": datetime.now().isoformat(),
+            "count": len(companies),
+            "companies": companies,
         }
 
-        with open(filepath, 'w', encoding='utf-8') as f:
+        with open(filepath, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=2, ensure_ascii=False, default=str)
 
         return filepath
 
     def export_full_database(
         self,
-        db: 'Database',
+        db: "Database",
         filename: Optional[str] = None,
     ) -> Path:
         """
@@ -192,14 +192,14 @@ class JSONExporter:
         recent_events = db.get_recent_capital_events(days=365)
 
         data = {
-            'exported_at': datetime.now().isoformat(),
-            'statistics': stats,
-            'recent_scrape_runs': recent_runs,
-            'recent_capital_events': recent_events,
-            'companies': companies,
+            "exported_at": datetime.now().isoformat(),
+            "statistics": stats,
+            "recent_scrape_runs": recent_runs,
+            "recent_capital_events": recent_events,
+            "companies": companies,
         }
 
-        with open(filepath, 'w', encoding='utf-8') as f:
+        with open(filepath, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=2, ensure_ascii=False, default=str)
 
         return filepath
@@ -208,7 +208,7 @@ class JSONExporter:
 class ReportGenerator:
     """Generate summary reports."""
 
-    def __init__(self, db: 'Database'):
+    def __init__(self, db: "Database"):
         self.db = db
 
     def generate_summary_report(self) -> str:
@@ -230,44 +230,52 @@ class ReportGenerator:
             "Companies by source:",
         ]
 
-        for source, count in stats.get('companies_by_source', {}).items():
+        for source, count in stats.get("companies_by_source", {}).items():
             lines.append(f"  {source}: {count:,}")
 
-        lines.extend([
-            "",
-            "Companies by enrichment status:",
-        ])
+        lines.extend(
+            [
+                "",
+                "Companies by enrichment status:",
+            ]
+        )
 
-        for status, count in stats.get('companies_by_enrichment', {}).items():
+        for status, count in stats.get("companies_by_enrichment", {}).items():
             lines.append(f"  {status}: {count:,}")
 
-        lines.extend([
-            "",
-            f"Total officers tracked: {stats.get('total_officers', 0):,}",
-            f"Total capital events: {stats.get('total_capital_events', 0):,}",
-            f"Enrichment queue size: {stats.get('enrichment_queue_size', 0):,}",
-            "",
-            "TOP CITIES",
-            "-" * 40,
-        ])
+        lines.extend(
+            [
+                "",
+                f"Total officers tracked: {stats.get('total_officers', 0):,}",
+                f"Total capital events: {stats.get('total_capital_events', 0):,}",
+                f"Enrichment queue size: {stats.get('enrichment_queue_size', 0):,}",
+                "",
+                "TOP CITIES",
+                "-" * 40,
+            ]
+        )
 
-        for city, count in stats.get('top_cities', [])[:10]:
+        for city, count in stats.get("top_cities", [])[:10]:
             lines.append(f"  {city}: {count:,}")
 
-        lines.extend([
-            "",
-            "AI RELEVANCE SCORE DISTRIBUTION",
-            "-" * 40,
-        ])
+        lines.extend(
+            [
+                "",
+                "AI RELEVANCE SCORE DISTRIBUTION",
+                "-" * 40,
+            ]
+        )
 
-        for score, count in stats.get('ai_score_distribution', []):
+        for score, count in stats.get("ai_score_distribution", []):
             lines.append(f"  Score {score}: {count:,} companies")
 
-        lines.extend([
-            "",
-            f"RECENT CAPITAL EVENTS (last 30 days): {len(recent_events)}",
-            "-" * 40,
-        ])
+        lines.extend(
+            [
+                "",
+                f"RECENT CAPITAL EVENTS (last 30 days): {len(recent_events)}",
+                "-" * 40,
+            ]
+        )
 
         for event in recent_events[:10]:
             lines.append(
@@ -276,11 +284,13 @@ class ReportGenerator:
                 f"({event.get('change_amount', 0):,.0f} EUR)"
             )
 
-        lines.extend([
-            "",
-            "RECENT SCRAPE RUNS",
-            "-" * 40,
-        ])
+        lines.extend(
+            [
+                "",
+                "RECENT SCRAPE RUNS",
+                "-" * 40,
+            ]
+        )
 
         for run in recent_runs:
             lines.append(
@@ -289,12 +299,14 @@ class ReportGenerator:
                 f"New: {run.get('records_new', 0):,}"
             )
 
-        lines.extend([
-            "",
-            "=" * 60,
-        ])
+        lines.extend(
+            [
+                "",
+                "=" * 60,
+            ]
+        )
 
-        return '\n'.join(lines)
+        return "\n".join(lines)
 
     def generate_new_companies_report(self, days: int = 7) -> str:
         """Generate report of newly discovered companies."""
@@ -304,10 +316,7 @@ class ReportGenerator:
 
         # Get new companies
         companies = self.db.search_companies(limit=10000)
-        new_companies = [
-            c for c in companies
-            if c.get('first_seen_date', '') >= cutoff
-        ]
+        new_companies = [c for c in companies if c.get("first_seen_date", "") >= cutoff]
 
         lines = [
             "=" * 60,
@@ -322,34 +331,33 @@ class ReportGenerator:
         # Group by source
         by_source = {}
         for c in new_companies:
-            source = c.get('source', 'unknown')
+            source = c.get("source", "unknown")
             by_source.setdefault(source, []).append(c)
 
         for source, companies_list in by_source.items():
-            lines.extend([
-                f"\nFrom {source}: {len(companies_list)} companies",
-                "-" * 40,
-            ])
+            lines.extend(
+                [
+                    f"\nFrom {source}: {len(companies_list)} companies",
+                    "-" * 40,
+                ]
+            )
 
             # Sort by AI score
-            sorted_companies = sorted(
-                companies_list,
-                key=lambda x: x.get('ai_robotics_score', 0),
-                reverse=True
-            )
+            sorted_companies = sorted(companies_list, key=lambda x: x.get("ai_robotics_score", 0), reverse=True)
 
             for c in sorted_companies[:20]:
                 lines.append(
-                    f"  [{c.get('ai_robotics_score', 0)}] {c.get('name', 'Unknown')} "
-                    f"({c.get('city', 'Unknown')})"
+                    f"  [{c.get('ai_robotics_score', 0)}] {c.get('name', 'Unknown')} ({c.get('city', 'Unknown')})"
                 )
 
             if len(sorted_companies) > 20:
                 lines.append(f"  ... and {len(sorted_companies) - 20} more")
 
-        lines.extend([
-            "",
-            "=" * 60,
-        ])
+        lines.extend(
+            [
+                "",
+                "=" * 60,
+            ]
+        )
 
-        return '\n'.join(lines)
+        return "\n".join(lines)

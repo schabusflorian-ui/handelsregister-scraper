@@ -5,17 +5,18 @@ Uses Google or DuckDuckGo to find LinkedIn profiles matching specific patterns.
 Handles rate limiting and anti-bot detection.
 """
 
+import logging
 import os
+import random
 import re
 import time
-import random
-import logging
-import requests
-import cloudscraper
-from typing import List, Set, Optional, Dict, Any
 from dataclasses import dataclass, field
 from datetime import datetime
-from urllib.parse import quote_plus, urlparse, parse_qs
+from typing import Dict, List, Optional, Set
+from urllib.parse import parse_qs, quote_plus, urlparse
+
+import cloudscraper
+import requests
 from bs4 import BeautifulSoup
 
 logger = logging.getLogger(__name__)
@@ -23,11 +24,11 @@ logger = logging.getLogger(__name__)
 
 # Rotate user agents to avoid detection
 USER_AGENTS = [
-    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15',
-    'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:121.0) Gecko/20100101 Firefox/121.0',
-    'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:121.0) Gecko/20100101 Firefox/121.0",
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
 ]
 
 
@@ -39,29 +40,24 @@ STEALTH_QUERIES = [
     'site:linkedin.com/in "stealth mode" "berlin"',
     'site:linkedin.com/in "stealth mode" "munich"',
     'site:linkedin.com/in "stealth" "co-founder" "germany"',
-
     # Building something new
     'site:linkedin.com/in "building something new" "founder" "germany"',
     'site:linkedin.com/in "building something new" "berlin"',
     'site:linkedin.com/in "working on something exciting" "germany"',
     'site:linkedin.com/in "working on something new" "berlin"',
-
     # Transition signals
     'site:linkedin.com/in "ex-" "founder" "berlin" "stealth"',
     'site:linkedin.com/in "former" "now building" "germany"',
     'site:linkedin.com/in "left" "to start" "berlin"',
     'site:linkedin.com/in "previously at" "founder" "berlin"',
-
     # Role-based signals
     'site:linkedin.com/in "founder & ceo" "stealth" "germany"',
     'site:linkedin.com/in "co-founder" "coming soon" "germany"',
     'site:linkedin.com/in "founder" "()" "berlin"',  # Empty company name
-
     # VC/Angel signals
     'site:linkedin.com/in "serial entrepreneur" "new venture" "germany"',
     'site:linkedin.com/in "angel investor" "building" "berlin"',
     'site:linkedin.com/in "entrepreneur in residence" "germany"',
-
     # Tech background + founder
     'site:linkedin.com/in "ex-google" "founder" "germany"',
     'site:linkedin.com/in "ex-meta" "founder" "berlin"',
@@ -76,6 +72,7 @@ STEALTH_QUERIES = [
 @dataclass
 class SearchResult:
     """A single search result."""
+
     url: str
     title: str
     snippet: str
@@ -111,13 +108,13 @@ class GoogleSearchScraper:
     def _get_headers(self) -> Dict[str, str]:
         """Get randomized headers."""
         return {
-            'User-Agent': random.choice(USER_AGENTS),
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-            'Accept-Language': 'en-US,en;q=0.5',
-            'Accept-Encoding': 'gzip, deflate',
-            'DNT': '1',
-            'Connection': 'keep-alive',
-            'Upgrade-Insecure-Requests': '1',
+            "User-Agent": random.choice(USER_AGENTS),
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+            "Accept-Language": "en-US,en;q=0.5",
+            "Accept-Encoding": "gzip, deflate",
+            "DNT": "1",
+            "Connection": "keep-alive",
+            "Upgrade-Insecure-Requests": "1",
         }
 
     def _delay(self):
@@ -139,7 +136,7 @@ class GoogleSearchScraper:
         """
         url = f"https://www.google.com/search?q={quote_plus(query)}&start={start}&num=10"
 
-        proxies = {'http': self.proxy, 'https': self.proxy} if self.proxy else None
+        proxies = {"http": self.proxy, "https": self.proxy} if self.proxy else None
 
         try:
             response = self.session.get(
@@ -158,7 +155,7 @@ class GoogleSearchScraper:
                 return None
 
             # Check for CAPTCHA
-            if 'captcha' in response.text.lower() or 'unusual traffic' in response.text.lower():
+            if "captcha" in response.text.lower() or "unusual traffic" in response.text.lower():
                 logger.warning("Google CAPTCHA detected. Need to wait or use proxy.")
                 return None
 
@@ -180,20 +177,20 @@ class GoogleSearchScraper:
             List of SearchResult objects
         """
         results = []
-        soup = BeautifulSoup(html, 'html.parser')
+        soup = BeautifulSoup(html, "html.parser")
 
         # Google's result divs (may change, need to adapt)
-        for div in soup.find_all('div', class_='g'):
+        for div in soup.find_all("div", class_="g"):
             try:
                 # Find the link
-                link = div.find('a', href=True)
+                link = div.find("a", href=True)
                 if not link:
                     continue
 
-                url = link['href']
+                url = link["href"]
 
                 # Only interested in LinkedIn profile URLs
-                if 'linkedin.com/in/' not in url:
+                if "linkedin.com/in/" not in url:
                     continue
 
                 # Clean up the URL
@@ -202,19 +199,21 @@ class GoogleSearchScraper:
                     continue
 
                 # Get title
-                title_elem = div.find('h3')
-                title = title_elem.get_text() if title_elem else ''
+                title_elem = div.find("h3")
+                title = title_elem.get_text() if title_elem else ""
 
                 # Get snippet
-                snippet_elem = div.find('div', {'data-sncf': True}) or div.find('span', class_='aCOpRe')
-                snippet = snippet_elem.get_text() if snippet_elem else ''
+                snippet_elem = div.find("div", {"data-sncf": True}) or div.find("span", class_="aCOpRe")
+                snippet = snippet_elem.get_text() if snippet_elem else ""
 
-                results.append(SearchResult(
-                    url=url,
-                    title=title,
-                    snippet=snippet,
-                    query=query,
-                ))
+                results.append(
+                    SearchResult(
+                        url=url,
+                        title=title,
+                        snippet=snippet,
+                        query=query,
+                    )
+                )
 
             except Exception as e:
                 logger.debug(f"Error parsing result: {e}")
@@ -233,14 +232,14 @@ class GoogleSearchScraper:
             Cleaned URL or None if invalid
         """
         # Handle Google redirect URLs
-        if url.startswith('/url?'):
+        if url.startswith("/url?"):
             parsed = urlparse(url)
             params = parse_qs(parsed.query)
-            if 'q' in params:
-                url = params['q'][0]
+            if "q" in params:
+                url = params["q"][0]
 
         # Extract the base LinkedIn profile URL
-        match = re.search(r'(https?://(?:www\.)?linkedin\.com/in/[^/?&#]+)', url)
+        match = re.search(r"(https?://(?:www\.)?linkedin\.com/in/[^/?&#]+)", url)
         if match:
             return match.group(1)
 
@@ -299,7 +298,7 @@ class GoogleSearchScraper:
         all_results = []
 
         for i, query in enumerate(STEALTH_QUERIES):
-            logger.info(f"Query {i+1}/{len(STEALTH_QUERIES)}")
+            logger.info(f"Query {i + 1}/{len(STEALTH_QUERIES)}")
 
             results = self.search_query(query)
             all_results.extend(results)
@@ -324,7 +323,7 @@ class GoogleSearchScraper:
         all_results = []
 
         for i, query in enumerate(queries):
-            logger.info(f"Query {i+1}/{len(queries)}")
+            logger.info(f"Query {i + 1}/{len(queries)}")
 
             results = self.search_query(query)
             all_results.extend(results)
@@ -354,7 +353,7 @@ class DuckDuckGoSearchScraper:
         # Use cloudscraper for better bot bypass
         if use_cloudscraper:
             self.session = cloudscraper.create_scraper(
-                browser={'browser': 'chrome', 'platform': 'darwin', 'mobile': False}
+                browser={"browser": "chrome", "platform": "darwin", "mobile": False}
             )
         else:
             self.session = requests.Session()
@@ -362,11 +361,11 @@ class DuckDuckGoSearchScraper:
 
     def _get_headers(self) -> Dict[str, str]:
         return {
-            'User-Agent': random.choice(USER_AGENTS),
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-            'Accept-Language': 'en-US,en;q=0.5',
-            'DNT': '1',
-            'Connection': 'keep-alive',
+            "User-Agent": random.choice(USER_AGENTS),
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            "Accept-Language": "en-US,en;q=0.5",
+            "DNT": "1",
+            "Connection": "keep-alive",
         }
 
     def _delay(self):
@@ -388,23 +387,18 @@ class DuckDuckGoSearchScraper:
         if page_data:
             # Pagination request - POST with form data
             url = "https://html.duckduckgo.com/html/"
-            method = 'POST'
-            request_kwargs = {'data': page_data}
+            method = "POST"
+            request_kwargs = {"data": page_data}
         else:
             # First page - GET request
             url = f"https://html.duckduckgo.com/html/?q={quote_plus(query)}"
-            method = 'GET'
+            method = "GET"
             request_kwargs = {}
 
         for attempt in range(retries + 1):
             try:
-                if method == 'POST':
-                    response = self.session.post(
-                        url,
-                        headers=self._get_headers(),
-                        timeout=30,
-                        **request_kwargs
-                    )
+                if method == "POST":
+                    response = self.session.post(url, headers=self._get_headers(), timeout=30, **request_kwargs)
                 else:
                     response = self.session.get(
                         url,
@@ -419,7 +413,7 @@ class DuckDuckGoSearchScraper:
 
                 if response.status_code == 202:
                     # Rate limited - wait longer with exponential backoff
-                    wait_time = 30 * (2 ** attempt)  # 30s, 60s, 120s, 240s
+                    wait_time = 30 * (2**attempt)  # 30s, 60s, 120s, 240s
                     logger.warning(f"DDG rate limit (202), waiting {wait_time}s...")
                     time.sleep(wait_time)
                     continue
@@ -438,23 +432,23 @@ class DuckDuckGoSearchScraper:
 
     def _extract_next_page_data(self, html: str) -> Optional[dict]:
         """Extract form data needed to fetch the next page of results."""
-        soup = BeautifulSoup(html, 'html.parser')
+        soup = BeautifulSoup(html, "html.parser")
 
         # Find the "Next" button form
-        next_form = soup.find('input', {'value': 'Next'})
+        next_form = soup.find("input", {"value": "Next"})
         if not next_form:
             return None
 
         # Get the parent form
-        form = next_form.find_parent('form')
+        form = next_form.find_parent("form")
         if not form:
             return None
 
         # Extract all hidden inputs
         form_data = {}
-        for inp in form.find_all('input'):
-            name = inp.get('name')
-            value = inp.get('value', '')
+        for inp in form.find_all("input"):
+            name = inp.get("name")
+            value = inp.get("value", "")
             if name:
                 form_data[name] = value
 
@@ -465,18 +459,18 @@ class DuckDuckGoSearchScraper:
         from urllib.parse import unquote
 
         results = []
-        soup = BeautifulSoup(html, 'html.parser')
+        soup = BeautifulSoup(html, "html.parser")
 
         # DuckDuckGo result links
-        for result in soup.find_all('a', class_='result__a'):
+        for result in soup.find_all("a", class_="result__a"):
             try:
-                href = result.get('href', '')
+                href = result.get("href", "")
 
                 # Decode URL-encoded href to check for linkedin
                 decoded_href = unquote(href)
 
                 # Only LinkedIn profile URLs (including country subdomains like de.linkedin.com)
-                if 'linkedin.com/in/' not in decoded_href:
+                if "linkedin.com/in/" not in decoded_href:
                     continue
 
                 # Extract clean URL
@@ -487,17 +481,19 @@ class DuckDuckGoSearchScraper:
                 title = result.get_text(strip=True)
 
                 # Get snippet from sibling
-                snippet = ''
-                snippet_elem = result.find_next('a', class_='result__snippet')
+                snippet = ""
+                snippet_elem = result.find_next("a", class_="result__snippet")
                 if snippet_elem:
                     snippet = snippet_elem.get_text(strip=True)
 
-                results.append(SearchResult(
-                    url=url,
-                    title=title,
-                    snippet=snippet,
-                    query=query,
-                ))
+                results.append(
+                    SearchResult(
+                        url=url,
+                        title=title,
+                        snippet=snippet,
+                        query=query,
+                    )
+                )
 
             except Exception as e:
                 logger.debug(f"Error parsing DDG result: {e}")
@@ -510,18 +506,18 @@ class DuckDuckGoSearchScraper:
         from urllib.parse import unquote
 
         # DDG uses uddg parameter for actual URL
-        if 'uddg=' in url:
+        if "uddg=" in url:
             parsed = urlparse(url)
             params = parse_qs(parsed.query)
-            if 'uddg' in params:
-                url = unquote(params['uddg'][0])
+            if "uddg" in params:
+                url = unquote(params["uddg"][0])
 
         # Match LinkedIn URLs including country subdomains (de.linkedin.com, uk.linkedin.com, etc.)
-        match = re.search(r'(https?://(?:[a-z]{2}\.)?(?:www\.)?linkedin\.com/in/[^/?&#]+)', url)
+        match = re.search(r"(https?://(?:[a-z]{2}\.)?(?:www\.)?linkedin\.com/in/[^/?&#]+)", url)
         if match:
             # Normalize to www.linkedin.com
             cleaned = match.group(1)
-            cleaned = re.sub(r'https?://[a-z]{2}\.linkedin\.com', 'https://www.linkedin.com', cleaned)
+            cleaned = re.sub(r"https?://[a-z]{2}\.linkedin\.com", "https://www.linkedin.com", cleaned)
             return cleaned
 
         return None
@@ -583,13 +579,13 @@ class DuckDuckGoSearchScraper:
         if queries is None:
             # Convert site: queries to regular queries for DDG
             queries = [
-                'linkedin.com/in stealth founder germany',
-                'linkedin.com/in stealth mode berlin',
+                "linkedin.com/in stealth founder germany",
+                "linkedin.com/in stealth mode berlin",
                 'linkedin.com/in "building something new" founder germany',
                 'linkedin.com/in "ex-google" founder berlin',
                 'linkedin.com/in "ex-meta" founder germany',
                 'linkedin.com/in "serial entrepreneur" berlin',
-                'linkedin.com/in stealth co-founder munich',
+                "linkedin.com/in stealth co-founder munich",
                 'linkedin.com/in "working on something exciting" germany',
             ]
 
@@ -623,13 +619,13 @@ def find_stealth_founders(
     if use_duckduckgo:
         scraper = DuckDuckGoSearchScraper(delay_range=delay_range)
         ddg_queries = [
-            'linkedin.com/in stealth founder germany',
-            'linkedin.com/in stealth mode berlin',
+            "linkedin.com/in stealth founder germany",
+            "linkedin.com/in stealth mode berlin",
             'linkedin.com/in "building something new" founder germany',
             'linkedin.com/in "ex-google" founder berlin',
             'linkedin.com/in "ex-stripe" founder germany',
             'linkedin.com/in "serial entrepreneur" berlin',
-            'linkedin.com/in stealth co-founder munich',
+            "linkedin.com/in stealth co-founder munich",
         ]
         queries = ddg_queries[:max_queries] if max_queries else ddg_queries
         return scraper.search_stealth_queries(queries)
@@ -640,7 +636,7 @@ def find_stealth_founders(
 
     all_results = []
     for i, query in enumerate(queries):
-        logger.info(f"Query {i+1}/{len(queries)}: {query[:50]}...")
+        logger.info(f"Query {i + 1}/{len(queries)}: {query[:50]}...")
 
         results = scraper.search_query(query)
         all_results.extend(results)
@@ -671,10 +667,10 @@ class CurlCffiSearchScraper:
 
     def _get_headers(self) -> Dict[str, str]:
         return {
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-            'Accept-Language': 'en-US,en;q=0.9,de;q=0.8',
-            'Referer': 'https://duckduckgo.com/',
-            'DNT': '1',
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            "Accept-Language": "en-US,en;q=0.9,de;q=0.8",
+            "Referer": "https://duckduckgo.com/",
+            "DNT": "1",
         }
 
     def _delay(self):
@@ -716,7 +712,7 @@ class CurlCffiSearchScraper:
                 if response.status_code == 202:
                     # Don't retry — return immediately and let the outer loop
                     # handle backoff. Retrying just digs the rate limit deeper.
-                    logger.warning(f"DDG rate limit (202) — skipping to next query")
+                    logger.warning("DDG rate limit (202) — skipping to next query")
                     return None, None
 
                 logger.warning(f"DuckDuckGo returned {response.status_code}")
@@ -733,17 +729,17 @@ class CurlCffiSearchScraper:
 
     def _extract_next_page_data(self, html: str) -> Optional[dict]:
         """Extract form data needed to fetch the next page of results."""
-        soup = BeautifulSoup(html, 'html.parser')
-        next_form = soup.find('input', {'value': 'Next'})
+        soup = BeautifulSoup(html, "html.parser")
+        next_form = soup.find("input", {"value": "Next"})
         if not next_form:
             return None
-        form = next_form.find_parent('form')
+        form = next_form.find_parent("form")
         if not form:
             return None
         form_data = {}
-        for inp in form.find_all('input'):
-            name = inp.get('name')
-            value = inp.get('value', '')
+        for inp in form.find_all("input"):
+            name = inp.get("name")
+            value = inp.get("value", "")
             if name:
                 form_data[name] = value
         return form_data if form_data else None
@@ -753,14 +749,14 @@ class CurlCffiSearchScraper:
         from urllib.parse import unquote
 
         results = []
-        soup = BeautifulSoup(html, 'html.parser')
+        soup = BeautifulSoup(html, "html.parser")
 
-        for result in soup.find_all('a', class_='result__a'):
+        for result in soup.find_all("a", class_="result__a"):
             try:
-                href = result.get('href', '')
+                href = result.get("href", "")
                 decoded_href = unquote(href)
 
-                if 'linkedin.com/in/' not in decoded_href:
+                if "linkedin.com/in/" not in decoded_href:
                     continue
 
                 url = self._clean_linkedin_url(href)
@@ -769,8 +765,8 @@ class CurlCffiSearchScraper:
 
                 title = result.get_text(strip=True)
 
-                snippet = ''
-                snippet_elem = result.find_next('a', class_='result__snippet')
+                snippet = ""
+                snippet_elem = result.find_next("a", class_="result__snippet")
                 if snippet_elem:
                     snippet = snippet_elem.get_text(strip=True)
 
@@ -785,16 +781,16 @@ class CurlCffiSearchScraper:
         """Clean LinkedIn URL from DuckDuckGo redirect."""
         from urllib.parse import unquote
 
-        if 'uddg=' in url:
+        if "uddg=" in url:
             parsed = urlparse(url)
             params = parse_qs(parsed.query)
-            if 'uddg' in params:
-                url = unquote(params['uddg'][0])
+            if "uddg" in params:
+                url = unquote(params["uddg"][0])
 
-        match = re.search(r'(https?://(?:[a-z]{2}\.)?(?:www\.)?linkedin\.com/in/[^/?&#]+)', url)
+        match = re.search(r"(https?://(?:[a-z]{2}\.)?(?:www\.)?linkedin\.com/in/[^/?&#]+)", url)
         if match:
             cleaned = match.group(1)
-            cleaned = re.sub(r'https?://[a-z]{2}\.linkedin\.com', 'https://www.linkedin.com', cleaned)
+            cleaned = re.sub(r"https?://[a-z]{2}\.linkedin\.com", "https://www.linkedin.com", cleaned)
             return cleaned
         return None
 
@@ -848,7 +844,7 @@ class BraveSearchScraper:
         self.delay_range = delay_range
         if use_cloudscraper:
             self.session = cloudscraper.create_scraper(
-                browser={'browser': 'chrome', 'platform': 'darwin', 'mobile': False}
+                browser={"browser": "chrome", "platform": "darwin", "mobile": False}
             )
         else:
             self.session = requests.Session()
@@ -856,10 +852,10 @@ class BraveSearchScraper:
 
     def _get_headers(self) -> Dict[str, str]:
         return {
-            'User-Agent': random.choice(USER_AGENTS),
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-            'Accept-Language': 'en-US,en;q=0.5',
-            'Accept-Encoding': 'gzip, deflate, br',
+            "User-Agent": random.choice(USER_AGENTS),
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            "Accept-Language": "en-US,en;q=0.5",
+            "Accept-Encoding": "gzip, deflate, br",
         }
 
     def _delay(self):
@@ -897,13 +893,13 @@ class BraveSearchScraper:
     def _parse_results(self, html: str, query: str) -> List[SearchResult]:
         """Parse Brave search results."""
         results = []
-        soup = BeautifulSoup(html, 'html.parser')
+        soup = BeautifulSoup(html, "html.parser")
         seen_urls = set()
 
         # Find all links containing linkedin.com/in
-        for link in soup.find_all('a', href=lambda h: h and 'linkedin.com/in/' in h):
+        for link in soup.find_all("a", href=lambda h: h and "linkedin.com/in/" in h):
             try:
-                href = link.get('href', '')
+                href = link.get("href", "")
 
                 # Clean URL
                 url = self._clean_linkedin_url(href)
@@ -915,31 +911,36 @@ class BraveSearchScraper:
                 title = link.get_text(strip=True)
 
                 # Clean up title - remove path cruft like "› in  › username"
-                if title.startswith('›') or 'linkedin.com' in title.lower():
+                if title.startswith("›") or "linkedin.com" in title.lower():
                     # Extract username from URL and try to find better title
-                    username = url.split('/in/')[-1].rstrip('/').replace('-', ' ').replace('%20', ' ')
+                    username = url.split("/in/")[-1].rstrip("/").replace("-", " ").replace("%20", " ")
                     # Try to find a better title in parent elements
-                    parent = link.find_parent(['div', 'article'])
+                    parent = link.find_parent(["div", "article"])
                     if parent:
                         # Look for heading or title element with actual name
-                        for elem in parent.find_all(['h2', 'h3', 'h4', 'a', 'span']):
+                        for elem in parent.find_all(["h2", "h3", "h4", "a", "span"]):
                             text = elem.get_text(strip=True)
                             # Skip if it's just path or LinkedIn text
-                            if text and len(text) > 5 and not text.startswith('›') and 'linkedin.com' not in text.lower():
+                            if (
+                                text
+                                and len(text) > 5
+                                and not text.startswith("›")
+                                and "linkedin.com" not in text.lower()
+                            ):
                                 title = text
                                 break
                     # Fallback: use cleaned username
-                    if title.startswith('›'):
+                    if title.startswith("›"):
                         title = username.title()
 
                 # Get snippet from nearby elements
-                snippet = ''
-                parent = link.find_parent(['div', 'article'])
+                snippet = ""
+                parent = link.find_parent(["div", "article"])
                 if parent:
                     # Look for description/snippet text
-                    for desc in parent.find_all(['p', 'span', 'div']):
+                    for desc in parent.find_all(["p", "span", "div"]):
                         text = desc.get_text(strip=True)
-                        if len(text) > 50 and 'linkedin.com' not in text.lower():
+                        if len(text) > 50 and "linkedin.com" not in text.lower():
                             snippet = text[:500]
                             break
 
@@ -955,10 +956,10 @@ class BraveSearchScraper:
 
     def _clean_linkedin_url(self, url: str) -> Optional[str]:
         """Clean LinkedIn URL."""
-        match = re.search(r'(https?://(?:[a-z]{2}\.)?(?:www\.)?linkedin\.com/in/[^/?&#]+)', url)
+        match = re.search(r"(https?://(?:[a-z]{2}\.)?(?:www\.)?linkedin\.com/in/[^/?&#]+)", url)
         if match:
             cleaned = match.group(1)
-            cleaned = re.sub(r'https?://[a-z]{2}\.linkedin\.com', 'https://www.linkedin.com', cleaned)
+            cleaned = re.sub(r"https?://[a-z]{2}\.linkedin\.com", "https://www.linkedin.com", cleaned)
             return cleaned
         return None
 
@@ -1010,14 +1011,12 @@ class DdgsLibraryScraper:
 
     def _clean_linkedin_url(self, url: str) -> Optional[str]:
         """Clean LinkedIn URL - normalize country subdomains."""
-        match = re.search(
-            r'(https?://(?:[a-z]{2}\.)?(?:www\.)?linkedin\.com/in/[^/?&#]+)', url
-        )
+        match = re.search(r"(https?://(?:[a-z]{2}\.)?(?:www\.)?linkedin\.com/in/[^/?&#]+)", url)
         if match:
             cleaned = match.group(1)
             cleaned = re.sub(
-                r'https?://[a-z]{2}\.linkedin\.com',
-                'https://www.linkedin.com',
+                r"https?://[a-z]{2}\.linkedin\.com",
+                "https://www.linkedin.com",
                 cleaned,
             )
             return cleaned
@@ -1037,13 +1036,14 @@ class DdgsLibraryScraper:
         """
         try:
             from ddgs import DDGS
-            from ddgs.exceptions import RatelimitException, DDGSException, TimeoutException
+            from ddgs.exceptions import DDGSException, RatelimitException, TimeoutException
+
             DuckDuckGoSearchException = DDGSException
         except ImportError:
             from duckduckgo_search import DDGS
             from duckduckgo_search.exceptions import (
-                RatelimitException,
                 DuckDuckGoSearchException,
+                RatelimitException,
                 TimeoutException,
             )
 
@@ -1059,7 +1059,7 @@ class DdgsLibraryScraper:
                     max_results=self.max_results_per_query,
                 )
                 if timelimit:
-                    search_kwargs['timelimit'] = timelimit
+                    search_kwargs["timelimit"] = timelimit
                 raw_results = ddgs.text(**search_kwargs)
                 break
             except RatelimitException:
@@ -1073,7 +1073,7 @@ class DdgsLibraryScraper:
                 return []
             except Exception as e:
                 if attempt < 2:
-                    logger.debug(f"ddgs attempt {attempt+1} failed: {e}, retrying...")
+                    logger.debug(f"ddgs attempt {attempt + 1} failed: {e}, retrying...")
                     time.sleep(2)
                     continue
                 logger.error(f"ddgs failed after 3 attempts: {e}")
@@ -1094,12 +1094,14 @@ class DdgsLibraryScraper:
                 continue
 
             self.found_urls.add(url)
-            results.append(SearchResult(
-                url=url,
-                title=item.get("title", ""),
-                snippet=item.get("body", ""),
-                query=query,
-            ))
+            results.append(
+                SearchResult(
+                    url=url,
+                    title=item.get("title", ""),
+                    snippet=item.get("body", ""),
+                    query=query,
+                )
+            )
 
         logger.info(f"  Found {len(results)} new LinkedIn URLs")
         return results
@@ -1137,14 +1139,12 @@ class SerperSearchScraper:
 
     def _clean_linkedin_url(self, url: str) -> Optional[str]:
         """Clean LinkedIn URL."""
-        match = re.search(
-            r'(https?://(?:[a-z]{2}\.)?(?:www\.)?linkedin\.com/in/[^/?&#]+)', url
-        )
+        match = re.search(r"(https?://(?:[a-z]{2}\.)?(?:www\.)?linkedin\.com/in/[^/?&#]+)", url)
         if match:
             cleaned = match.group(1)
             cleaned = re.sub(
-                r'https?://[a-z]{2}\.linkedin\.com',
-                'https://www.linkedin.com',
+                r"https?://[a-z]{2}\.linkedin\.com",
+                "https://www.linkedin.com",
                 cleaned,
             )
             return cleaned
@@ -1217,12 +1217,14 @@ class SerperSearchScraper:
                 continue
 
             self.found_urls.add(url)
-            results.append(SearchResult(
-                url=url,
-                title=item.get("title", ""),
-                snippet=item.get("snippet", ""),
-                query=query,
-            ))
+            results.append(
+                SearchResult(
+                    url=url,
+                    title=item.get("title", ""),
+                    snippet=item.get("snippet", ""),
+                    query=query,
+                )
+            )
 
         logger.info(f"  Found {len(results)} new LinkedIn URLs")
         return results
@@ -1296,7 +1298,7 @@ class MultiSearchScraper:
         return []
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
 
     # Test with DuckDuckGo

@@ -1,0 +1,88 @@
+[project]
+name = "handelsregister-scraper"
+version = "0.1.0"
+description = "German Handelsregister startup discovery platform — monitors the commercial register for AI, robotics, and climate-tech startups"
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.9"
+dependencies = [
+    "requests>=2.28.0",
+    "beautifulsoup4>=4.12.0",
+    "lxml>=4.9.0",
+    "python-dateutil>=2.8.0",
+    "click>=8.0.0",
+    "rich>=13.0.0",
+    "pyyaml>=6.0.0",
+    "apscheduler>=3.10.0",
+    "sqlalchemy>=2.0.0",
+    "rapidfuzz>=3.0.0",
+    "ddgs>=9.0.0",
+    "fastapi>=0.109.0",
+    "uvicorn>=0.27.0",
+    "jinja2>=3.1.0",
+    "cloudscraper>=1.2.71",
+    "curl_cffi>=0.7.0",
+    "brotli>=1.1.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "ruff>=0.9.0",
+    "pytest>=7.0.0",
+    "pytest-cov>=4.0.0",
+    "pytest-mock>=3.10.0",
+    "freezegun>=1.2.0",
+    "pre-commit>=3.0.0",
+]
+
+[project.scripts]
+handelsregister = "main:cli"
+
+[build-system]
+requires = ["setuptools>=75.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = [
+    "persistence*",
+    "processing*",
+    "sources*",
+    "scheduler*",
+    "web*",
+    "export*",
+]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 120
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP"]
+ignore = [
+    "E501",   # line too long — handled by formatter
+    "E402",   # module import not at top — conditional/guarded imports
+    "E701",   # multiple statements on one line — stylistic, low priority
+    "E722",   # bare except — too many to fix safely in one pass
+    "E741",   # ambiguous variable name — false positives
+    "F841",   # unused variable — often intentional in unpacking
+    "UP006",  # use builtin type for generics — requires runtime support
+    "UP007",  # use X | Y for union — requires Python 3.10+ runtime
+    "UP035",  # deprecated typing imports — requires Python 3.9+ builtins
+    "UP045",  # use X | None for Optional — requires Python 3.10+ runtime
+]
+per-file-ignores = { "scripts/*" = ["E402", "F821"], "*/exporters.py" = ["F821"], "sources/bundesapi.py" = ["F821"], "sources/offeneregister.py" = ["F821"] }
+
+[tool.ruff.format]
+quote-style = "double"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = "test_*.py"
+python_functions = "test_*"
+python_classes = "Test*"
+addopts = "-v --tb=short"
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "integration: marks integration tests",
+]
+filterwarnings = ["ignore::DeprecationWarning"]

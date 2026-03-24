@@ -11,11 +11,11 @@ Strategy:
 No API keys required.
 """
 
+import logging
 import re
 import time
-import logging
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Tuple
+from typing import List, Optional, Tuple
 from urllib.parse import urljoin, urlparse
 
 import requests
@@ -24,58 +24,120 @@ from rapidfuzz import fuzz
 
 logger = logging.getLogger(__name__)
 
-USER_AGENT = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36'
+USER_AGENT = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"
 REQUEST_TIMEOUT = 10
 
 # Domains that appear in search results but are NOT company websites
 FALSE_POSITIVE_DOMAINS = {
     # Social media
-    'linkedin.com', 'xing.com', 'twitter.com', 'x.com',
-    'facebook.com', 'instagram.com', 'tiktok.com',
+    "linkedin.com",
+    "xing.com",
+    "twitter.com",
+    "x.com",
+    "facebook.com",
+    "instagram.com",
+    "tiktok.com",
     # Business directories / aggregators
-    'crunchbase.com', 'pitchbook.com', 'northdata.com', 'northdata.de',
-    'firmenwissen.de', 'unternehmensregister.de', 'handelsregister.de',
-    'wer-zu-wem.de', 'kununu.de', 'glassdoor.com', 'glassdoor.de',
-    'dnb.com', 'implisense.com', 'companyhouse.de',
+    "crunchbase.com",
+    "pitchbook.com",
+    "northdata.com",
+    "northdata.de",
+    "firmenwissen.de",
+    "unternehmensregister.de",
+    "handelsregister.de",
+    "wer-zu-wem.de",
+    "kununu.de",
+    "glassdoor.com",
+    "glassdoor.de",
+    "dnb.com",
+    "implisense.com",
+    "companyhouse.de",
     # News
-    'gruenderszene.de', 'deutsche-startups.de', 't3n.de',
-    'handelsblatt.com', 'manager-magazin.de', 'sifted.eu',
-    'techcrunch.com', 'eu-startups.com',
+    "gruenderszene.de",
+    "deutsche-startups.de",
+    "t3n.de",
+    "handelsblatt.com",
+    "manager-magazin.de",
+    "sifted.eu",
+    "techcrunch.com",
+    "eu-startups.com",
     # Job boards
-    'indeed.com', 'indeed.de', 'stepstone.de', 'jobs.de',
+    "indeed.com",
+    "indeed.de",
+    "stepstone.de",
+    "jobs.de",
     # Generic
-    'wikipedia.org', 'bloomberg.com', 'reuters.com',
-    'youtube.com', 'github.com', 'medium.com',
-    'apple.com', 'play.google.com',
+    "wikipedia.org",
+    "bloomberg.com",
+    "reuters.com",
+    "youtube.com",
+    "github.com",
+    "medium.com",
+    "apple.com",
+    "play.google.com",
 }
 
 # German legal form suffixes to strip from company names
 LEGAL_FORMS = [
-    'gmbh & co. kg', 'gmbh & co kg', 'gmbh & co. ohg',
-    'ug (haftungsbeschränkt)', 'ug haftungsbeschränkt',
-    'ggmbh', 'gmbh', 'ug', 'ag', 'se', 'kg', 'ohg', 'gbr', 'e.v.', 'e.v',
-    'mbh', 'eg', 'partg', 'kgaa',
+    "gmbh & co. kg",
+    "gmbh & co kg",
+    "gmbh & co. ohg",
+    "ug (haftungsbeschränkt)",
+    "ug haftungsbeschränkt",
+    "ggmbh",
+    "gmbh",
+    "ug",
+    "ag",
+    "se",
+    "kg",
+    "ohg",
+    "gbr",
+    "e.v.",
+    "e.v",
+    "mbh",
+    "eg",
+    "partg",
+    "kgaa",
 ]
 
 # Common suffixes that aren't part of the brand name
 STRIP_SUFFIXES = [
-    'bank', 'holding', 'group', 'gruppe', 'deutschland', 'germany',
-    'europe', 'international', 'solutions', 'technologies', 'systems',
-    'services',
+    "bank",
+    "holding",
+    "group",
+    "gruppe",
+    "deutschland",
+    "germany",
+    "europe",
+    "international",
+    "solutions",
+    "technologies",
+    "systems",
+    "services",
 ]
 
 # Parked domain indicators
 PARKED_INDICATORS = [
-    'domain steht zum verkauf', 'domain is for sale', 'buy this domain',
-    'diese domain kaufen', 'domain parking', 'sedo.com', 'sedoparking',
-    'hugedomains', 'afternic', 'dan.com', 'godaddy',
-    'parked free', 'is available for purchase',
+    "domain steht zum verkauf",
+    "domain is for sale",
+    "buy this domain",
+    "diese domain kaufen",
+    "domain parking",
+    "sedo.com",
+    "sedoparking",
+    "hugedomains",
+    "afternic",
+    "dan.com",
+    "godaddy",
+    "parked free",
+    "is available for purchase",
 ]
 
 
 @dataclass
 class ImpressumData:
     """Parsed data from a company's Impressum page."""
+
     legal_name: Optional[str] = None
     registry_number: Optional[str] = None  # e.g. 'HRB 187497'
     registry_court: Optional[str] = None  # e.g. 'Amtsgericht Charlottenburg'
@@ -86,6 +148,7 @@ class ImpressumData:
 @dataclass
 class WebsiteResult:
     """Result of a website lookup."""
+
     url: str
     confidence: float  # 0.0 - 1.0
     source: str  # 'domain_guess', 'search'
@@ -110,22 +173,22 @@ def normalize_company_name(name: str) -> str:
     lower = result.lower()
     for lf in LEGAL_FORMS:
         # Match at end or before punctuation
-        pattern = r'\s*\b' + re.escape(lf) + r'\s*$'
-        lower_new = re.sub(pattern, '', lower, flags=re.IGNORECASE)
+        pattern = r"\s*\b" + re.escape(lf) + r"\s*$"
+        lower_new = re.sub(pattern, "", lower, flags=re.IGNORECASE)
         if lower_new != lower:
-            result = result[:len(lower_new)].strip()
+            result = result[: len(lower_new)].strip()
             lower = lower_new.strip()
 
     # Strip trailing common suffixes only if something remains
     for suffix in STRIP_SUFFIXES:
-        if lower.endswith(' ' + suffix):
-            candidate = result[:-(len(suffix) + 1)].strip()
+        if lower.endswith(" " + suffix):
+            candidate = result[: -(len(suffix) + 1)].strip()
             if len(candidate.split()) >= 1 and len(candidate) >= 3:
                 result = candidate
                 lower = result.lower()
 
     # Strip trailing punctuation
-    result = result.strip(' .-,&')
+    result = result.strip(" .-,&")
 
     return result.lower().strip()
 
@@ -145,36 +208,36 @@ def generate_domain_candidates(name: str) -> List[str]:
 
     def _add(domain: str):
         # Skip absurdly long domains (label max is 63 chars per DNS spec)
-        label = domain.split('.')[0]
+        label = domain.split(".")[0]
         if len(label) > 40 or domain in candidates:
             return
         candidates.append(domain)
 
-    tlds = ['.de', '.com', '.io', '.tech', '.ai']
+    tlds = [".de", ".com", ".io", ".tech", ".ai"]
 
     # Check if the brand name IS a domain (e.g. "mercury.ai", "disco.ai")
-    known_tlds = {'.ai', '.io', '.de', '.com', '.tech', '.app', '.co', '.net', '.org'}
-    if '.' in brand:
-        last_dot = brand.rfind('.')
+    known_tlds = {".ai", ".io", ".de", ".com", ".tech", ".app", ".co", ".net", ".org"}
+    if "." in brand:
+        last_dot = brand.rfind(".")
         suffix = brand[last_dot:]
         if suffix in known_tlds:
             # The name itself is a domain!
             _add(brand)
 
     # Handle dots in names (e.g. "one.five" -> "onefive", "one-five")
-    if '.' in brand and not brand.endswith('.'):
-        no_dots = brand.replace('.', '').replace(' ', '')
-        dot_to_dash = brand.replace('.', '-').replace(' ', '-')
+    if "." in brand and not brand.endswith("."):
+        no_dots = brand.replace(".", "").replace(" ", "")
+        dot_to_dash = brand.replace(".", "-").replace(" ", "-")
         for base in [no_dots, dot_to_dash]:
             for tld in tlds[:3]:  # .de, .com, .io
                 _add(base + tld)
 
-    words = brand.replace('.', ' ').split()
+    words = brand.replace(".", " ").split()
 
     # Join words without separator
-    joined = ''.join(words)
+    joined = "".join(words)
     # Join words with hyphen
-    hyphenated = '-'.join(words)
+    hyphenated = "-".join(words)
 
     for base in [joined, hyphenated]:
         for tld in tlds:
@@ -183,10 +246,10 @@ def generate_domain_candidates(name: str) -> List[str]:
     # For single long words, try common prefixes/suffixes
     if len(words) == 1 and len(words[0]) >= 4:
         word = words[0]
-        for tld in ['.de', '.com']:
-            _add(f'get{word}{tld}')
-            _add(f'{word}app{tld}')
-            _add(f'{word}hq{tld}')
+        for tld in [".de", ".com"]:
+            _add(f"get{word}{tld}")
+            _add(f"{word}app{tld}")
+            _add(f"{word}hq{tld}")
 
     return candidates
 
@@ -194,10 +257,10 @@ def generate_domain_candidates(name: str) -> List[str]:
 def _is_false_positive_domain(url: str) -> bool:
     """Check if URL belongs to a known non-company domain."""
     try:
-        netloc = urlparse(url).netloc.lower().lstrip('www.')
+        netloc = urlparse(url).netloc.lower().lstrip("www.")
         # Check exact match and parent domain
         for fp in FALSE_POSITIVE_DOMAINS:
-            if netloc == fp or netloc.endswith('.' + fp):
+            if netloc == fp or netloc.endswith("." + fp):
                 return True
     except Exception:
         pass
@@ -208,14 +271,14 @@ def _check_domain(domain: str) -> Optional[str]:
     """
     Test if a domain responds. Returns final URL after redirects, or None.
     """
-    for scheme in ['https://', 'http://']:
+    for scheme in ["https://", "http://"]:
         url = scheme + domain
         try:
             resp = requests.head(
                 url,
                 timeout=REQUEST_TIMEOUT,
                 allow_redirects=True,
-                headers={'User-Agent': USER_AGENT},
+                headers={"User-Agent": USER_AGENT},
             )
             if resp.status_code < 400:
                 final_url = resp.url
@@ -242,11 +305,11 @@ def _validate_website(url: str, company_name: str) -> WebsiteResult:
     is_parked = False
 
     # Domain contains company name words -> strong signal
-    domain = urlparse(url).netloc.lower().lstrip('www.')
-    domain_base = domain.split('.')[0]
+    domain = urlparse(url).netloc.lower().lstrip("www.")
+    domain_base = domain.split(".")[0]
     # Split brand on spaces, dots, hyphens to get individual words
-    brand_words = set(re.split(r'[\s.\-]+', brand))
-    domain_words = set(re.split(r'[-.]', domain_base))
+    brand_words = set(re.split(r"[\s.\-]+", brand))
+    domain_words = set(re.split(r"[-.]", domain_base))
     if brand_words & domain_words:
         confidence += 0.3
     elif any(w in domain_base for w in brand_words if len(w) >= 3):
@@ -257,15 +320,17 @@ def _validate_website(url: str, company_name: str) -> WebsiteResult:
         resp = requests.get(
             url,
             timeout=REQUEST_TIMEOUT,
-            headers={'User-Agent': USER_AGENT},
+            headers={"User-Agent": USER_AGENT},
         )
         # Limit to 500KB decoded content
         content = resp.text[:512_000]
     except requests.RequestException:
         # URL responded to HEAD but GET failed — still possible website
         return WebsiteResult(
-            url=url, confidence=max(confidence, 0.2),
-            source='', title_match=False,
+            url=url,
+            confidence=max(confidence, 0.2),
+            source="",
+            title_match=False,
         )
 
     content_lower = content.lower()
@@ -279,10 +344,10 @@ def _validate_website(url: str, company_name: str) -> WebsiteResult:
 
     if not is_parked:
         # Parse HTML
-        soup = BeautifulSoup(content, 'lxml')
+        soup = BeautifulSoup(content, "lxml")
 
         # Title match
-        title_tag = soup.find('title')
+        title_tag = soup.find("title")
         if title_tag and title_tag.string:
             page_title = title_tag.string.strip()
             ratio = fuzz.token_set_ratio(brand, page_title.lower())
@@ -293,29 +358,29 @@ def _validate_website(url: str, company_name: str) -> WebsiteResult:
                 confidence += 0.1
 
         # Meta tags
-        for meta in soup.find_all('meta'):
-            meta_content = (meta.get('content') or '').lower()
-            meta_name = (meta.get('name') or meta.get('property') or '').lower()
-            if meta_name in ('og:site_name', 'og:title', 'description'):
+        for meta in soup.find_all("meta"):
+            meta_content = (meta.get("content") or "").lower()
+            meta_name = (meta.get("name") or meta.get("property") or "").lower()
+            if meta_name in ("og:site_name", "og:title", "description"):
                 if fuzz.token_set_ratio(brand, meta_content) >= 60:
                     confidence += 0.1
                     break
 
         # Impressum link (legally required for German companies)
         impressum_url = None
-        for a in soup.find_all('a', href=True):
-            link_text = (a.get_text() or '').lower()
-            href = a['href'].lower()
-            if 'impressum' in link_text or 'impressum' in href or 'imprint' in link_text or 'imprint' in href:
+        for a in soup.find_all("a", href=True):
+            link_text = (a.get_text() or "").lower()
+            href = a["href"].lower()
+            if "impressum" in link_text or "impressum" in href or "imprint" in link_text or "imprint" in href:
                 has_impressum = True
-                impressum_url = _resolve_impressum_url(url, a['href'])
+                impressum_url = _resolve_impressum_url(url, a["href"])
                 confidence += 0.2
                 break
 
     return WebsiteResult(
         url=url,
         confidence=min(confidence, 1.0),
-        source='',
+        source="",
         title_match=title_match,
         has_impressum=has_impressum,
         impressum_url=impressum_url if not is_parked else None,
@@ -325,7 +390,7 @@ def _validate_website(url: str, company_name: str) -> WebsiteResult:
 
 def _resolve_impressum_url(base_url: str, href: str) -> str:
     """Resolve an Impressum href to an absolute URL."""
-    if href.startswith(('http://', 'https://')):
+    if href.startswith(("http://", "https://")):
         return href
     return urljoin(base_url, href)
 
@@ -333,30 +398,30 @@ def _resolve_impressum_url(base_url: str, href: str) -> str:
 # Regex patterns for Impressum parsing
 # Registry number: HRB 12345, HRA 6789
 _RE_REGISTRY_NUMBER = re.compile(
-    r'\b(HR[AB])\s*[\-:]?\s*(\d{3,7})\s*(?:\w)?',
+    r"\b(HR[AB])\s*[\-:]?\s*(\d{3,7})\s*(?:\w)?",
     re.IGNORECASE,
 )
 
 # Registry court: Amtsgericht Berlin-Charlottenburg, AG München
 # Captures the city name (e.g. "Charlottenburg", "Aachen", "München")
 _RE_REGISTRY_COURT = re.compile(
-    r'(?:'
-    r'Registergericht[ \t]*:[ \t]*(?:\b(?:AG|Amtsgericht)\s+)?'     # "Registergericht: Amtsgericht X"
-    r'|\bAmtsgericht\s+'                                              # "Amtsgericht X" (full word only)
-    r'|\bDistrict\s+Court\s+(?:of\s+)?'                              # "District Court of X"
-    r'|eingetragen\s+(?:im|beim)\s+Handelsregister\s+(?:des\s+)?\b(?:AG|Amtsgericht)\s+'  # "eingetragen im HR des AG X"
-    r'|commercial\s+register\s+(?:of\s+)?(?:the\s+)?(?:District\s+Court\s+(?:of\s+)?)?' # "commercial register of the District Court of X"
-    r')'
-    r'([A-ZÄÖÜ][a-zäöüß]+(?:[\-][A-Za-zÄÖÜäöüß]+){0,2})',  # City name (hyphenated ok)
+    r"(?:"
+    r"Registergericht[ \t]*:[ \t]*(?:\b(?:AG|Amtsgericht)\s+)?"  # "Registergericht: Amtsgericht X"
+    r"|\bAmtsgericht\s+"  # "Amtsgericht X" (full word only)
+    r"|\bDistrict\s+Court\s+(?:of\s+)?"  # "District Court of X"
+    r"|eingetragen\s+(?:im|beim)\s+Handelsregister\s+(?:des\s+)?\b(?:AG|Amtsgericht)\s+"  # "eingetragen im HR des AG X"
+    r"|commercial\s+register\s+(?:of\s+)?(?:the\s+)?(?:District\s+Court\s+(?:of\s+)?)?"  # "commercial register of the District Court of X"
+    r")"
+    r"([A-ZÄÖÜ][a-zäöüß]+(?:[\-][A-Za-zÄÖÜäöüß]+){0,2})",  # City name (hyphenated ok)
     re.IGNORECASE,
 )
 
 # German legal forms in Impressum - used to find the full legal name
 # Uses [ \t] instead of \s to avoid matching across newlines
 _RE_LEGAL_NAME = re.compile(
-    r'([A-ZÄÖÜa-zäöüß][A-Za-zÄÖÜäöüß0-9\.\- \t&]{1,60}?'
-    r'[ \t]+(?:GmbH[ \t]*&[ \t]*Co\.?[ \t]*KG|GmbH|UG[ \t]*\(?haftungsbeschränkt\)?|AG|SE|KG|OHG|e\.?[ \t]*V\.?|KGaA|eG|mbH))'
-    r'(?:[ \t\n]|$|,|\.|<)',
+    r"([A-ZÄÖÜa-zäöüß][A-Za-zÄÖÜäöüß0-9\.\- \t&]{1,60}?"
+    r"[ \t]+(?:GmbH[ \t]*&[ \t]*Co\.?[ \t]*KG|GmbH|UG[ \t]*\(?haftungsbeschränkt\)?|AG|SE|KG|OHG|e\.?[ \t]*V\.?|KGaA|eG|mbH))"
+    r"(?:[ \t\n]|$|,|\.|<)",
 )
 
 
@@ -374,7 +439,7 @@ def _fetch_and_parse_impressum(impressum_url: str) -> Optional[ImpressumData]:
         resp = requests.get(
             impressum_url,
             timeout=REQUEST_TIMEOUT,
-            headers={'User-Agent': USER_AGENT},
+            headers={"User-Agent": USER_AGENT},
         )
         if resp.status_code >= 400:
             return None
@@ -382,28 +447,28 @@ def _fetch_and_parse_impressum(impressum_url: str) -> Optional[ImpressumData]:
     except requests.RequestException:
         return None
 
-    soup = BeautifulSoup(content, 'lxml')
+    soup = BeautifulSoup(content, "lxml")
 
     # Remove script/style elements
-    for tag in soup.find_all(['script', 'style', 'nav', 'header', 'footer']):
+    for tag in soup.find_all(["script", "style", "nav", "header", "footer"]):
         tag.decompose()
 
-    text = soup.get_text(separator='\n')
+    text = soup.get_text(separator="\n")
     # Clean up whitespace
     lines = [line.strip() for line in text.splitlines() if line.strip()]
-    text_block = '\n'.join(lines)
+    text_block = "\n".join(lines)
 
     data = ImpressumData()
 
     # Extract registry number (HRB/HRA)
     m = _RE_REGISTRY_NUMBER.search(text_block)
     if m:
-        data.registry_number = f'{m.group(1).upper()} {m.group(2)}'
+        data.registry_number = f"{m.group(1).upper()} {m.group(2)}"
 
     # Extract registry court
     m = _RE_REGISTRY_COURT.search(text_block)
     if m:
-        court = m.group(1).strip().rstrip('.,;:')
+        court = m.group(1).strip().rstrip(".,;:")
         data.registry_court = court
 
     # Extract legal name
@@ -416,29 +481,30 @@ def _fetch_and_parse_impressum(impressum_url: str) -> Optional[ImpressumData]:
     # Extract address (German postal code pattern: "Straße 5, 10997 Berlin")
     # Require at least one lowercase letter in street to avoid matching headers like "IMPRINT"
     addr_match = re.search(
-        r'(?:^|\n)([A-Za-zÄÖÜäöüß][A-Za-zÄÖÜäöüß\.\- ]*[a-zäöüß][A-Za-zÄÖÜäöüß\.\- ]*\d+[a-z]?)[ \t]*[,\n][ \t]*(\d{5})[ \t]+([A-Za-zÄÖÜäöüß][\w\s\-]+)',
+        r"(?:^|\n)([A-Za-zÄÖÜäöüß][A-Za-zÄÖÜäöüß\.\- ]*[a-zäöüß][A-Za-zÄÖÜäöüß\.\- ]*\d+[a-z]?)[ \t]*[,\n][ \t]*(\d{5})[ \t]+([A-Za-zÄÖÜäöüß][\w\s\-]+)",
         text_block,
     )
     if addr_match:
         street = addr_match.group(1).strip()
         plz = addr_match.group(2)
         city = addr_match.group(3).strip()
-        data.address = f'{street}, {plz} {city}'
+        data.address = f"{street}, {plz} {city}"
 
     # Extract managing directors (Geschäftsführer)
     gf_match = re.search(
-        r'(?:Geschäftsführe(?:r|rin)|Managing\s+Director|Vertretungsberechtig(?:t|te)r?|'
-        r'Vorstand|CEO|Vertreten\s+durch)\s*[:\s]+(.+?)(?:\n\n|\n[A-Z]|\Z)',
+        r"(?:Geschäftsführe(?:r|rin)|Managing\s+Director|Vertretungsberechtig(?:t|te)r?|"
+        r"Vorstand|CEO|Vertreten\s+durch)\s*[:\s]+(.+?)(?:\n\n|\n[A-Z]|\Z)",
         text_block,
         re.IGNORECASE | re.DOTALL,
     )
     if gf_match:
         gf_text = gf_match.group(1).strip()
         # Split on common separators: comma, newline, "und", "and"
-        names = re.split(r'\s*[,\n]\s*|\s+und\s+|\s+and\s+', gf_text)
+        names = re.split(r"\s*[,\n]\s*|\s+und\s+|\s+and\s+", gf_text)
         data.managing_directors = [
-            n.strip() for n in names
-            if n.strip() and len(n.strip()) > 2 and not n.strip().startswith(('Tel', 'Fax', 'E-', 'USt'))
+            n.strip()
+            for n in names
+            if n.strip() and len(n.strip()) > 2 and not n.strip().startswith(("Tel", "Fax", "E-", "USt"))
         ][:5]  # Cap at 5
 
     # Only return if we found at least one useful field
@@ -468,18 +534,18 @@ def _match_impressum_to_company(
     # Match 1: Registry number (definitive — HRB numbers are unique per court)
     if impressum.registry_number and native_company_number:
         # Normalize both: strip spaces, uppercase
-        imp_num = re.sub(r'\s+', ' ', impressum.registry_number.upper().strip())
-        db_num = re.sub(r'\s+', ' ', native_company_number.upper().strip())
+        imp_num = re.sub(r"\s+", " ", impressum.registry_number.upper().strip())
+        db_num = re.sub(r"\s+", " ", native_company_number.upper().strip())
         # Also try without the prefix (some DBs store just the number)
-        imp_digits = re.search(r'\d+', imp_num)
-        db_digits = re.search(r'\d+', db_num)
+        imp_digits = re.search(r"\d+", imp_num)
+        db_digits = re.search(r"\d+", db_num)
 
         if imp_num == db_num:
             return 1.0  # Exact HRB match — definitive
         elif imp_digits and db_digits and imp_digits.group() == db_digits.group():
             # Same number, check if type prefix matches too
-            imp_type = re.match(r'(HR[AB])', imp_num)
-            db_type = re.match(r'(HR[AB])', db_num)
+            imp_type = re.match(r"(HR[AB])", imp_num)
+            db_type = re.match(r"(HR[AB])", db_num)
             if imp_type and db_type and imp_type.group() == db_type.group():
                 return 1.0
             # Same digits, might be same company
@@ -535,16 +601,16 @@ def _search_duckduckgo(company_name: str, max_results: int = 5) -> List[Tuple[st
 
     results = []
     queries = [
-        f'{company_name} offizielle Webseite',
-        f'{company_name} official website',
+        f"{company_name} offizielle Webseite",
+        f"{company_name} official website",
     ]
 
     for query in queries:
         try:
-            ddg_results = DDGS().text(query, region='de-de', max_results=max_results)
+            ddg_results = DDGS().text(query, region="de-de", max_results=max_results)
             for r in ddg_results:
-                url = r.get('href', '')
-                title = r.get('title', '')
+                url = r.get("href", "")
+                title = r.get("title", "")
                 if url and not _is_false_positive_domain(url):
                     results.append((url, title))
             if results:
@@ -612,15 +678,14 @@ class WebsiteFinder:
             url = _check_domain(domain)
             if url:
                 result = _validate_website(url, company_name)
-                result.source = 'domain_guess'
+                result.source = "domain_guess"
                 # Domain guess that responds + validates is high confidence
                 result.confidence += 0.2
                 result.confidence = min(result.confidence, 1.0)
 
                 if result.confidence >= 0.7:
                     # High confidence — try Impressum verification
-                    logger.debug("Domain guess hit: %s -> %s (conf=%.2f)",
-                                 company_name, url, result.confidence)
+                    logger.debug("Domain guess hit: %s -> %s (conf=%.2f)", company_name, url, result.confidence)
                     best = result
                     break
 
@@ -631,7 +696,10 @@ class WebsiteFinder:
         if best and best.confidence >= self.min_confidence and not self.enable_search:
             # Still try Impressum before returning
             best = self._try_impressum_verification(
-                best, company_name, native_company_number, registry_court,
+                best,
+                company_name,
+                native_company_number,
+                registry_court,
             )
             return best
 
@@ -647,7 +715,7 @@ class WebsiteFinder:
 
             for url, title in search_results[:3]:
                 result = _validate_website(url, company_name)
-                result.source = 'search'
+                result.source = "search"
 
                 if not best or result.confidence > best.confidence:
                     best = result
@@ -658,11 +726,19 @@ class WebsiteFinder:
         # Phase 3: Impressum deep validation
         if best and best.confidence >= self.min_confidence:
             best = self._try_impressum_verification(
-                best, company_name, native_company_number, registry_court,
+                best,
+                company_name,
+                native_company_number,
+                registry_court,
             )
-            logger.info("Found website: %s -> %s (conf=%.2f, src=%s, impressum=%s)",
-                        company_name, best.url, best.confidence, best.source,
-                        'verified' if best.impressum_verified else 'no')
+            logger.info(
+                "Found website: %s -> %s (conf=%.2f, src=%s, impressum=%s)",
+                company_name,
+                best.url,
+                best.confidence,
+                best.source,
+                "verified" if best.impressum_verified else "no",
+            )
             return best
 
         logger.debug("No website found for: %s", company_name)
@@ -686,14 +762,14 @@ class WebsiteFinder:
 
         # If we didn't find an Impressum link, try common paths
         if not impressum_url and not result.is_parked:
-            base = result.url.rstrip('/')
-            for path in ['/impressum', '/imprint', '/legal/impressum']:
+            base = result.url.rstrip("/")
+            for path in ["/impressum", "/imprint", "/legal/impressum"]:
                 test_url = base + path
                 try:
                     resp = requests.head(
                         test_url,
                         timeout=REQUEST_TIMEOUT,
-                        headers={'User-Agent': USER_AGENT},
+                        headers={"User-Agent": USER_AGENT},
                         allow_redirects=True,
                     )
                     if resp.status_code < 400:
@@ -716,7 +792,10 @@ class WebsiteFinder:
 
         # Match against company record
         boost = _match_impressum_to_company(
-            impressum_data, company_name, native_company_number, registry_court,
+            impressum_data,
+            company_name,
+            native_company_number,
+            registry_court,
         )
 
         if boost > 0:
@@ -725,10 +804,13 @@ class WebsiteFinder:
             if boost >= 0.8:
                 result.impressum_verified = True
             logger.debug(
-                "Impressum verification: %s conf %.2f -> %.2f (boost=%.2f, "
-                "legal_name=%s, reg=%s, court=%s)",
-                company_name, old_conf, result.confidence, boost,
-                impressum_data.legal_name, impressum_data.registry_number,
+                "Impressum verification: %s conf %.2f -> %.2f (boost=%.2f, legal_name=%s, reg=%s, court=%s)",
+                company_name,
+                old_conf,
+                result.confidence,
+                boost,
+                impressum_data.legal_name,
+                impressum_data.registry_number,
                 impressum_data.registry_court,
             )
 

@@ -10,12 +10,8 @@ and English/neologism positive signals.
 """
 
 import pytest
-import sys
-from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
-
-from processing.brand_name_scorer import BrandNameScorer, BrandNameScore
+from processing.brand_name_scorer import BrandNameScorer
 
 
 @pytest.fixture
@@ -68,8 +64,7 @@ class TestNonGermanNameDetection:
         ]
         for name in tech_brands:
             result = scorer.score(name, city="Berlin")
-            assert result.non_german_signal > 0, \
-                f"'{name}' should be detected as non-German brand"
+            assert result.non_german_signal > 0, f"'{name}' should be detected as non-German brand"
 
     def test_german_traditional_names(self, scorer):
         german_names = [
@@ -81,8 +76,7 @@ class TestNonGermanNameDetection:
         ]
         for name in german_names:
             result = scorer.score(name, city="Berlin")
-            assert result.non_german_signal == 0, \
-                f"'{name}' should be detected as German"
+            assert result.non_german_signal == 0, f"'{name}' should be detected as German"
 
     def test_german_surname_at_start(self, scorer):
         """Companies starting with common German surnames."""
@@ -93,8 +87,7 @@ class TestNonGermanNameDetection:
         ]
         for name in names:
             result = scorer.score(name, city="Berlin")
-            assert result.non_german_signal == 0, \
-                f"'{name}' should be detected as German surname"
+            assert result.non_german_signal == 0, f"'{name}' should be detected as German surname"
 
     def test_short_brand_signal(self, scorer):
         result = scorer.score("Naboo UG", city="Berlin")
@@ -108,8 +101,7 @@ class TestShellCompanyDetection:
         """Mass-created shelf companies: aptus NNNN."""
         for num in [2635, 2636, 2637]:
             result = scorer.score(f"aptus {num}. GmbH", city="Berlin")
-            assert not result.is_likely_tech_startup, \
-                f"aptus {num}. should be detected as shell company"
+            assert not result.is_likely_tech_startup, f"aptus {num}. should be detected as shell company"
             assert result.shell_penalty <= -5
 
     def test_numbered_shell_with_initials(self, scorer):
@@ -126,8 +118,7 @@ class TestShellCompanyDetection:
 
     def test_vorratsgesellschaft(self, scorer):
         """Explicit Vorratsgesellschaft keyword."""
-        result = scorer.score(
-            "Vorratsgesellschaft Nr. 42 UG (haftungsbeschränkt)", city="Berlin")
+        result = scorer.score("Vorratsgesellschaft Nr. 42 UG (haftungsbeschränkt)", city="Berlin")
         assert not result.is_likely_tech_startup
         assert result.shell_penalty <= -5
 
@@ -138,9 +129,7 @@ class TestShellCompanyDetection:
 
     def test_firma_de_shelf(self, scorer):
         """firma.de Vorratsgesellschaft pattern."""
-        result = scorer.score(
-            "firma.de Vorratsgesellschaft 1234 UG (haftungsbeschränkt)",
-            city="Berlin")
+        result = scorer.score("firma.de Vorratsgesellschaft 1234 UG (haftungsbeschränkt)", city="Berlin")
         assert not result.is_likely_tech_startup
 
     def test_abbreviation_number_dfi(self, scorer):
@@ -155,11 +144,10 @@ class TestShellCompanyDetection:
 
     def test_verwaltungs_ug_berlin(self, scorer):
         """Verwaltungs UG in Berlin/München — vehicle, not startup."""
-        for prefix in ['BEKA', 'ALE', 'KBC']:
+        for prefix in ["BEKA", "ALE", "KBC"]:
             name = f"{prefix} Verwaltungs UG (haftungsbeschränkt)"
             result = scorer.score(name, city="München")
-            assert not result.is_likely_tech_startup, \
-                f"'{name}' should fail as Verwaltungs vehicle"
+            assert not result.is_likely_tech_startup, f"'{name}' should fail as Verwaltungs vehicle"
 
     def test_holding_ug(self, scorer):
         """Holding UG — financial vehicle."""
@@ -193,8 +181,7 @@ class TestShellCompanyDetection:
         ]
         for name, city in real_startups:
             result = scorer.score(name, city=city)
-            assert result.shell_penalty == 0, \
-                f"'{name}' should NOT have shell penalty"
+            assert result.shell_penalty == 0, f"'{name}' should NOT have shell penalty"
             assert result.is_likely_tech_startup
 
 
@@ -210,8 +197,7 @@ class TestEnglishBrandDetection:
         ]
         for name in english_brands:
             result = scorer.score(name, city="Berlin")
-            assert result.english_signal > 0, \
-                f"'{name}' should get English brand signal"
+            assert result.english_signal > 0, f"'{name}' should get English brand signal"
 
     def test_english_compound_words(self, scorer):
         """English words embedded in compound brands."""
@@ -284,7 +270,7 @@ class TestCombinedScoring:
     def test_sme_patterns_penalize(self, scorer):
         """SME patterns reduce score."""
         result = scorer.score("Verwaltung Digital UG", city="Berlin")
-        assert any('SME' in s for s in result.negative_signals)
+        assert any("SME" in s for s in result.negative_signals)
 
     def test_known_startups_all_pass(self, scorer):
         """Comprehensive test: well-known German startups all pass."""
@@ -309,8 +295,7 @@ class TestCombinedScoring:
         ]
         for name, city in known_startups:
             result = scorer.score(name, city=city)
-            assert result.is_likely_tech_startup, \
-                f"'{name}' ({city}) should pass (score={result.total_score})"
+            assert result.is_likely_tech_startup, f"'{name}' ({city}) should pass (score={result.total_score})"
 
 
 class TestEdgeCases:
@@ -345,8 +330,8 @@ class TestEdgeCases:
     def test_score_dataclass_has_new_fields(self, scorer):
         """BrandNameScore includes v2 fields."""
         result = scorer.score("Test GmbH", city="Berlin")
-        assert hasattr(result, 'shell_penalty')
-        assert hasattr(result, 'english_signal')
+        assert hasattr(result, "shell_penalty")
+        assert hasattr(result, "english_signal")
 
     def test_shell_penalty_included_in_total(self, scorer):
         """Shell penalty is reflected in total_score."""

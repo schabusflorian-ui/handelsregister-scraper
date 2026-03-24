@@ -13,16 +13,16 @@ Features:
 
 import json
 import logging
+from dataclasses import dataclass, field
 from datetime import datetime
-from typing import List, Dict, Optional, Any
-from dataclasses import dataclass, field, asdict
+from typing import Any, Dict, List, Optional
 
 from persistence.database import Database
-from sources.bundesapi import BundesAPISource, SearchResult
+from processing.brand_name_scorer import BrandNameScorer
 from processing.filters import AIRoboticsFilter
 from processing.startup_scorer import StartupScorer
-from processing.brand_name_scorer import BrandNameScorer
 from scheduler.rate_limiter import PersistentRateLimiter
+from sources.bundesapi import BundesAPISource, SearchResult
 
 logger = logging.getLogger(__name__)
 
@@ -30,11 +30,12 @@ logger = logging.getLogger(__name__)
 @dataclass
 class DiscoveryJobState:
     """Persistent state for discovery job."""
+
     job_id: int
-    job_type: str = 'discovery'
-    started_at: str = ''
+    job_type: str = "discovery"
+    started_at: str = ""
     completed_at: Optional[str] = None
-    status: str = 'pending'  # pending, running, completed, failed
+    status: str = "pending"  # pending, running, completed, failed
 
     # Progress tracking
     keywords_total: int = 0
@@ -64,37 +65,37 @@ class DiscoveryJob:
 
     # Priority keywords to search first (high signal)
     PRIORITY_KEYWORDS = [
-        'künstliche intelligenz',
-        'artificial intelligence',
-        'machine learning',
-        'deep learning',
-        'robotik',
-        'robotics',
-        'KI GmbH',
-        'AI GmbH',
-        '.ai GmbH',
-        'neural',
-        'autonomous',
-        'automation',
-        'computer vision',
-        'natural language',
+        "künstliche intelligenz",
+        "artificial intelligence",
+        "machine learning",
+        "deep learning",
+        "robotik",
+        "robotics",
+        "KI GmbH",
+        "AI GmbH",
+        ".ai GmbH",
+        "neural",
+        "autonomous",
+        "automation",
+        "computer vision",
+        "natural language",
     ]
 
     # Secondary keywords (medium signal)
     SECONDARY_KEYWORDS = [
-        'data science',
-        'big data',
-        'predictive',
-        'analytics platform',
-        'cloud platform',
-        'IoT',
-        'internet of things',
-        'sensor',
-        'smart factory',
-        'industrie 4.0',
-        'digitalisierung',
-        'software platform',
-        'SaaS',
+        "data science",
+        "big data",
+        "predictive",
+        "analytics platform",
+        "cloud platform",
+        "IoT",
+        "internet of things",
+        "sensor",
+        "smart factory",
+        "industrie 4.0",
+        "digitalisierung",
+        "software platform",
+        "SaaS",
     ]
 
     def __init__(
@@ -149,10 +150,13 @@ class DiscoveryJob:
 
     def _create_job_run(self) -> int:
         """Create a new job run record."""
-        cursor = self.db.conn.execute("""
+        cursor = self.db.conn.execute(
+            """
             INSERT INTO job_runs (job_type, started_at, status, keywords_total)
             VALUES (?, ?, 'running', ?)
-        """, ('discovery', datetime.utcnow().isoformat(), len(self.keywords)))
+        """,
+            ("discovery", datetime.utcnow().isoformat(), len(self.keywords)),
+        )
         self.db.conn.commit()
         return cursor.lastrowid
 
@@ -161,7 +165,8 @@ class DiscoveryJob:
         if not self._state:
             return
 
-        self.db.conn.execute("""
+        self.db.conn.execute(
+            """
             UPDATE job_runs SET
                 status = ?,
                 completed_at = ?,
@@ -174,19 +179,21 @@ class DiscoveryJob:
                 last_error = ?,
                 error_count = ?
             WHERE id = ?
-        """, (
-            self._state.status,
-            self._state.completed_at,
-            self._state.keywords_completed,
-            self._state.current_keyword_index,
-            self._state.companies_found,
-            self._state.companies_new,
-            self._state.requests_used,
-            json.dumps(self._state.checkpoint_data),
-            self._state.last_error,
-            self._state.error_count,
-            self._state.job_id,
-        ))
+        """,
+            (
+                self._state.status,
+                self._state.completed_at,
+                self._state.keywords_completed,
+                self._state.current_keyword_index,
+                self._state.companies_found,
+                self._state.companies_new,
+                self._state.requests_used,
+                json.dumps(self._state.checkpoint_data),
+                self._state.last_error,
+                self._state.error_count,
+                self._state.job_id,
+            ),
+        )
         self.db.conn.commit()
 
     def _get_last_incomplete_job(self) -> Optional[DiscoveryJobState]:
@@ -199,20 +206,20 @@ class DiscoveryJob:
 
         if row:
             return DiscoveryJobState(
-                job_id=row['id'],
-                job_type=row['job_type'],
-                started_at=row['started_at'],
-                completed_at=row['completed_at'],
-                status=row['status'],
-                keywords_total=row['keywords_total'],
-                keywords_completed=row['keywords_completed'],
-                current_keyword_index=row['current_keyword_index'],
-                companies_found=row['companies_found'],
-                companies_new=row['companies_new'],
-                requests_used=row['requests_used'],
-                checkpoint_data=json.loads(row['checkpoint_data'] or '{}'),
-                last_error=row['last_error'],
-                error_count=row['error_count'],
+                job_id=row["id"],
+                job_type=row["job_type"],
+                started_at=row["started_at"],
+                completed_at=row["completed_at"],
+                status=row["status"],
+                keywords_total=row["keywords_total"],
+                keywords_completed=row["keywords_completed"],
+                current_keyword_index=row["current_keyword_index"],
+                companies_found=row["companies_found"],
+                companies_new=row["companies_new"],
+                requests_used=row["requests_used"],
+                checkpoint_data=json.loads(row["checkpoint_data"] or "{}"),
+                last_error=row["last_error"],
+                error_count=row["error_count"],
             )
         return None
 
@@ -244,13 +251,11 @@ class DiscoveryJob:
             city=result.state,  # Use state as city approximation
             ai_relevance_score=filter_result.relevance_score,
         )
-        classification = self.startup_scorer.classify(
-            startup_result,
-            ai_relevance_score=filter_result.relevance_score
-        )
+        classification = self.startup_scorer.classify(startup_result, ai_relevance_score=filter_result.relevance_score)
 
         # Extract legal form from company name
         from processing.filters import extract_legal_form
+
         legal_form = extract_legal_form(result.name)
 
         # Calculate brand name score
@@ -260,7 +265,7 @@ class DiscoveryJob:
         company_id = self.db.insert_company(
             company_number=f"bundesapi_{hash(result.native_company_number) & 0xFFFFFFFF:08x}",
             name=result.name,
-            source='bundesapi',
+            source="bundesapi",
             native_company_number=result.native_company_number,
             current_status=result.status,
             registry_court=result.registry_court,
@@ -279,12 +284,11 @@ class DiscoveryJob:
 
         # Add to enrichment queue — boost priority for brand-name startups
         priority = 0 if brand_result.is_likely_tech_startup else 1
-        self.db.add_to_enrichment_queue(company_id, priority=priority, reason='new_from_bundesapi')
+        self.db.add_to_enrichment_queue(company_id, priority=priority, reason="new_from_bundesapi")
 
         self._state.companies_new += 1
         logger.info(
-            "New company: %s (AI score: %d, startup: %s)",
-            result.name, filter_result.relevance_score, classification
+            "New company: %s (AI score: %d, startup: %s)", result.name, filter_result.relevance_score, classification
         )
 
         return True
@@ -306,8 +310,9 @@ class DiscoveryJob:
         if resume:
             existing_job = self._get_last_incomplete_job()
             if existing_job:
-                logger.info("Resuming job %d from keyword index %d",
-                           existing_job.job_id, existing_job.current_keyword_index)
+                logger.info(
+                    "Resuming job %d from keyword index %d", existing_job.job_id, existing_job.current_keyword_index
+                )
                 self._state = existing_job
 
         # Create new job if not resuming
@@ -316,7 +321,7 @@ class DiscoveryJob:
             self._state = DiscoveryJobState(
                 job_id=job_id,
                 started_at=datetime.utcnow().isoformat(),
-                status='running',
+                status="running",
                 keywords_total=len(self.keywords),
             )
 
@@ -332,22 +337,21 @@ class DiscoveryJob:
                 rate_state = self.rate_limiter.get_state()
                 if rate_state.tokens_available < 2:  # Need at least 2 tokens (init + search)
                     logger.info("Insufficient rate limit tokens, pausing job")
-                    self._state.checkpoint_data['paused_reason'] = 'rate_limit'
+                    self._state.checkpoint_data["paused_reason"] = "rate_limit"
                     self._update_job_state()
                     break
 
                 # Check max requests for this run
                 if self._state.requests_used >= self.max_requests:
                     logger.info("Reached max requests for this run (%d)", self.max_requests)
-                    self._state.checkpoint_data['paused_reason'] = 'max_requests'
+                    self._state.checkpoint_data["paused_reason"] = "max_requests"
                     self._update_job_state()
                     break
 
                 # Update checkpoint
                 self._state.current_keyword_index = i
 
-                logger.info("Searching keyword %d/%d: %s",
-                           i + 1, len(self.keywords), keyword)
+                logger.info("Searching keyword %d/%d: %s", i + 1, len(self.keywords), keyword)
 
                 try:
                     # Acquire rate limit token
@@ -361,7 +365,7 @@ class DiscoveryJob:
                     results_count = 0
                     for result in self.source.search(
                         keywords=[keyword],
-                        keyword_mode='all',
+                        keyword_mode="all",
                         max_results=50,
                     ):
                         results_count += 1
@@ -379,7 +383,7 @@ class DiscoveryJob:
                     # Continue to next keyword unless too many errors
                     if self._state.error_count >= 5:
                         logger.error("Too many errors, stopping job")
-                        self._state.status = 'failed'
+                        self._state.status = "failed"
                         break
 
                 # Save progress periodically
@@ -387,26 +391,26 @@ class DiscoveryJob:
 
             # Mark job as completed if we processed all keywords
             if self._state.current_keyword_index >= len(self.keywords) - 1:
-                self._state.status = 'completed'
+                self._state.status = "completed"
                 self._state.completed_at = datetime.utcnow().isoformat()
 
         except Exception as e:
             logger.exception("Job failed with error: %s", e)
-            self._state.status = 'failed'
+            self._state.status = "failed"
             self._state.last_error = str(e)
 
         finally:
             self._update_job_state()
 
         return {
-            'job_id': self._state.job_id,
-            'status': self._state.status,
-            'keywords_completed': self._state.keywords_completed,
-            'keywords_total': self._state.keywords_total,
-            'companies_found': self._state.companies_found,
-            'companies_new': self._state.companies_new,
-            'requests_used': self._state.requests_used,
-            'errors': self._state.error_count,
+            "job_id": self._state.job_id,
+            "status": self._state.status,
+            "keywords_completed": self._state.keywords_completed,
+            "keywords_total": self._state.keywords_total,
+            "companies_found": self._state.companies_found,
+            "companies_new": self._state.companies_new,
+            "requests_used": self._state.requests_used,
+            "errors": self._state.error_count,
         }
 
 

@@ -11,15 +11,15 @@ Notifications are sent for:
 - Errors and failures
 """
 
-import os
-import json
 import logging
+import os
 import smtplib
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
-from datetime import datetime
-from typing import List, Dict, Optional, Any
 from dataclasses import dataclass
+from datetime import datetime
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+from typing import Any, Dict, List, Optional
+
 import requests
 
 logger = logging.getLogger(__name__)
@@ -28,6 +28,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class NotificationConfig:
     """Configuration for notifications."""
+
     slack_webhook_url: Optional[str] = None
     smtp_host: Optional[str] = None
     smtp_port: int = 587
@@ -36,15 +37,15 @@ class NotificationConfig:
     alert_email: Optional[str] = None
 
     @classmethod
-    def from_env(cls) -> 'NotificationConfig':
+    def from_env(cls) -> "NotificationConfig":
         """Load configuration from environment variables."""
         return cls(
-            slack_webhook_url=os.getenv('SLACK_WEBHOOK_URL'),
-            smtp_host=os.getenv('SMTP_HOST'),
-            smtp_port=int(os.getenv('SMTP_PORT', '587')),
-            smtp_user=os.getenv('SMTP_USER'),
-            smtp_password=os.getenv('SMTP_PASSWORD'),
-            alert_email=os.getenv('ALERT_EMAIL'),
+            slack_webhook_url=os.getenv("SLACK_WEBHOOK_URL"),
+            smtp_host=os.getenv("SMTP_HOST"),
+            smtp_port=int(os.getenv("SMTP_PORT", "587")),
+            smtp_user=os.getenv("SMTP_USER"),
+            smtp_password=os.getenv("SMTP_PASSWORD"),
+            alert_email=os.getenv("ALERT_EMAIL"),
         )
 
 
@@ -68,9 +69,9 @@ class NotificationService:
             return False
 
         try:
-            payload = {'text': message}
+            payload = {"text": message}
             if blocks:
-                payload['blocks'] = blocks
+                payload["blocks"] = blocks
 
             response = requests.post(
                 self.config.slack_webhook_url,
@@ -86,19 +87,18 @@ class NotificationService:
 
     def _send_email(self, subject: str, body: str, html: Optional[str] = None) -> bool:
         """Send email notification."""
-        if not all([self.config.smtp_host, self.config.smtp_user,
-                   self.config.smtp_password, self.config.alert_email]):
+        if not all([self.config.smtp_host, self.config.smtp_user, self.config.smtp_password, self.config.alert_email]):
             return False
 
         try:
-            msg = MIMEMultipart('alternative')
-            msg['Subject'] = subject
-            msg['From'] = self.config.smtp_user
-            msg['To'] = self.config.alert_email
+            msg = MIMEMultipart("alternative")
+            msg["Subject"] = subject
+            msg["From"] = self.config.smtp_user
+            msg["To"] = self.config.alert_email
 
-            msg.attach(MIMEText(body, 'plain'))
+            msg.attach(MIMEText(body, "plain"))
             if html:
-                msg.attach(MIMEText(html, 'html'))
+                msg.attach(MIMEText(html, "html"))
 
             with smtplib.SMTP(self.config.smtp_host, self.config.smtp_port) as server:
                 server.starttls()
@@ -125,11 +125,11 @@ class NotificationService:
         - AI score >= 3 (significant AI relevance)
         - OR startup classification == 'startup'
         """
-        if ai_score < 3 and startup_classification != 'startup':
+        if ai_score < 3 and startup_classification != "startup":
             return  # Don't notify for low-score companies
 
         location = f" ({city})" if city else ""
-        emoji = "🚀" if startup_classification == 'startup' else "🔬"
+        emoji = "🚀" if startup_classification == "startup" else "🔬"
 
         message = (
             f"{emoji} *New AI/Robotics Company Discovered*\n\n"
@@ -140,14 +140,14 @@ class NotificationService:
         self._send_slack(message)
 
         # Email for high-priority discoveries
-        if ai_score >= 4 or startup_classification == 'startup':
+        if ai_score >= 4 or startup_classification == "startup":
             self._send_email(
                 subject=f"[Handelsregister] New {startup_classification}: {company_name}",
                 body=f"""
 New AI/Robotics Company Discovered
 
 Company: {company_name}
-Location: {city or 'Unknown'}
+Location: {city or "Unknown"}
 AI Score: {ai_score}
 Classification: {startup_classification}
 
@@ -162,10 +162,10 @@ View in database for more details.
         Args:
             stats: Dictionary with summary statistics
         """
-        new_companies = stats.get('new_companies', 0)
-        total_companies = stats.get('total_companies', 0)
-        backfill_progress = stats.get('backfill_progress', 0)
-        requests_used = stats.get('requests_used', 0)
+        new_companies = stats.get("new_companies", 0)
+        total_companies = stats.get("total_companies", 0)
+        backfill_progress = stats.get("backfill_progress", 0)
+        requests_used = stats.get("requests_used", 0)
 
         message = (
             f"📊 *Handelsregister Daily Summary*\n\n"
@@ -177,7 +177,7 @@ View in database for more details.
 
         self._send_slack(message)
 
-    def notify_error(self, error_message: str, job_type: str = 'unknown'):
+    def notify_error(self, error_message: str, job_type: str = "unknown"):
         """
         Send error notification.
 
@@ -231,9 +231,9 @@ Handelsregister Backfill Complete
 The historical backfill of the Handelsregister database is now complete.
 
 Statistics:
-- Total combinations searched: {stats.get('total_combinations', 0):,}
-- Companies found: {stats.get('companies_found', 0):,}
-- New companies added: {stats.get('companies_new', 0):,}
+- Total combinations searched: {stats.get("total_combinations", 0):,}
+- Companies found: {stats.get("companies_found", 0):,}
+- New companies added: {stats.get("companies_new", 0):,}
 
 The scheduler will now continue with regular discovery jobs.
             """,
@@ -259,9 +259,7 @@ def notify_new_company(
     city: Optional[str] = None,
 ):
     """Convenience function to notify about new company."""
-    get_notification_service().notify_new_company(
-        company_name, ai_score, startup_classification, city
-    )
+    get_notification_service().notify_new_company(company_name, ai_score, startup_classification, city)
 
 
 def notify_daily_summary(stats: Dict[str, Any]):
@@ -269,6 +267,6 @@ def notify_daily_summary(stats: Dict[str, Any]):
     get_notification_service().notify_daily_summary(stats)
 
 
-def notify_error(error_message: str, job_type: str = 'unknown'):
+def notify_error(error_message: str, job_type: str = "unknown"):
     """Convenience function for error notification."""
     get_notification_service().notify_error(error_message, job_type)

@@ -1,6 +1,6 @@
 """Data source adapters for Handelsregister scraping."""
 
-from .offeneregister import OffeneRegisterSource
 from .bundesapi import BundesAPISource
+from .offeneregister import OffeneRegisterSource
 
-__all__ = ['OffeneRegisterSource', 'BundesAPISource']
+__all__ = ["OffeneRegisterSource", "BundesAPISource"]

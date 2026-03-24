@@ -9,17 +9,17 @@ Monitors RSS feeds from German startup media outlets to:
 Free data source - no API limits.
 """
 
-import re
-import logging
 import hashlib
-from datetime import datetime, timedelta
-from typing import List, Dict, Optional, Iterator, Tuple
-from dataclasses import dataclass, field
+import logging
+import re
 import xml.etree.ElementTree as ET
+from dataclasses import dataclass
+from datetime import datetime
+from typing import Dict, List, Optional, Tuple
 
 try:
-    import urllib.request
     import urllib.error
+    import urllib.request
 except ImportError:
     pass
 
@@ -29,6 +29,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class NewsArticle:
     """A news article from RSS feed."""
+
     title: str
     url: str
     published_date: Optional[str]
@@ -40,6 +41,7 @@ class NewsArticle:
 @dataclass
 class FundingMention:
     """A funding-related mention extracted from news."""
+
     company_name: str
     investors: List[str]
     amount: Optional[float]
@@ -56,136 +58,130 @@ class FundingMention:
 DEFAULT_RSS_FEEDS = [
     # === Core German Startup News ===
     {
-        'name': 'Gruenderszene',
-        'url': 'https://www.gruenderszene.de/feed',
-        'type': 'startup_news',
+        "name": "Gruenderszene",
+        "url": "https://www.gruenderszene.de/feed",
+        "type": "startup_news",
     },
     {
-        'name': 't3n',
-        'url': 'https://t3n.de/rss.xml',
-        'type': 'tech_news',
+        "name": "t3n",
+        "url": "https://t3n.de/rss.xml",
+        "type": "tech_news",
     },
     {
-        'name': 'deutsche-startups',
-        'url': 'https://www.deutsche-startups.de/feed/',
-        'type': 'startup_news',
+        "name": "deutsche-startups",
+        "url": "https://www.deutsche-startups.de/feed/",
+        "type": "startup_news",
     },
     {
-        'name': 'Sonnenseite',
-        'url': 'https://www.sonnenseite.com/feed/',
-        'type': 'climate_news',
+        "name": "Sonnenseite",
+        "url": "https://www.sonnenseite.com/feed/",
+        "type": "climate_news",
     },
     {
-        'name': 'Munich Startup',
-        'url': 'https://www.munich-startup.de/feed/',
-        'type': 'startup_news',
+        "name": "Munich Startup",
+        "url": "https://www.munich-startup.de/feed/",
+        "type": "startup_news",
     },
     {
-        'name': 'Startbase',
-        'url': 'https://www.startbase.com/feed/',
-        'type': 'startup_news',
+        "name": "Startbase",
+        "url": "https://www.startbase.com/feed/",
+        "type": "startup_news",
     },
     {
-        'name': 'Hamburg Startups',
-        'url': 'https://www.hamburg-startups.net/feed/',
-        'type': 'startup_news',
+        "name": "Hamburg Startups",
+        "url": "https://www.hamburg-startups.net/feed/",
+        "type": "startup_news",
     },
-
     # === VC / Deal News ===
     {
-        'name': 'VC Magazine',
-        'url': 'https://www.vc-magazin.de/feed/',
-        'type': 'vc_news',
+        "name": "VC Magazine",
+        "url": "https://www.vc-magazin.de/feed/",
+        "type": "vc_news",
     },
     {
-        'name': 'Finance Forward',
-        'url': 'https://financefwd.com/de/feed/',
-        'type': 'fintech_news',
+        "name": "Finance Forward",
+        "url": "https://financefwd.com/de/feed/",
+        "type": "fintech_news",
     },
-
     # === Tech & Innovation ===
     {
-        'name': 'Heise Online',
-        'url': 'https://www.heise.de/rss/heise-atom.xml',
-        'type': 'tech_news',
+        "name": "Heise Online",
+        "url": "https://www.heise.de/rss/heise-atom.xml",
+        "type": "tech_news",
     },
     {
-        'name': 'Golem.de',
-        'url': 'https://rss.golem.de/rss.php?feed=ATOM1.0',
-        'type': 'tech_news',
+        "name": "Golem.de",
+        "url": "https://rss.golem.de/rss.php?feed=ATOM1.0",
+        "type": "tech_news",
     },
     {
-        'name': 'Computerbase',
-        'url': 'https://www.computerbase.de/rss/news.xml',
-        'type': 'tech_news',
+        "name": "Computerbase",
+        "url": "https://www.computerbase.de/rss/news.xml",
+        "type": "tech_news",
     },
-
     # === Climate / Energy / Sustainability ===
     {
-        'name': 'Cleanthinking',
-        'url': 'https://www.cleanthinking.de/feed/',
-        'type': 'climate_news',
+        "name": "Cleanthinking",
+        "url": "https://www.cleanthinking.de/feed/",
+        "type": "climate_news",
     },
     {
-        'name': 'Edison Media',
-        'url': 'https://edison.media/feed/',
-        'type': 'energy_news',
+        "name": "Edison Media",
+        "url": "https://edison.media/feed/",
+        "type": "energy_news",
     },
     {
-        'name': 'PV Magazine DE',
-        'url': 'https://www.pv-magazine.de/feed/',
-        'type': 'energy_news',
+        "name": "PV Magazine DE",
+        "url": "https://www.pv-magazine.de/feed/",
+        "type": "energy_news",
     },
     {
-        'name': 'Electrive',
-        'url': 'https://www.electrive.net/feed/',
-        'type': 'emobility_news',
+        "name": "Electrive",
+        "url": "https://www.electrive.net/feed/",
+        "type": "emobility_news",
     },
     {
-        'name': 'H2 View',
-        'url': 'https://www.h2-view.com/feed/',
-        'type': 'hydrogen_news',
+        "name": "H2 View",
+        "url": "https://www.h2-view.com/feed/",
+        "type": "hydrogen_news",
     },
-
     # === European Startup Ecosystem ===
     {
-        'name': 'Tech.eu',
-        'url': 'https://tech.eu/feed/',
-        'type': 'startup_news',
+        "name": "Tech.eu",
+        "url": "https://tech.eu/feed/",
+        "type": "startup_news",
     },
     {
-        'name': 'Sifted',
-        'url': 'https://sifted.eu/feed',
-        'type': 'startup_news',
+        "name": "Sifted",
+        "url": "https://sifted.eu/feed",
+        "type": "startup_news",
     },
-
     # === AI / Robotics Specific ===
     {
-        'name': 'The Decoder',
-        'url': 'https://the-decoder.de/feed/',
-        'type': 'ai_news',
+        "name": "The Decoder",
+        "url": "https://the-decoder.de/feed/",
+        "type": "ai_news",
     },
     {
-        'name': 'Autonomes Fahren',
-        'url': 'https://www.autonomes-fahren.de/feed/',
-        'type': 'robotics_news',
+        "name": "Autonomes Fahren",
+        "url": "https://www.autonomes-fahren.de/feed/",
+        "type": "robotics_news",
     },
-
     # === Early Stage / Grants / Spinoffs ===
     {
-        'name': 'Startupdetector',
-        'url': 'https://startupdetector.de/feed/',
-        'type': 'early_stage_news',
+        "name": "Startupdetector",
+        "url": "https://startupdetector.de/feed/",
+        "type": "early_stage_news",
     },
     {
-        'name': 'Gruenderkueche',
-        'url': 'https://www.gruenderkueche.de/feed/',
-        'type': 'early_stage_news',
+        "name": "Gruenderkueche",
+        "url": "https://www.gruenderkueche.de/feed/",
+        "type": "early_stage_news",
     },
     {
-        'name': 'VDI Nachrichten',
-        'url': 'https://www.vdi-nachrichten.com/feed/',
-        'type': 'research_news',
+        "name": "VDI Nachrichten",
+        "url": "https://www.vdi-nachrichten.com/feed/",
+        "type": "research_news",
     },
 ]
 
@@ -193,170 +189,161 @@ DEFAULT_RSS_FEEDS = [
 # Each is (regex_pattern, weight). An article needs score >= 2 to count.
 FUNDING_SIGNALS = [
     # Strong signals - actual funding events
-    (r'\berhält\s+\d+\s*(?:Millionen|Mio)', 3),
-    (r'\bsammelt\s+\d+\s*(?:Millionen|Mio)', 3),
-    (r'\beingesammelt\b', 3),
-    (r'\braised?\b.*\d+\s*(?:million|m)\b', 3),
-    (r'\bfinanzierungsrunde\b', 3),
-    (r'\bkapitalerhöhung\b', 3),
-    (r'\bseries\s+[a-d]\b', 3),
-    (r'\b(?:pre-?)?seed(?:-?runde| round)\b', 3),
-    (r'#DealMonitor\b', 3),
-
+    (r"\berhält\s+\d+\s*(?:Millionen|Mio)", 3),
+    (r"\bsammelt\s+\d+\s*(?:Millionen|Mio)", 3),
+    (r"\beingesammelt\b", 3),
+    (r"\braised?\b.*\d+\s*(?:million|m)\b", 3),
+    (r"\bfinanzierungsrunde\b", 3),
+    (r"\bkapitalerhöhung\b", 3),
+    (r"\bseries\s+[a-d]\b", 3),
+    (r"\b(?:pre-?)?seed(?:-?runde| round)\b", 3),
+    (r"#DealMonitor\b", 3),
     # Medium signals - likely funding context
-    (r'\d+\s*(?:Millionen|Mio\.?)\b.*\b(?:einsammeln|investier|finanzier)', 2),
-    (r'\bfunding\b', 2),
-    (r'\bwachstumsfinanzierung\b', 2),
-    (r'\brisikokapital\b', 2),
-    (r'\bneuer?\s+Fonds\b', 2),
-
+    (r"\d+\s*(?:Millionen|Mio\.?)\b.*\b(?:einsammeln|investier|finanzier)", 2),
+    (r"\bfunding\b", 2),
+    (r"\bwachstumsfinanzierung\b", 2),
+    (r"\brisikokapital\b", 2),
+    (r"\bneuer?\s+Fonds\b", 2),
     # Climate funding signals
-    (r'\bklima(?:fonds|finanzierung|investition)\b', 2),
-    (r'\bgreen\s+(?:bond|funding|investment)\b', 2),
-    (r'\bimpact\s+(?:invest|fund)', 2),
-
+    (r"\bklima(?:fonds|finanzierung|investition)\b", 2),
+    (r"\bgreen\s+(?:bond|funding|investment)\b", 2),
+    (r"\bimpact\s+(?:invest|fund)", 2),
     # Grant/stipendium/early-stage signals
-    (r'\bEXIST[- ](?:Gründerstipendium|Forschungstransfer)\b', 3),
-    (r'\bGründerstipendium\b', 3),
-    (r'\bGründerpreis\b', 2),
-    (r'\bFörder(?:ung|bescheid|mittel|programm)\b', 2),
-    (r'\bstipendium\b', 2),
-    (r'\bBMBF[- ](?:Förderung|Projekt)\b', 2),
-    (r'\bBMWK?i?[- ](?:Förderung|Programm)\b', 2),
-    (r'\bHTGF\b', 2),
-    (r'\bHigh-Tech Gründerfonds\b', 3),
-    (r'\bangel\s+(?:round|runde|invest)', 2),
-    (r'\bbusiness\s+angel\b', 1),
-    (r'\bpre-?seed\b', 2),
-    (r'\baccelerator\b', 1),
-    (r'\binkubator\b', 1),
-    (r'\bAusgründung\b', 2),
-    (r'\bspin-?off\b', 2),
-    (r'\buniversitäts?-?(?:startup|gründung|ausgründung)\b', 2),
-    (r'\bEIC\s+(?:Accelerator|Pathfinder)\b', 2),
-
+    (r"\bEXIST[- ](?:Gründerstipendium|Forschungstransfer)\b", 3),
+    (r"\bGründerstipendium\b", 3),
+    (r"\bGründerpreis\b", 2),
+    (r"\bFörder(?:ung|bescheid|mittel|programm)\b", 2),
+    (r"\bstipendium\b", 2),
+    (r"\bBMBF[- ](?:Förderung|Projekt)\b", 2),
+    (r"\bBMWK?i?[- ](?:Förderung|Programm)\b", 2),
+    (r"\bHTGF\b", 2),
+    (r"\bHigh-Tech Gründerfonds\b", 3),
+    (r"\bangel\s+(?:round|runde|invest)", 2),
+    (r"\bbusiness\s+angel\b", 1),
+    (r"\bpre-?seed\b", 2),
+    (r"\baccelerator\b", 1),
+    (r"\binkubator\b", 1),
+    (r"\bAusgründung\b", 2),
+    (r"\bspin-?off\b", 2),
+    (r"\buniversitäts?-?(?:startup|gründung|ausgründung)\b", 2),
+    (r"\bEIC\s+(?:Accelerator|Pathfinder)\b", 2),
     # Weak signals - need multiple to count
-    (r'\bventure\s+capital\b', 1),
-    (r'\binvestition\b', 1),
-    (r'\bbeteiligung\b', 1),
-    (r'\binvestor(?:en)?\b', 1),
+    (r"\bventure\s+capital\b", 1),
+    (r"\binvestition\b", 1),
+    (r"\bbeteiligung\b", 1),
+    (r"\binvestor(?:en)?\b", 1),
 ]
 
 # Keywords indicating AI/robotics - use word boundaries to avoid false matches
 AI_ROBOTICS_PATTERNS = [
     # === AI Core ===
-    r'\bkünstliche(?:r|n|s)?\s+intelligenz\b',
-    r'\b(?:K|k)(?:I|i)[-\s](?:Startup|Unternehmen|Firma|Tool|Agent|Model|System|Funktion)',
-    r'\bartificial\s+intelligence\b',
-    r'\bmachine\s+learning\b',
-    r'\bmaschinelles\s+lernen\b',
-    r'\bdeep\s+learning\b',
-    r'\bgenerative\s+(?:ai|ki)\b',
-    r'\blarge\s+language\s+model\b',
-    r'\bfoundation\s+model\b',
-    r'\bdiffusion\s+model\b',
-    r'\btext-to-(?:image|video)\b',
-    r'\bagentic\s+ai\b',
-    r'\bai\s+agent\b',
-    r'\bKI-\w+',  # KI-Startup, KI-Firma, KI-Agenten, etc.
-    r'\bAI\b',
-    r'\.ai\b',
-
+    r"\bkünstliche(?:r|n|s)?\s+intelligenz\b",
+    r"\b(?:K|k)(?:I|i)[-\s](?:Startup|Unternehmen|Firma|Tool|Agent|Model|System|Funktion)",
+    r"\bartificial\s+intelligence\b",
+    r"\bmachine\s+learning\b",
+    r"\bmaschinelles\s+lernen\b",
+    r"\bdeep\s+learning\b",
+    r"\bgenerative\s+(?:ai|ki)\b",
+    r"\blarge\s+language\s+model\b",
+    r"\bfoundation\s+model\b",
+    r"\bdiffusion\s+model\b",
+    r"\btext-to-(?:image|video)\b",
+    r"\bagentic\s+ai\b",
+    r"\bai\s+agent\b",
+    r"\bKI-\w+",  # KI-Startup, KI-Firma, KI-Agenten, etc.
+    r"\bAI\b",
+    r"\.ai\b",
     # === NLP / Language AI ===
-    r'\bnlp\b',
-    r'\bchatbot\b',
-    r'\bllm\b',
-    r'\bconversational\s+ai\b',
-    r'\bsprachverarbeitung\b',
-    r'\bspracherkennung\b',
-    r'\bspeech\s+recognition\b',
-    r'\btext\s+mining\b',
-    r'\bretrieval\s+augmented\s+generation\b',
-    r'\brag\b',
-    r'\bvector\s+database\b',
-
+    r"\bnlp\b",
+    r"\bchatbot\b",
+    r"\bllm\b",
+    r"\bconversational\s+ai\b",
+    r"\bsprachverarbeitung\b",
+    r"\bspracherkennung\b",
+    r"\bspeech\s+recognition\b",
+    r"\btext\s+mining\b",
+    r"\bretrieval\s+augmented\s+generation\b",
+    r"\brag\b",
+    r"\bvector\s+database\b",
     # === Computer Vision ===
-    r'\bcomputer\s+vision\b',
-    r'\bbildverarbeitung\b',
-    r'\bbilderkennung\b',
-    r'\bobjekterkennung\b',
-    r'\bgesichtserkennung\b',
-    r'\blidar\b',
-    r'\bmachine\s+vision\b',
-    r'\bvideo\s*analytics\b',
-
+    r"\bcomputer\s+vision\b",
+    r"\bbildverarbeitung\b",
+    r"\bbilderkennung\b",
+    r"\bobjekterkennung\b",
+    r"\bgesichtserkennung\b",
+    r"\blidar\b",
+    r"\bmachine\s+vision\b",
+    r"\bvideo\s*analytics\b",
     # === Robotics ===
-    r'\brobotik\b',
-    r'\brobotics\b',
-    r'\brobotic\b',
-    r'\brobot\b',
-    r'\bcobot\b',
-    r'\bhumanoide?\b',
-    r'\bexoskelett\b',
-    r'\bdrone\b',
-    r'\bdrohne\b',
-    r'\buav\b',
-    r'\bserviceroboter\b',
-    r'\bindustrieroboter\b',
-
+    r"\brobotik\b",
+    r"\brobotics\b",
+    r"\brobotic\b",
+    r"\brobot\b",
+    r"\bcobot\b",
+    r"\bhumanoide?\b",
+    r"\bexoskelett\b",
+    r"\bdrone\b",
+    r"\bdrohne\b",
+    r"\buav\b",
+    r"\bserviceroboter\b",
+    r"\bindustrieroboter\b",
     # === Autonomous / Process Automation ===
-    r'\bautonome\s+(?:systeme|fahrzeuge|fahren)\b',
-    r'\bselbstfahrend\b',
-    r'\brpa\b',
-    r'\bprocess\s+automation\b',
-    r'\brobotic\s+process\s+automation\b',
-    r'\bindustrial\s+automation\b',
-    r'\bindustrie\s+4\.0\b',
-    r'\bsmart\s+factory\b',
-    r'\bdigital(?:er)?\s+zwilling\b',
-    r'\bdigital\s+twin\b',
-
+    r"\bautonome\s+(?:systeme|fahrzeuge|fahren)\b",
+    r"\bselbstfahrend\b",
+    r"\brpa\b",
+    r"\bprocess\s+automation\b",
+    r"\brobotic\s+process\s+automation\b",
+    r"\bindustrial\s+automation\b",
+    r"\bindustrie\s+4\.0\b",
+    r"\bsmart\s+factory\b",
+    r"\bdigital(?:er)?\s+zwilling\b",
+    r"\bdigital\s+twin\b",
     # === Data Science / ML ===
-    r'\bdata\s+science\b',
-    r'\bpredictive\s+(?:analytics|maintenance)\b',
-    r'\banomaly\s+detection\b',
-    r'\bmlops\b',
-    r'\bautoml\b',
-    r'\bedge\s+ai\b',
+    r"\bdata\s+science\b",
+    r"\bpredictive\s+(?:analytics|maintenance)\b",
+    r"\banomaly\s+detection\b",
+    r"\bmlops\b",
+    r"\bautoml\b",
+    r"\bedge\s+ai\b",
 ]
 
 # Keywords indicating climate tech / cleantech
 CLIMATE_PATTERNS = [
-    r'\bcleantech\b',
-    r'\bgreentech\b',
-    r'\bclimate\s*tech\b',
-    r'\bklimatechnologie\b',
-    r'\berneuerbare\s+energie\b',
-    r'\brenewable\s+energy\b',
-    r'\bphotovoltaik\b',
-    r'\bsolar(?:energie|energy|panel|modul)\b',
-    r'\bwindenergie\b',
-    r'\bwind\s+(?:energy|turbine|kraft)\b',
-    r'\bwasserstoff\b',
-    r'\bhydrogen\b',
-    r'\bgrüne(?:r|n|s)?\s+wasserstoff\b',
-    r'\bgreen\s+hydrogen\b',
-    r'\bbrennstoffzelle\b',
-    r'\bfuel\s+cell\b',
-    r'\belektromobilität\b',
-    r'\belectric\s+vehicle\b',
-    r'\bladeinfrastruktur\b',
-    r'\benergiespeicher\b',
-    r'\benergy\s+storage\b',
-    r'\bbatterietechnologie\b',
-    r'\bsolid\s+state\s+battery\b',
-    r'\bfestkörperbatterie\b',
-    r'\bcarbon\s+capture\b',
-    r'\bco2-abscheidung\b',
-    r'\bdekarbonisierung\b',
-    r'\bdecarbonization\b',
-    r'\bsmart\s+grid\b',
-    r'\bwärmepumpe\b',
-    r'\bheat\s+pump\b',
-    r'\bgeothermie\b',
-    r'\bagritech\b',
-    r'\bvertical\s+farming\b',
-    r'\bprecision\s+farming\b',
+    r"\bcleantech\b",
+    r"\bgreentech\b",
+    r"\bclimate\s*tech\b",
+    r"\bklimatechnologie\b",
+    r"\berneuerbare\s+energie\b",
+    r"\brenewable\s+energy\b",
+    r"\bphotovoltaik\b",
+    r"\bsolar(?:energie|energy|panel|modul)\b",
+    r"\bwindenergie\b",
+    r"\bwind\s+(?:energy|turbine|kraft)\b",
+    r"\bwasserstoff\b",
+    r"\bhydrogen\b",
+    r"\bgrüne(?:r|n|s)?\s+wasserstoff\b",
+    r"\bgreen\s+hydrogen\b",
+    r"\bbrennstoffzelle\b",
+    r"\bfuel\s+cell\b",
+    r"\belektromobilität\b",
+    r"\belectric\s+vehicle\b",
+    r"\bladeinfrastruktur\b",
+    r"\benergiespeicher\b",
+    r"\benergy\s+storage\b",
+    r"\bbatterietechnologie\b",
+    r"\bsolid\s+state\s+battery\b",
+    r"\bfestkörperbatterie\b",
+    r"\bcarbon\s+capture\b",
+    r"\bco2-abscheidung\b",
+    r"\bdekarbonisierung\b",
+    r"\bdecarbonization\b",
+    r"\bsmart\s+grid\b",
+    r"\bwärmepumpe\b",
+    r"\bheat\s+pump\b",
+    r"\bgeothermie\b",
+    r"\bagritech\b",
+    r"\bvertical\s+farming\b",
+    r"\bprecision\s+farming\b",
 ]
 
 # Combined patterns for backward compatibility
@@ -364,53 +351,105 @@ AI_ROBOTICS_CLIMATE_PATTERNS = AI_ROBOTICS_PATTERNS + CLIMATE_PATTERNS
 
 # Patterns for early-stage / grant / university spinoff detection
 EARLY_STAGE_PATTERNS = [
-    r'\bEXIST[- ]?(?:Gründerstipendium|Forschungstransfer|Gründungskultur)\b',
-    r'\bGründerstipendium\b',
-    r'\bGründerpreis\b',
-    r'\bstartup[- ]?stipendium\b',
-    r'\bFörder(?:ung|bescheid|mittel|programm)\b',
-    r'\bBMBF\b',
-    r'\bBMWK?\b',
-    r'\bHTGF\b',
-    r'\bHigh-Tech\s+Gründerfonds\b',
-    r'\bpre-?seed\b',
-    r'\bangel[- ](?:round|runde|invest|funding)\b',
-    r'\bbusiness\s+angels?\b',
-    r'\baccelerator(?:-?programm)?\b',
-    r'\binkubator\b',
-    r'\bincubator\b',
-    r'\bAusgründung\b',
-    r'\bspin-?off\b',
-    r'\buni(?:versitäts?)?[- ]?(?:startup|gründung|ausgründung|spinoff)\b',
-    r'\bForschungstransfer\b',
-    r'\bTechnologietransfer\b',
-    r'\bEIC\s+(?:Accelerator|Pathfinder)\b',
-    r'\bHorizon\s+(?:Europe|2020)\b',
-    r'\bINVEST[- ]Zuschuss\b',
-    r'\bERP[- ]Gründerkredit\b',
-    r'\bZIM[- ]Förderung\b',
-    r'\bGründerwettbewerb\b',
-    r'\bfrühphasen(?:finanzierung|investor|kapital)\b',
-    r'\bearly[- ]?stage\b',
-    r'\bfounders?\s+(?:program|programm|grant|stipend)\b',
-    r'\bCyber\s+Valley\b',
-    r'\bUnternehmerTUM\b',
-    r'\bFraunhofer\s+Venture\b',
-    r'\bMax\s+Planck\s+Innovation\b',
+    r"\bEXIST[- ]?(?:Gründerstipendium|Forschungstransfer|Gründungskultur)\b",
+    r"\bGründerstipendium\b",
+    r"\bGründerpreis\b",
+    r"\bstartup[- ]?stipendium\b",
+    r"\bFörder(?:ung|bescheid|mittel|programm)\b",
+    r"\bBMBF\b",
+    r"\bBMWK?\b",
+    r"\bHTGF\b",
+    r"\bHigh-Tech\s+Gründerfonds\b",
+    r"\bpre-?seed\b",
+    r"\bangel[- ](?:round|runde|invest|funding)\b",
+    r"\bbusiness\s+angels?\b",
+    r"\baccelerator(?:-?programm)?\b",
+    r"\binkubator\b",
+    r"\bincubator\b",
+    r"\bAusgründung\b",
+    r"\bspin-?off\b",
+    r"\buni(?:versitäts?)?[- ]?(?:startup|gründung|ausgründung|spinoff)\b",
+    r"\bForschungstransfer\b",
+    r"\bTechnologietransfer\b",
+    r"\bEIC\s+(?:Accelerator|Pathfinder)\b",
+    r"\bHorizon\s+(?:Europe|2020)\b",
+    r"\bINVEST[- ]Zuschuss\b",
+    r"\bERP[- ]Gründerkredit\b",
+    r"\bZIM[- ]Förderung\b",
+    r"\bGründerwettbewerb\b",
+    r"\bfrühphasen(?:finanzierung|investor|kapital)\b",
+    r"\bearly[- ]?stage\b",
+    r"\bfounders?\s+(?:program|programm|grant|stipend)\b",
+    r"\bCyber\s+Valley\b",
+    r"\bUnternehmerTUM\b",
+    r"\bFraunhofer\s+Venture\b",
+    r"\bMax\s+Planck\s+Innovation\b",
 ]
 
 # Words that should NOT be extracted as company names
 GERMAN_STOPWORDS = {
-    'ich', 'du', 'er', 'sie', 'es', 'wir', 'ihr', 'sie',
-    'der', 'die', 'das', 'den', 'dem', 'des', 'ein', 'eine',
-    'vom', 'von', 'zum', 'zur', 'mit', 'bei', 'nach', 'aus',
-    'vor', 'über', 'unter', 'zwischen', 'hinter', 'neben',
-    'warum', 'wie', 'was', 'wer', 'wo', 'wann', 'welche',
-    'diese', 'dieser', 'dieses', 'jeder', 'jede', 'jedes',
-    'anfang', 'ende', 'plötzlich', 'wegen', 'ohne', 'hier',
-    'dort', 'neue', 'neuer', 'neues', 'zwei', 'drei', 'vier',
-    'auktion', 'fortpflanzung', 'narzissmus', 'rechenzentrum',
-    'aufnahme', 'unzufrieden',
+    "ich",
+    "du",
+    "er",
+    "sie",
+    "es",
+    "wir",
+    "ihr",
+    "sie",
+    "der",
+    "die",
+    "das",
+    "den",
+    "dem",
+    "des",
+    "ein",
+    "eine",
+    "vom",
+    "von",
+    "zum",
+    "zur",
+    "mit",
+    "bei",
+    "nach",
+    "aus",
+    "vor",
+    "über",
+    "unter",
+    "zwischen",
+    "hinter",
+    "neben",
+    "warum",
+    "wie",
+    "was",
+    "wer",
+    "wo",
+    "wann",
+    "welche",
+    "diese",
+    "dieser",
+    "dieses",
+    "jeder",
+    "jede",
+    "jedes",
+    "anfang",
+    "ende",
+    "plötzlich",
+    "wegen",
+    "ohne",
+    "hier",
+    "dort",
+    "neue",
+    "neuer",
+    "neues",
+    "zwei",
+    "drei",
+    "vier",
+    "auktion",
+    "fortpflanzung",
+    "narzissmus",
+    "rechenzentrum",
+    "aufnahme",
+    "unzufrieden",
 }
 
 
@@ -427,7 +466,7 @@ class NewsMonitor:
     def __init__(
         self,
         feeds: Optional[List[Dict]] = None,
-        user_agent: str = 'HandelsregisterScraper/1.0',
+        user_agent: str = "HandelsregisterScraper/1.0",
     ):
         self.feeds = feeds or DEFAULT_RSS_FEEDS
         self.user_agent = user_agent
@@ -435,12 +474,9 @@ class NewsMonitor:
     def fetch_feed(self, feed_url: str) -> Optional[str]:
         """Fetch RSS feed content."""
         try:
-            request = urllib.request.Request(
-                feed_url,
-                headers={'User-Agent': self.user_agent}
-            )
+            request = urllib.request.Request(feed_url, headers={"User-Agent": self.user_agent})
             with urllib.request.urlopen(request, timeout=30) as response:
-                return response.read().decode('utf-8')
+                return response.read().decode("utf-8")
         except Exception as e:
             logger.warning("Failed to fetch feed %s: %s", feed_url, e)
             return None
@@ -453,14 +489,14 @@ class NewsMonitor:
             root = ET.fromstring(xml_content)
 
             # Try RSS format first
-            items = root.findall('.//item')
+            items = root.findall(".//item")
 
             # Try Atom format if no RSS items
             if not items:
-                ns = {'atom': 'http://www.w3.org/2005/Atom'}
-                items = root.findall('.//atom:entry', ns)
+                ns = {"atom": "http://www.w3.org/2005/Atom"}
+                items = root.findall(".//atom:entry", ns)
                 if not items:
-                    items = root.findall('.//{http://www.w3.org/2005/Atom}entry')
+                    items = root.findall(".//{http://www.w3.org/2005/Atom}entry")
 
             for item in items:
                 article = self._parse_item(item, source_name)
@@ -474,38 +510,36 @@ class NewsMonitor:
 
     def _parse_item(self, item: ET.Element, source_name: str) -> Optional[NewsArticle]:
         """Parse a single RSS/Atom item."""
-        title = self._get_text(item, 'title')
-        link = self._get_text(item, 'link')
-        pub_date = self._get_text(item, 'pubDate')
-        description = self._get_text(item, 'description')
+        title = self._get_text(item, "title")
+        link = self._get_text(item, "link")
+        pub_date = self._get_text(item, "pubDate")
+        description = self._get_text(item, "description")
 
         # Atom feeds use <link href="..."/> attributes instead of text content
         if not link:
-            for ns_prefix in ['', '{http://www.w3.org/2005/Atom}']:
-                link_elem = item.find(ns_prefix + 'link')
+            for ns_prefix in ["", "{http://www.w3.org/2005/Atom}"]:
+                link_elem = item.find(ns_prefix + "link")
                 if link_elem is not None:
-                    href = link_elem.get('href', '')
+                    href = link_elem.get("href", "")
                     if href:
                         link = href
                         break
 
         if not pub_date:
-            pub_date = self._get_text(item, 'published') or self._get_text(item, 'updated')
+            pub_date = self._get_text(item, "published") or self._get_text(item, "updated")
 
         if not description:
-            description = self._get_text(item, 'summary') or self._get_text(item, 'content')
+            description = self._get_text(item, "summary") or self._get_text(item, "content")
 
         if not title or not link:
             return None
 
         # Strip HTML from description
         if description:
-            description = re.sub(r'<[^>]+>', ' ', description)
-            description = re.sub(r'\s+', ' ', description).strip()
+            description = re.sub(r"<[^>]+>", " ", description)
+            description = re.sub(r"\s+", " ", description).strip()
 
-        content_hash = hashlib.md5(
-            (title + link).encode('utf-8')
-        ).hexdigest()
+        content_hash = hashlib.md5((title + link).encode("utf-8")).hexdigest()
 
         return NewsArticle(
             title=title,
@@ -522,7 +556,7 @@ class NewsMonitor:
         if child is not None and child.text:
             return child.text.strip()
 
-        for ns_prefix in ['', '{http://www.w3.org/2005/Atom}', '{http://purl.org/rss/1.0/}']:
+        for ns_prefix in ["", "{http://www.w3.org/2005/Atom}", "{http://purl.org/rss/1.0/}"]:
             child = element.find(ns_prefix + tag)
             if child is not None and child.text:
                 return child.text.strip()
@@ -534,16 +568,16 @@ class NewsMonitor:
         all_articles = []
 
         for feed in self.feeds:
-            logger.info("Fetching feed: %s", feed['name'])
+            logger.info("Fetching feed: %s", feed["name"])
 
-            content = self.fetch_feed(feed['url'])
+            content = self.fetch_feed(feed["url"])
             if not content:
                 continue
 
-            articles = self.parse_feed(content, feed['name'])
+            articles = self.parse_feed(content, feed["name"])
             all_articles.extend(articles[:max_per_feed])
 
-            logger.info("Got %d articles from %s", len(articles), feed['name'])
+            logger.info("Got %d articles from %s", len(articles), feed["name"])
 
         return all_articles
 
@@ -593,11 +627,11 @@ class NewsMonitor:
         then falls back to generic extraction.
         """
         # Try DealMonitor format first (deutsche-startups)
-        if '#DealMonitor' in (article.title or ''):
+        if "#DealMonitor" in (article.title or ""):
             return self._parse_dealmonitor(article)
 
         # Try StartupTicker format
-        if '#StartupTicker' in (article.title or ''):
+        if "#StartupTicker" in (article.title or ""):
             return self._parse_startup_ticker(article)
 
         # Generic extraction
@@ -613,10 +647,10 @@ class NewsMonitor:
 
         # DealMonitor titles list multiple deals separated by – or +++
         # Extract the first/main deal
-        deals = re.split(r'\s*[–—]\s*|\s*\+\+\+\s*', text)
+        deals = re.split(r"\s*[–—]\s*|\s*\+\+\+\s*", text)
 
         # Name fragment allowing lowercase starts (one.five, co-reactive, etc.)
-        _n = r'[A-Za-z][A-Za-z0-9\.\-]*(?:\s+[A-Za-z][A-Za-z0-9\.\-]+)*'
+        _n = r"[A-Za-z][A-Za-z0-9\.\-]*(?:\s+[A-Za-z][A-Za-z0-9\.\-]+)*"
 
         # Find the first segment with a funding amount
         for deal in deals:
@@ -626,20 +660,20 @@ class NewsMonitor:
 
             # Pattern: "CompanyName erhält/sammelt X Millionen"
             match = re.search(
-                rf'({_n})\s+'
-                r'(?:erhält|sammelt|bekommt|sichert\s+sich|schließt)\s+'
-                r'(\d+(?:[,\.]\d+)?)\s*(?:Millionen|Mio\.?)',
-                deal
+                rf"({_n})\s+"
+                r"(?:erhält|sammelt|bekommt|sichert\s+sich|schließt)\s+"
+                r"(\d+(?:[,\.]\d+)?)\s*(?:Millionen|Mio\.?)",
+                deal,
             )
             if match:
                 company = match.group(1).strip()
                 if self._is_valid_company_name(company):
-                    amount = float(match.group(2).replace(',', '.')) * 1_000_000
+                    amount = float(match.group(2).replace(",", ".")) * 1_000_000
                     return FundingMention(
                         company_name=company,
                         investors=[],
                         amount=amount,
-                        currency='EUR',
+                        currency="EUR",
                         round_type=self._extract_round_type(deal),
                         article_url=article.url,
                         article_title=article.title,
@@ -650,19 +684,19 @@ class NewsMonitor:
 
             # Pattern: "CompanyName sammelt X Millionen ein"
             match = re.search(
-                rf'({_n})\s+'
-                r'sammelt\s+(\d+(?:[,\.]\d+)?)\s*(?:Millionen|Mio\.?)\s+ein',
-                deal
+                rf"({_n})\s+"
+                r"sammelt\s+(\d+(?:[,\.]\d+)?)\s*(?:Millionen|Mio\.?)\s+ein",
+                deal,
             )
             if match:
                 company = match.group(1).strip()
                 if self._is_valid_company_name(company):
-                    amount = float(match.group(2).replace(',', '.')) * 1_000_000
+                    amount = float(match.group(2).replace(",", ".")) * 1_000_000
                     return FundingMention(
                         company_name=company,
                         investors=[],
                         amount=amount,
-                        currency='EUR',
+                        currency="EUR",
                         round_type=self._extract_round_type(deal),
                         article_url=article.url,
                         article_title=article.title,
@@ -683,16 +717,16 @@ class NewsMonitor:
         text = f"{article.title} {article.description or ''}"
 
         # StartupTicker mentions multiple companies with +++
-        segments = re.split(r'\s*\+\+\+\s*', text)
+        segments = re.split(r"\s*\+\+\+\s*", text)
 
         # Return the first company name found
         for segment in segments:
             segment = segment.strip()
             # Skip the header
-            if '#StartupTicker' in segment:
+            if "#StartupTicker" in segment:
                 continue
             # Extract company-like name (allow lowercase starts for modern names)
-            match = re.search(r'([A-Za-z][A-Za-z0-9\.\-]+(?:\s+[A-Za-z][A-Za-z0-9\.\-]+)*)', segment)
+            match = re.search(r"([A-Za-z][A-Za-z0-9\.\-]+(?:\s+[A-Za-z][A-Za-z0-9\.\-]+)*)", segment)
             if match:
                 name = match.group(1).strip()
                 if self._is_valid_company_name(name) and len(name) >= 3:
@@ -750,7 +784,7 @@ class NewsMonitor:
             confidence = 0.5
 
         return FundingMention(
-            company_name=company_name or '',
+            company_name=company_name or "",
             investors=investors,
             amount=amount,
             currency=currency,
@@ -765,42 +799,45 @@ class NewsMonitor:
     def _extract_amount(self, text: str) -> Tuple[Optional[float], Optional[str]]:
         """Extract funding amount from text."""
         # Special case: "die erste Million" = 1M EUR
-        if re.search(r'(?:die\s+)?erste\s+Million\b', text, re.IGNORECASE):
-            return 1_000_000.0, 'EUR'
+        if re.search(r"(?:die\s+)?erste\s+Million\b", text, re.IGNORECASE):
+            return 1_000_000.0, "EUR"
 
         # EUR amounts - with or without explicit currency
         eur_patterns = [
             # "25 Millionen Euro" / "25 Mio. Euro" / "25 Mio. EUR"
-            (r'(\d+(?:[,\.]\d+)?)\s*(?:Millionen|Mio\.?)\s*(?:Euro|EUR|€)', 1_000_000),
+            (r"(\d+(?:[,\.]\d+)?)\s*(?:Millionen|Mio\.?)\s*(?:Euro|EUR|€)", 1_000_000),
             # "€25 Millionen" / "€ 25 Mio"
-            (r'(?:€|EUR)\s*(\d+(?:[,\.]\d+)?)\s*(?:Millionen|Mio\.?)', 1_000_000),
+            (r"(?:€|EUR)\s*(\d+(?:[,\.]\d+)?)\s*(?:Millionen|Mio\.?)", 1_000_000),
             # "25 Milliarden Euro"
-            (r'(\d+(?:[,\.]\d+)?)\s*(?:Milliarden|Mrd\.?)\s*(?:Euro|EUR|€)', 1_000_000_000),
+            (r"(\d+(?:[,\.]\d+)?)\s*(?:Milliarden|Mrd\.?)\s*(?:Euro|EUR|€)", 1_000_000_000),
             # "X erhält/sammelt 25 Millionen" (implicit EUR in German startup context)
-            (r'(?:erhält|sammelt|bekommt|eingesammelt|einsammeln|sichert sich)\s+(\d+(?:[,\.]\d+)?)\s*(?:Millionen|Mio\.?)', 1_000_000),
+            (
+                r"(?:erhält|sammelt|bekommt|eingesammelt|einsammeln|sichert sich)\s+(\d+(?:[,\.]\d+)?)\s*(?:Millionen|Mio\.?)",
+                1_000_000,
+            ),
             # "90 Millionen in" (investment context, implicit EUR)
-            (r'(\d+(?:[,\.]\d+)?)\s*(?:Millionen|Mio\.?)\s+(?:in\s+|investier)', 1_000_000),
+            (r"(\d+(?:[,\.]\d+)?)\s*(?:Millionen|Mio\.?)\s+(?:in\s+|investier)", 1_000_000),
         ]
 
         for pattern, multiplier in eur_patterns:
             match = re.search(pattern, text, re.IGNORECASE)
             if match:
-                amount_str = match.group(1).replace(',', '.')
+                amount_str = match.group(1).replace(",", ".")
                 amount = float(amount_str) * multiplier
-                return amount, 'EUR'
+                return amount, "EUR"
 
         # USD amounts
         usd_patterns = [
-            r'\$\s*(\d+(?:[,\.]\d+)?)\s*(?:million|m)\b',
-            r'(\d+(?:[,\.]\d+)?)\s*(?:million|m)\s*(?:dollar|usd|\$)',
+            r"\$\s*(\d+(?:[,\.]\d+)?)\s*(?:million|m)\b",
+            r"(\d+(?:[,\.]\d+)?)\s*(?:million|m)\s*(?:dollar|usd|\$)",
         ]
 
         for pattern in usd_patterns:
             match = re.search(pattern, text, re.IGNORECASE)
             if match:
-                amount_str = match.group(1).replace(',', '.')
+                amount_str = match.group(1).replace(",", ".")
                 amount = float(amount_str) * 1_000_000
-                return amount, 'USD'
+                return amount, "USD"
 
         return None, None
 
@@ -813,29 +850,29 @@ class NewsMonitor:
         """
         # Name fragment: 1-4 words, allows lowercase starts, dots, hyphens
         # Limited to max 4 words to avoid grabbing sentence fragments
-        _w = r'[A-Za-z][A-Za-z0-9\.\-]*'
-        _n = rf'{_w}(?:\s+{_w}){{0,3}}'
+        _w = r"[A-Za-z][A-Za-z0-9\.\-]*"
+        _n = rf"{_w}(?:\s+{_w}){{0,3}}"
 
         # Patterns ordered by specificity (most specific first)
         patterns = [
             # "CompanyName: X Mio" / "CompanyName: Seed-Runde" (colon headlines)
-            rf'^({_n})\s*:\s+(?:\d|Seed|Series|Pre|Angel|Grant)',
+            rf"^({_n})\s*:\s+(?:\d|Seed|Series|Pre|Angel|Grant)",
             # "CompanyName erhält/sammelt/bekommt X Millionen"
-            rf'({_n})\s+(?:erhält|sammelt|bekommt|sichert\s+sich|schließt)',
+            rf"({_n})\s+(?:erhält|sammelt|bekommt|sichert\s+sich|schließt)",
             # "hat CompanyName ... eingesammelt" / "hat CompanyName ... geschlossen"
-            rf'hat\s+({_n})\s+.*?(?:eingesammelt|geschlossen|erhalten|bekommen)',
+            rf"hat\s+({_n})\s+.*?(?:eingesammelt|geschlossen|erhalten|bekommen)",
             # "CompanyName hat ... eingesammelt"
-            rf'({_n})\s+(?:hat|haben)\s+.*eingesammelt',
+            rf"({_n})\s+(?:hat|haben)\s+.*eingesammelt",
             # "X raises/secures/closes"
-            rf'({_n})\s+(?:raises|secures|closes)',
+            rf"({_n})\s+(?:raises|secures|closes)",
             # "Startup X" / "Fintech X" / "KI-Startup X"
-            rf'(?:Startup|Start-up|Fintech|Healthtech|Insurtech|SaaS|KI-Startup|AI-Startup|Cleantech-Startup|HealthTech-Startup)\s+({_n})',
+            rf"(?:Startup|Start-up|Fintech|Healthtech|Insurtech|SaaS|KI-Startup|AI-Startup|Cleantech-Startup|HealthTech-Startup)\s+({_n})",
             # "Gründer von X" / "Gründer-Team von X"
-            rf'(?:Gründer(?:-Team)?|Founder)\s+(?:von|of)\s+({_n})',
+            rf"(?:Gründer(?:-Team)?|Founder)\s+(?:von|of)\s+({_n})",
             # "Series/Seed/Runde für CompanyName" (funding context only)
-            rf'(?:Series\s+\w|Seed|Finanzierung|Runde)\s+für\s+({_n})',
+            rf"(?:Series\s+\w|Seed|Finanzierung|Runde)\s+für\s+({_n})",
             # "bei X" in funding context, e.g. "investiert bei CompanyName"
-            rf'investier\w*\s+(?:bei|in)\s+({_n})',
+            rf"investier\w*\s+(?:bei|in)\s+({_n})",
         ]
 
         for pattern in patterns:
@@ -854,7 +891,7 @@ class NewsMonitor:
             return False
 
         # Reject placeholder names
-        if name.lower() in ('unknown', 'unbekannt'):
+        if name.lower() in ("unknown", "unbekannt"):
             return False
 
         # Reject German stopwords and common non-company words
@@ -863,19 +900,52 @@ class NewsMonitor:
 
         # Reject common non-company words (German nouns, adjectives, geographic)
         blacklist = {
-            'der', 'die', 'das', 'ein', 'kein', 'sein', 'ihr',
-            'maschmeyers', 'ehemalige',
-            'europäische', 'deutsche', 'berliner', 'münchner',
-            'frühphasen', 'bremer', 'hamburger', 'kölner',
+            "der",
+            "die",
+            "das",
+            "ein",
+            "kein",
+            "sein",
+            "ihr",
+            "maschmeyers",
+            "ehemalige",
+            "europäische",
+            "deutsche",
+            "berliner",
+            "münchner",
+            "frühphasen",
+            "bremer",
+            "hamburger",
+            "kölner",
             # Countries and regions that appear in headlines
-            'deutschland', 'germany', 'europa', 'europe',
-            'kroatien', 'frankreich', 'österreich', 'schweiz',
-            'italien', 'spanien', 'polen', 'china', 'indien',
-            'bayern', 'sachsen', 'hessen', 'brandenburg',
+            "deutschland",
+            "germany",
+            "europa",
+            "europe",
+            "kroatien",
+            "frankreich",
+            "österreich",
+            "schweiz",
+            "italien",
+            "spanien",
+            "polen",
+            "china",
+            "indien",
+            "bayern",
+            "sachsen",
+            "hessen",
+            "brandenburg",
             # Generic words that slip through
-            'incubation', 'investment', 'finanzierung', 'förderung',
-            'millionen', 'milliarden', 'prozent', 'umsatz',
-            'wissenschaftler', 'solche',
+            "incubation",
+            "investment",
+            "finanzierung",
+            "förderung",
+            "millionen",
+            "milliarden",
+            "prozent",
+            "umsatz",
+            "wissenschaftler",
+            "solche",
         }
         if name.lower() in blacklist:
             return False
@@ -886,18 +956,62 @@ class NewsMonitor:
 
         # Reject names that are clearly sentence fragments (contain articles/prepositions)
         words = name.lower().split()
-        fragment_words = {'der', 'die', 'das', 'den', 'dem', 'des',
-                         'ein', 'eine', 'einer', 'einem', 'einen',
-                         'und', 'oder', 'aber', 'sein', 'ihr', 'alle',
-                         'von', 'vom', 'zum', 'zur', 'mit', 'für',
-                         'wird', 'werden', 'wurde', 'hat', 'haben',
-                         'damit', 'seine', 'seiner', 'seinen',
-                         'the', 'a', 'an', 'and', 'for', 'with',
-                         'based', 'french', 'german', 'dutch',
-                         'lithuanian', 'austrian', 'swiss',
-                         'startup', 'investor', 'company',
-                         'platform', 'analysis', 'tech', 'climate',
-                         'skaliert', 'running'}
+        fragment_words = {
+            "der",
+            "die",
+            "das",
+            "den",
+            "dem",
+            "des",
+            "ein",
+            "eine",
+            "einer",
+            "einem",
+            "einen",
+            "und",
+            "oder",
+            "aber",
+            "sein",
+            "ihr",
+            "alle",
+            "von",
+            "vom",
+            "zum",
+            "zur",
+            "mit",
+            "für",
+            "wird",
+            "werden",
+            "wurde",
+            "hat",
+            "haben",
+            "damit",
+            "seine",
+            "seiner",
+            "seinen",
+            "the",
+            "a",
+            "an",
+            "and",
+            "for",
+            "with",
+            "based",
+            "french",
+            "german",
+            "dutch",
+            "lithuanian",
+            "austrian",
+            "swiss",
+            "startup",
+            "investor",
+            "company",
+            "platform",
+            "analysis",
+            "tech",
+            "climate",
+            "skaliert",
+            "running",
+        }
         if len(words) > 1 and any(w in fragment_words for w in words):
             return False
 
@@ -913,13 +1027,13 @@ class NewsMonitor:
 
         patterns = [
             # "angeführt von InvestorName" / "lead by InvestorName"
-            r'(?:angeführt|geführt|geleitet)\s+von\s+([A-Z][A-Za-z0-9\s,&\.\-]+?)(?:\.|,\s+(?:sowie|und|and|mit)|$)',
+            r"(?:angeführt|geführt|geleitet)\s+von\s+([A-Z][A-Za-z0-9\s,&\.\-]+?)(?:\.|,\s+(?:sowie|und|and|mit)|$)",
             # "led by InvestorName"
-            r'(?:led?|backed)\s+by\s+([A-Z][A-Za-z0-9\s,&\.\-]+?)(?:\.|,\s+(?:and|with)|$)',
+            r"(?:led?|backed)\s+by\s+([A-Z][A-Za-z0-9\s,&\.\-]+?)(?:\.|,\s+(?:and|with)|$)",
             # "von InvestorName Capital/Ventures/Partners"
-            r'von\s+([A-Z][A-Za-z0-9]+(?:\s+(?:Capital|Ventures|Partners|Invest|Fund))+)',
+            r"von\s+([A-Z][A-Za-z0-9]+(?:\s+(?:Capital|Ventures|Partners|Invest|Fund))+)",
             # "Investor InvestorName"
-            r'(?:Investor|Lead-Investor|Hauptinvestor)\s+([A-Z][A-Za-z0-9]+(?:\s+[A-Z][A-Za-z0-9]+)*)',
+            r"(?:Investor|Lead-Investor|Hauptinvestor)\s+([A-Z][A-Za-z0-9]+(?:\s+[A-Z][A-Za-z0-9]+)*)",
         ]
 
         for pattern in patterns:
@@ -927,7 +1041,7 @@ class NewsMonitor:
             if match:
                 investor_text = match.group(1).strip()
                 # Split by separators
-                for inv in re.split(r'\s*(?:,|und|and|sowie|&)\s*', investor_text):
+                for inv in re.split(r"\s*(?:,|und|and|sowie|&)\s*", investor_text):
                     inv = inv.strip()
                     # Must look like an investor name (capitalized, not too short)
                     if inv and len(inv) > 3 and inv[0].isupper():
@@ -942,25 +1056,25 @@ class NewsMonitor:
         """Extract funding round type from text."""
         round_patterns = [
             # Grants & stipends (earliest stage)
-            (r'\bEXIST[- ]?(?:Gründerstipendium|Forschungstransfer)\b', 'grant'),
-            (r'\bGründerstipendium\b', 'grant'),
-            (r'\bFörder(?:ung|bescheid|mittel|programm)\b', 'grant'),
-            (r'\bstipendium\b', 'grant'),
-            (r'\bBMBF\b', 'grant'),
+            (r"\bEXIST[- ]?(?:Gründerstipendium|Forschungstransfer)\b", "grant"),
+            (r"\bGründerstipendium\b", "grant"),
+            (r"\bFörder(?:ung|bescheid|mittel|programm)\b", "grant"),
+            (r"\bstipendium\b", "grant"),
+            (r"\bBMBF\b", "grant"),
             # Angel
-            (r'\bangel\s+(?:round|runde|invest)', 'angel'),
-            (r'\bbusiness\s+angels?\b', 'angel'),
+            (r"\bangel\s+(?:round|runde|invest)", "angel"),
+            (r"\bbusiness\s+angels?\b", "angel"),
             # Pre-seed & seed
-            (r'\bpre-?seed\b', 'pre_seed'),
-            (r'\bseed(?:-?runde|\s+round|\s+finanzierung)?\b', 'seed'),
+            (r"\bpre-?seed\b", "pre_seed"),
+            (r"\bseed(?:-?runde|\s+round|\s+finanzierung)?\b", "seed"),
             # Series rounds
-            (r'\bseries\s*a\b', 'series_a'),
-            (r'\bseries\s*b\b', 'series_b'),
-            (r'\bseries\s*c\b', 'series_c'),
-            (r'\bseries\s*d\b', 'series_d'),
+            (r"\bseries\s*a\b", "series_a"),
+            (r"\bseries\s*b\b", "series_b"),
+            (r"\bseries\s*c\b", "series_c"),
+            (r"\bseries\s*d\b", "series_d"),
             # Growth
-            (r'\bwachstums?finanzierung\b', 'growth'),
-            (r'\bgrowth\s*(?:round|runde)\b', 'growth'),
+            (r"\bwachstums?finanzierung\b", "growth"),
+            (r"\bgrowth\s*(?:round|runde)\b", "growth"),
         ]
 
         for pattern, round_name in round_patterns:

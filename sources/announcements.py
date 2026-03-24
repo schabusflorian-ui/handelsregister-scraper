@@ -16,20 +16,20 @@ Rate limit: Respects 60 requests/hour per §303a, b StGB.
 """
 
 import re
-import time
-from datetime import datetime
-from typing import List, Dict, Optional, Iterator, Tuple
+from collections.abc import Iterator
 from dataclasses import dataclass
-from urllib.parse import urljoin
-import requests
+from datetime import datetime
+from typing import Dict, List, Optional, Tuple
+
 from bs4 import BeautifulSoup
 
-from sources.bundesapi import BundesAPISource, BundesAPIConfig, SearchResult
+from sources.bundesapi import BundesAPIConfig, BundesAPISource, SearchResult
 
 
 @dataclass
 class Announcement:
     """A single announcement (Bekanntmachung) from the register."""
+
     company_name: str
     native_company_number: str
     announcement_type: str  # Neueintragung, Kapitalerhöhung, etc.
@@ -48,16 +48,21 @@ class Announcement:
 
 # Announcement type patterns (German)
 ANNOUNCEMENT_TYPES = {
-    'neueintragung': ['neueintragung', 'erstmalige eintragung', 'neue firma'],
-    'kapitalerhoehung': ['kapitalerhöhung', 'erhöhung des stammkapitals', 'erhöhung des grundkapitals',
-                         'kapital erhöht', 'stammkapital erhöht'],
-    'kapitalherabsetzung': ['kapitalherabsetzung', 'herabsetzung des stammkapitals', 'kapital herabgesetzt'],
-    'geschaeftsfuehrer': ['geschäftsführer', 'bestellt', 'abberufen', 'prokura', 'vertretungsbefugnis'],
-    'satzungsaenderung': ['satzungsänderung', 'änderung der satzung', 'gesellschaftsvertrag geändert'],
-    'sitzverlegung': ['sitzverlegung', 'sitz verlegt', 'neuer sitz'],
-    'umwandlung': ['umwandlung', 'formwechsel', 'verschmelzung'],
-    'aufloesung': ['auflösung', 'liquidation', 'abwicklung', 'löschung'],
-    'insolvenz': ['insolvenz', 'insolvenzverfahren', 'eröffnung des insolvenz'],
+    "neueintragung": ["neueintragung", "erstmalige eintragung", "neue firma"],
+    "kapitalerhoehung": [
+        "kapitalerhöhung",
+        "erhöhung des stammkapitals",
+        "erhöhung des grundkapitals",
+        "kapital erhöht",
+        "stammkapital erhöht",
+    ],
+    "kapitalherabsetzung": ["kapitalherabsetzung", "herabsetzung des stammkapitals", "kapital herabgesetzt"],
+    "geschaeftsfuehrer": ["geschäftsführer", "bestellt", "abberufen", "prokura", "vertretungsbefugnis"],
+    "satzungsaenderung": ["satzungsänderung", "änderung der satzung", "gesellschaftsvertrag geändert"],
+    "sitzverlegung": ["sitzverlegung", "sitz verlegt", "neuer sitz"],
+    "umwandlung": ["umwandlung", "formwechsel", "verschmelzung"],
+    "aufloesung": ["auflösung", "liquidation", "abwicklung", "löschung"],
+    "insolvenz": ["insolvenz", "insolvenzverfahren", "eröffnung des insolvenz"],
 }
 
 
@@ -85,7 +90,7 @@ class AnnouncementScraper:
             if any(kw in text_lower for kw in keywords):
                 return ann_type
 
-        return 'sonstige'  # Other/unknown
+        return "sonstige"  # Other/unknown
 
     def _extract_capital_amounts(self, text: str) -> Tuple[Optional[float], Optional[float]]:
         """
@@ -94,14 +99,14 @@ class AnnouncementScraper:
         German number format: 1.234.567,89 EUR
         """
         # Pattern: "von EUR 25.000,00 auf EUR 100.000,00"
-        pattern_change = r'von\s*(?:EUR|€)?\s*([\d.]+(?:,\d{2})?)\s*(?:EUR|€)?\s*auf\s*(?:EUR|€)?\s*([\d.]+(?:,\d{2})?)'
+        pattern_change = r"von\s*(?:EUR|€)?\s*([\d.]+(?:,\d{2})?)\s*(?:EUR|€)?\s*auf\s*(?:EUR|€)?\s*([\d.]+(?:,\d{2})?)"
         match = re.search(pattern_change, text, re.IGNORECASE)
         if match:
             old_str, new_str = match.groups()
             return self._parse_german_number(old_str), self._parse_german_number(new_str)
 
         # Pattern: "Stammkapital: EUR 100.000,00" (just new amount)
-        pattern_single = r'(?:stamm|grund)kapital[:\s]*(?:EUR|€)?\s*([\d.]+(?:,\d{2})?)'
+        pattern_single = r"(?:stamm|grund)kapital[:\s]*(?:EUR|€)?\s*([\d.]+(?:,\d{2})?)"
         match = re.search(pattern_single, text, re.IGNORECASE)
         if match:
             return None, self._parse_german_number(match.group(1))
@@ -114,7 +119,7 @@ class AnnouncementScraper:
             return None
         try:
             # Remove thousand separators (.) and convert decimal comma to dot
-            cleaned = num_str.replace('.', '').replace(',', '.')
+            cleaned = num_str.replace(".", "").replace(",", ".")
             return float(cleaned)
         except (ValueError, TypeError):
             return None
@@ -122,21 +127,23 @@ class AnnouncementScraper:
     def _extract_officers(self, text: str) -> List[str]:
         """Extract officer names mentioned in announcement."""
         from processing.officer_extractor import extract_officers_from_text
+
         extracted = extract_officers_from_text(text)
         return list({o.name for o in extracted})
 
-    def _parse_announcement_block(self, block_html: str, company_name: str,
-                                   native_company_number: str) -> Optional[Announcement]:
+    def _parse_announcement_block(
+        self, block_html: str, company_name: str, native_company_number: str
+    ) -> Optional[Announcement]:
         """Parse a single announcement block from the VO page."""
-        soup = BeautifulSoup(block_html, 'lxml')
+        soup = BeautifulSoup(block_html, "lxml")
 
         # Extract text content
-        text = soup.get_text(separator=' ', strip=True)
+        text = soup.get_text(separator=" ", strip=True)
         if not text or len(text) < 20:
             return None
 
         # Extract date (typically in format DD.MM.YYYY)
-        date_match = re.search(r'(\d{2}\.\d{2}\.\d{4})', text)
+        date_match = re.search(r"(\d{2}\.\d{2}\.\d{4})", text)
         announcement_date = date_match.group(1) if date_match else None
 
         # Classify announcement type
@@ -153,7 +160,7 @@ class AnnouncementScraper:
             native_company_number=native_company_number,
             announcement_type=ann_type,
             announcement_date=announcement_date,
-            publication_date=datetime.now().strftime('%Y-%m-%d'),
+            publication_date=datetime.now().strftime("%Y-%m-%d"),
             text=text[:2000],  # Limit text length
             capital_old=capital_old,
             capital_new=capital_new,
@@ -192,7 +199,7 @@ class AnnouncementScraper:
     def search_with_announcements(
         self,
         keywords: List[str],
-        keyword_mode: str = 'all',
+        keyword_mode: str = "all",
         states: Optional[List[str]] = None,
         max_results: int = 10,
         fetch_announcements: bool = True,
@@ -253,7 +260,7 @@ def detect_announcement_type(text: str) -> str:
         if any(kw in text_lower for kw in keywords):
             return ann_type
 
-    return 'sonstige'
+    return "sonstige"
 
 
 def extract_capital_from_text(text: str) -> Dict[str, Optional[float]]:
@@ -262,22 +269,22 @@ def extract_capital_from_text(text: str) -> Dict[str, Optional[float]]:
 
     Returns dict with 'old' and 'new' capital amounts.
     """
-    result = {'old': None, 'new': None}
+    result = {"old": None, "new": None}
 
     # Pattern: "von EUR 25.000,00 auf EUR 100.000,00"
-    pattern_change = r'von\s*(?:EUR|€)?\s*([\d.]+(?:,\d{2})?)\s*(?:EUR|€)?\s*auf\s*(?:EUR|€)?\s*([\d.]+(?:,\d{2})?)'
+    pattern_change = r"von\s*(?:EUR|€)?\s*([\d.]+(?:,\d{2})?)\s*(?:EUR|€)?\s*auf\s*(?:EUR|€)?\s*([\d.]+(?:,\d{2})?)"
     match = re.search(pattern_change, text, re.IGNORECASE)
     if match:
         old_str, new_str = match.groups()
-        result['old'] = _parse_german_number(old_str)
-        result['new'] = _parse_german_number(new_str)
+        result["old"] = _parse_german_number(old_str)
+        result["new"] = _parse_german_number(new_str)
         return result
 
     # Pattern: "Stammkapital: EUR 100.000,00"
-    pattern_single = r'(?:stamm|grund)kapital[:\s]*(?:EUR|€)?\s*([\d.]+(?:,\d{2})?)'
+    pattern_single = r"(?:stamm|grund)kapital[:\s]*(?:EUR|€)?\s*([\d.]+(?:,\d{2})?)"
     match = re.search(pattern_single, text, re.IGNORECASE)
     if match:
-        result['new'] = _parse_german_number(match.group(1))
+        result["new"] = _parse_german_number(match.group(1))
 
     return result
 
@@ -287,7 +294,7 @@ def _parse_german_number(num_str: str) -> Optional[float]:
     if not num_str:
         return None
     try:
-        cleaned = num_str.replace('.', '').replace(',', '.')
+        cleaned = num_str.replace(".", "").replace(",", ".")
         return float(cleaned)
     except (ValueError, TypeError):
         return None

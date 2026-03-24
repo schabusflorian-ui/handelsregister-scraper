@@ -14,15 +14,15 @@ Usage:
 
 import argparse
 import logging
-from logging.handlers import RotatingFileHandler
-import sys
 import os
+import sys
+from logging.handlers import RotatingFileHandler
 
 # Add project root to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from scheduler.jobs.slow_stealth_scraper import SlowStealthScraper
 from persistence.database import Database
+from scheduler.jobs.slow_stealth_scraper import SlowStealthScraper
 
 
 def setup_logging(verbose: bool = False):
@@ -30,22 +30,19 @@ def setup_logging(verbose: bool = False):
     level = logging.DEBUG if verbose else logging.INFO
 
     # Create formatter
-    formatter = logging.Formatter(
-        '%(asctime)s %(levelname)s %(message)s',
-        datefmt='%Y-%m-%d %H:%M:%S'
-    )
+    formatter = logging.Formatter("%(asctime)s %(levelname)s %(message)s", datefmt="%Y-%m-%d %H:%M:%S")
 
     # Console handler
     console_handler = logging.StreamHandler()
     console_handler.setFormatter(formatter)
 
     # Rotating file handler - max 10MB per file, keep 5 backups (50MB total)
-    os.makedirs('data', exist_ok=True)
+    os.makedirs("data", exist_ok=True)
     file_handler = RotatingFileHandler(
-        'data/stealth_scraper.log',
-        maxBytes=10*1024*1024,  # 10MB
+        "data/stealth_scraper.log",
+        maxBytes=10 * 1024 * 1024,  # 10MB
         backupCount=5,
-        encoding='utf-8'
+        encoding="utf-8",
     )
     file_handler.setFormatter(formatter)
 
@@ -57,18 +54,18 @@ def setup_logging(verbose: bool = False):
 
 
 def main():
-    parser = argparse.ArgumentParser(description='Continuous stealth founder scraper')
-    parser.add_argument('--fast', action='store_true', help='Faster delays for testing (30s/45s)')
-    parser.add_argument('--slow', action='store_true', help='Slower delays to avoid blocks (120s/180s)')
-    parser.add_argument('--search-delay', type=int, default=60, help='Seconds between searches (default: 60)')
-    parser.add_argument('--scrape-delay', type=int, default=90, help='Seconds between scrapes (default: 90)')
-    parser.add_argument('--iterations', type=int, default=None, help='Max iterations (default: unlimited)')
-    parser.add_argument('--verbose', '-v', action='store_true', help='Verbose logging')
-    parser.add_argument('--stats', action='store_true', help='Show current stats and exit')
+    parser = argparse.ArgumentParser(description="Continuous stealth founder scraper")
+    parser.add_argument("--fast", action="store_true", help="Faster delays for testing (30s/45s)")
+    parser.add_argument("--slow", action="store_true", help="Slower delays to avoid blocks (120s/180s)")
+    parser.add_argument("--search-delay", type=int, default=60, help="Seconds between searches (default: 60)")
+    parser.add_argument("--scrape-delay", type=int, default=90, help="Seconds between scrapes (default: 90)")
+    parser.add_argument("--iterations", type=int, default=None, help="Max iterations (default: unlimited)")
+    parser.add_argument("--verbose", "-v", action="store_true", help="Verbose logging")
+    parser.add_argument("--stats", action="store_true", help="Show current stats and exit")
     args = parser.parse_args()
 
     # Ensure data directory exists
-    os.makedirs('data', exist_ok=True)
+    os.makedirs("data", exist_ok=True)
 
     setup_logging(args.verbose)
     logger = logging.getLogger(__name__)
@@ -82,7 +79,7 @@ def main():
         search_delay, scrape_delay = args.search_delay, args.scrape_delay
 
     # Connect to database
-    db = Database('handelsregister.db')
+    db = Database("handelsregister.db")
 
     try:
         scraper = SlowStealthScraper(
@@ -132,5 +129,5 @@ def main():
         logger.info("Database connection closed")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

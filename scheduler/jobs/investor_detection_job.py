@@ -11,9 +11,9 @@ Creates investment records linking companies to investors.
 
 import logging
 from datetime import datetime
-from typing import Dict, Any, List, Optional
+from typing import Any, Dict, Optional
 
-from processing.investor_matcher import InvestorMatcher, InvestorMatch
+from processing.investor_matcher import InvestorMatcher
 
 logger = logging.getLogger(__name__)
 
@@ -74,57 +74,57 @@ class InvestorDetectionJob:
         started_at = datetime.utcnow()
 
         stats = {
-            'capital_events_scanned': 0,
-            'officers_scanned': 0,
-            'announcements_scanned': 0,
-            'news_alerts_scanned': 0,
-            'investments_found': 0,
-            'investments_new': 0,
-            'errors': 0,
+            "capital_events_scanned": 0,
+            "officers_scanned": 0,
+            "announcements_scanned": 0,
+            "news_alerts_scanned": 0,
+            "investments_found": 0,
+            "investments_new": 0,
+            "errors": 0,
         }
 
         try:
             # Scan capital events
             capital_stats = self._scan_capital_events()
-            stats['capital_events_scanned'] = capital_stats['scanned']
-            stats['investments_found'] += capital_stats['found']
-            stats['investments_new'] += capital_stats['new']
+            stats["capital_events_scanned"] = capital_stats["scanned"]
+            stats["investments_found"] += capital_stats["found"]
+            stats["investments_new"] += capital_stats["new"]
 
             # Scan officers
             officer_stats = self._scan_officers()
-            stats['officers_scanned'] = officer_stats['scanned']
-            stats['investments_found'] += officer_stats['found']
-            stats['investments_new'] += officer_stats['new']
+            stats["officers_scanned"] = officer_stats["scanned"]
+            stats["investments_found"] += officer_stats["found"]
+            stats["investments_new"] += officer_stats["new"]
 
             # Scan announcements
             announcement_stats = self._scan_announcements()
-            stats['announcements_scanned'] = announcement_stats['scanned']
-            stats['investments_found'] += announcement_stats['found']
-            stats['investments_new'] += announcement_stats['new']
+            stats["announcements_scanned"] = announcement_stats["scanned"]
+            stats["investments_found"] += announcement_stats["found"]
+            stats["investments_new"] += announcement_stats["new"]
 
             # Scan news alerts (funding + early-stage)
             news_stats = self._scan_news_alerts()
-            stats['news_alerts_scanned'] = news_stats['scanned']
-            stats['investments_found'] += news_stats['found']
-            stats['investments_new'] += news_stats['new']
+            stats["news_alerts_scanned"] = news_stats["scanned"]
+            stats["investments_found"] += news_stats["found"]
+            stats["investments_new"] += news_stats["new"]
 
         except Exception as e:
             logger.exception("Investor detection failed: %s", e)
-            stats['errors'] += 1
+            stats["errors"] += 1
 
-        stats['duration_seconds'] = (datetime.utcnow() - started_at).total_seconds()
+        stats["duration_seconds"] = (datetime.utcnow() - started_at).total_seconds()
 
         logger.info(
             "Investor detection complete: %d investments found, %d new",
-            stats['investments_found'],
-            stats['investments_new']
+            stats["investments_found"],
+            stats["investments_new"],
         )
 
         return stats
 
     def _scan_capital_events(self) -> Dict[str, int]:
         """Scan capital events for investor mentions."""
-        stats = {'scanned': 0, 'found': 0, 'new': 0}
+        stats = {"scanned": 0, "found": 0, "new": 0}
 
         conn = self.db.conn
 
@@ -139,34 +139,31 @@ class InvestorDetectionJob:
         """).fetchall()
 
         for row in rows:
-            stats['scanned'] += 1
+            stats["scanned"] += 1
 
             # Search for investors in publication text
-            matches = self.matcher.search_in_text(
-                row['publication_text'],
-                min_confidence=self.min_confidence
-            )
+            matches = self.matcher.search_in_text(row["publication_text"], min_confidence=self.min_confidence)
 
             for match in matches:
-                stats['found'] += 1
+                stats["found"] += 1
                 new = self._record_investment(
-                    company_id=row['company_id'],
+                    company_id=row["company_id"],
                     investor_id=match.investor_id,
-                    round_type=self._infer_round_type(row['new_amount']),
-                    amount=row['new_amount'],
-                    investment_date=row['event_date'],
-                    source='capital_event',
+                    round_type=self._infer_round_type(row["new_amount"]),
+                    amount=row["new_amount"],
+                    investment_date=row["event_date"],
+                    source="capital_event",
                     confidence=match.confidence,
-                    notes=f"Matched '{match.matched_text}' in capital event"
+                    notes=f"Matched '{match.matched_text}' in capital event",
                 )
                 if new:
-                    stats['new'] += 1
+                    stats["new"] += 1
 
         return stats
 
     def _scan_officers(self) -> Dict[str, int]:
         """Scan officers for VC partner names."""
-        stats = {'scanned': 0, 'found': 0, 'new': 0}
+        stats = {"scanned": 0, "found": 0, "new": 0}
 
         conn = self.db.conn
 
@@ -180,49 +177,50 @@ class InvestorDetectionJob:
         """).fetchall()
 
         for row in rows:
-            stats['scanned'] += 1
+            stats["scanned"] += 1
 
             # Try to match officer name against VC partners
-            matches = self.matcher.match(row['name'], min_confidence=self.min_confidence)
+            matches = self.matcher.match(row["name"], min_confidence=self.min_confidence)
 
             # Only consider partner matches
-            partner_matches = [m for m in matches if m.match_type == 'partner']
+            partner_matches = [m for m in matches if m.match_type == "partner"]
 
             for match in partner_matches:
                 # Reduce false positives from common names:
                 # Only record if company has startup indicators
                 # Common German names like "Johannes Weber" match too often
-                is_startup = row['startup_classification'] in ('startup', 'tech_company')
-                has_ai_score = (row['ai_robotics_score'] or 0) >= 3
+                is_startup = row["startup_classification"] in ("startup", "tech_company")
+                has_ai_score = (row["ai_robotics_score"] or 0) >= 3
 
                 # Require startup/tech classification OR high AI score for partner matches
                 # This filters out traditional companies with coincidentally named officers
                 if not (is_startup or has_ai_score):
                     logger.debug(
                         "Skipping partner match: %s at %s (not a startup/tech company)",
-                        row['name'], row['company_name']
+                        row["name"],
+                        row["company_name"],
                     )
                     continue
 
-                stats['found'] += 1
+                stats["found"] += 1
                 new = self._record_investment(
-                    company_id=row['company_id'],
+                    company_id=row["company_id"],
                     investor_id=match.investor_id,
                     round_type=None,
                     amount=None,
-                    investment_date=row['start_date'],
-                    source='officer',
+                    investment_date=row["start_date"],
+                    source="officer",
                     confidence=match.confidence,
-                    notes=f"Officer '{row['name']}' matches VC partner"
+                    notes=f"Officer '{row['name']}' matches VC partner",
                 )
                 if new:
-                    stats['new'] += 1
+                    stats["new"] += 1
 
         return stats
 
     def _scan_announcements(self) -> Dict[str, int]:
         """Scan announcements for investor mentions."""
-        stats = {'scanned': 0, 'found': 0, 'new': 0}
+        stats = {"scanned": 0, "found": 0, "new": 0}
 
         conn = self.db.conn
 
@@ -238,34 +236,31 @@ class InvestorDetectionJob:
         """).fetchall()
 
         for row in rows:
-            stats['scanned'] += 1
+            stats["scanned"] += 1
 
             # Search for investors in announcement text
-            matches = self.matcher.search_in_text(
-                row['text'],
-                min_confidence=self.min_confidence
-            )
+            matches = self.matcher.search_in_text(row["text"], min_confidence=self.min_confidence)
 
             for match in matches:
-                stats['found'] += 1
+                stats["found"] += 1
                 new = self._record_investment(
-                    company_id=row['company_id'],
+                    company_id=row["company_id"],
                     investor_id=match.investor_id,
-                    round_type=self._infer_round_type(row['capital_new']),
-                    amount=row['capital_new'],
-                    investment_date=row['announcement_date'],
-                    source='announcement',
+                    round_type=self._infer_round_type(row["capital_new"]),
+                    amount=row["capital_new"],
+                    investment_date=row["announcement_date"],
+                    source="announcement",
                     confidence=match.confidence,
-                    notes=f"Matched '{match.matched_text}' in announcement"
+                    notes=f"Matched '{match.matched_text}' in announcement",
                 )
                 if new:
-                    stats['new'] += 1
+                    stats["new"] += 1
 
         return stats
 
     def _scan_news_alerts(self) -> Dict[str, int]:
         """Scan news alerts for investor/grant/incubator mentions."""
-        stats = {'scanned': 0, 'found': 0, 'new': 0}
+        stats = {"scanned": 0, "found": 0, "new": 0}
 
         conn = self.db.conn
 
@@ -286,75 +281,74 @@ class InvestorDetectionJob:
         """).fetchall()
 
         for row in rows:
-            stats['scanned'] += 1
+            stats["scanned"] += 1
 
             # Scan investor names from funding alerts
-            if row['investors']:
-                for inv_name in row['investors'].split(','):
+            if row["investors"]:
+                for inv_name in row["investors"].split(","):
                     inv_name = inv_name.strip()
                     if not inv_name:
                         continue
 
                     matches = self.matcher.match(inv_name, min_confidence=self.min_confidence)
                     for match in matches:
-                        stats['found'] += 1
+                        stats["found"] += 1
                         new = self._record_investment(
-                            company_id=row['company_id'],
+                            company_id=row["company_id"],
                             investor_id=match.investor_id,
-                            round_type=row['round_type'],
-                            amount=row['amount'],
-                            investment_date=row['created_at'],
-                            source='news_funding',
+                            round_type=row["round_type"],
+                            amount=row["amount"],
+                            investment_date=row["created_at"],
+                            source="news_funding",
                             confidence=match.confidence,
-                            notes=f"Matched '{match.matched_text}' in news: {row['article_title']}"
+                            notes=f"Matched '{match.matched_text}' in news: {row['article_title']}",
                         )
                         if new:
-                            stats['new'] += 1
+                            stats["new"] += 1
 
             # Scan early-stage signals for grant/incubator/accelerator matches
-            if row['early_stage_signals']:
-                for signal in row['early_stage_signals'].split(','):
+            if row["early_stage_signals"]:
+                for signal in row["early_stage_signals"].split(","):
                     signal = signal.strip()
                     if not signal:
                         continue
 
                     matches = self.matcher.match(signal, min_confidence=0.7)
                     for match in matches:
-                        stats['found'] += 1
+                        stats["found"] += 1
                         new = self._record_investment(
-                            company_id=row['company_id'],
+                            company_id=row["company_id"],
                             investor_id=match.investor_id,
-                            round_type='grant' if 'grant' in match.investor_name.lower() or 'förder' in signal.lower() else 'pre_seed',
-                            amount=row['amount'],
-                            investment_date=row['created_at'],
-                            source='news_early_stage',
+                            round_type="grant"
+                            if "grant" in match.investor_name.lower() or "förder" in signal.lower()
+                            else "pre_seed",
+                            amount=row["amount"],
+                            investment_date=row["created_at"],
+                            source="news_early_stage",
                             confidence=match.confidence,
-                            notes=f"Early-stage signal '{signal}' in: {row['article_title']}"
+                            notes=f"Early-stage signal '{signal}' in: {row['article_title']}",
                         )
                         if new:
-                            stats['new'] += 1
+                            stats["new"] += 1
 
             # Also search article title for investor mentions
-            if row['article_title']:
-                text_matches = self.matcher.search_in_text(
-                    row['article_title'],
-                    min_confidence=self.min_confidence
-                )
+            if row["article_title"]:
+                text_matches = self.matcher.search_in_text(row["article_title"], min_confidence=self.min_confidence)
                 for match in text_matches:
-                    stats['found'] += 1
-                    source = 'news_early_stage' if row['alert_type'] == 'early_stage' else 'news_funding'
+                    stats["found"] += 1
+                    source = "news_early_stage" if row["alert_type"] == "early_stage" else "news_funding"
                     new = self._record_investment(
-                        company_id=row['company_id'],
+                        company_id=row["company_id"],
                         investor_id=match.investor_id,
-                        round_type=row['round_type'],
-                        amount=row['amount'],
-                        investment_date=row['created_at'],
+                        round_type=row["round_type"],
+                        amount=row["amount"],
+                        investment_date=row["created_at"],
                         source=source,
                         confidence=match.confidence,
-                        notes=f"Matched '{match.matched_text}' in news title"
+                        notes=f"Matched '{match.matched_text}' in news title",
                     )
                     if new:
-                        stats['new'] += 1
+                        stats["new"] += 1
 
         return stats
 
@@ -367,7 +361,7 @@ class InvestorDetectionJob:
         investment_date: Optional[str],
         source: str,
         confidence: float,
-        notes: Optional[str] = None
+        notes: Optional[str] = None,
     ) -> bool:
         """
         Record an investment in the database.
@@ -379,39 +373,39 @@ class InvestorDetectionJob:
 
         try:
             # Check if already exists
-            existing = conn.execute("""
+            existing = conn.execute(
+                """
                 SELECT id FROM investments
                 WHERE company_id = ? AND investor_id = ?
                   AND (investment_date = ? OR (investment_date IS NULL AND ? IS NULL))
-            """, (company_id, investor_id, investment_date, investment_date)).fetchone()
+            """,
+                (company_id, investor_id, investment_date, investment_date),
+            ).fetchone()
 
             if existing:
                 # Update confidence if higher
-                conn.execute("""
+                conn.execute(
+                    """
                     UPDATE investments
                     SET confidence = MAX(confidence, ?),
                         notes = COALESCE(notes, '') || '; ' || ?
                     WHERE id = ?
-                """, (confidence, notes or '', existing['id']))
+                """,
+                    (confidence, notes or "", existing["id"]),
+                )
                 conn.commit()
                 return False
 
             # Insert new record
-            conn.execute("""
+            conn.execute(
+                """
                 INSERT INTO investments
                 (company_id, investor_id, round_type, amount, currency,
                  investment_date, detection_source, confidence, notes)
                 VALUES (?, ?, ?, ?, 'EUR', ?, ?, ?, ?)
-            """, (
-                company_id,
-                investor_id,
-                round_type,
-                amount,
-                investment_date,
-                source,
-                confidence,
-                notes
-            ))
+            """,
+                (company_id, investor_id, round_type, amount, investment_date, source, confidence, notes),
+            )
             conn.commit()
             return True
 
@@ -426,22 +420,22 @@ class InvestorDetectionJob:
         This is a rough heuristic based on typical German funding amounts.
         """
         if amount is None:
-            return 'unknown'
+            return "unknown"
 
         if amount < 100_000:
-            return 'pre_seed'
+            return "pre_seed"
         elif amount < 500_000:
-            return 'seed'
+            return "seed"
         elif amount < 2_000_000:
-            return 'seed'
+            return "seed"
         elif amount < 10_000_000:
-            return 'series_a'
+            return "series_a"
         elif amount < 30_000_000:
-            return 'series_b'
+            return "series_b"
         elif amount < 100_000_000:
-            return 'series_c'
+            return "series_c"
         else:
-            return 'growth'
+            return "growth"
 
 
 def run_investor_detection(db_path: str) -> Dict[str, Any]:

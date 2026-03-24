@@ -16,11 +16,9 @@ Requires: railway CLI installed and linked to project
 
 import argparse
 import json
-import os
+import sqlite3
 import subprocess
 import sys
-import tempfile
-import sqlite3
 from datetime import datetime
 from pathlib import Path
 
@@ -39,12 +37,15 @@ def railway_ssh_script(script: str, timeout: int = 120) -> str:
     inside the container. This avoids all shell quoting issues.
     """
     import base64
+
     encoded = base64.b64encode(script.encode()).decode()
     # Single command: decode base64 and pipe to python3
     cmd = f"echo {encoded} | base64 -d | python3"
     result = subprocess.run(
         ["railway", "ssh", cmd],
-        capture_output=True, text=True, timeout=timeout,
+        capture_output=True,
+        text=True,
+        timeout=timeout,
     )
     if result.returncode != 0:
         # railway ssh often puts Python errors in stdout, not stderr
@@ -62,9 +63,9 @@ def pull_companies_and_officers(local_db: str, days: int = 30) -> dict:
 
     Uses railway ssh to export JSON from the container, then imports locally.
     """
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print("PULL: Railway → Local (companies + officers)")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
 
     # Export from Railway as JSON via SSH
     # Use first_seen_date since registration_date is mostly NULL
@@ -106,25 +107,25 @@ sys.stdout.flush()
         raw = railway_ssh_script(export_script, timeout=180)
     except Exception as e:
         print(f"  ERROR: {e}")
-        return {'companies': 0, 'officers': 0, 'error': str(e)}
+        return {"companies": 0, "officers": 0, "error": str(e)}
 
     # Parse the JSON output (last line should be JSON)
-    lines = raw.strip().split('\n')
-    json_line = lines[-1] if lines else '{}'
+    lines = raw.strip().split("\n")
+    json_line = lines[-1] if lines else "{}"
     try:
         data = json.loads(json_line)
     except json.JSONDecodeError as e:
         print(f"  ERROR parsing response: {e}")
         print(f"  Raw output (last 500 chars): {raw[-500:]}")
-        return {'companies': 0, 'officers': 0, 'error': str(e)}
+        return {"companies": 0, "officers": 0, "error": str(e)}
 
-    companies = data.get('companies', [])
-    officers = data.get('officers', [])
+    companies = data.get("companies", [])
+    officers = data.get("officers", [])
     print(f"  Received {len(companies)} companies, {len(officers)} officers")
 
     if not companies:
         print("  Nothing to import")
-        return {'companies': 0, 'officers': 0}
+        return {"companies": 0, "officers": 0}
 
     # Import into local DB
     conn = sqlite3.connect(local_db)
@@ -137,15 +138,13 @@ sys.stdout.flush()
     for co in companies:
         try:
             # Check if company already exists locally (by company_number)
-            cursor.execute(
-                'SELECT id FROM companies WHERE company_number = ?',
-                (co['company_number'],)
-            )
+            cursor.execute("SELECT id FROM companies WHERE company_number = ?", (co["company_number"],))
             existing = cursor.fetchone()
 
             if existing:
                 # Update with Railway data (Railway has richer data)
-                cursor.execute('''
+                cursor.execute(
+                    """
                     UPDATE companies SET
                         name = COALESCE(?, name),
                         city = COALESCE(?, city),
@@ -155,15 +154,22 @@ sys.stdout.flush()
                         first_seen_date = COALESCE(?, first_seen_date),
                         last_updated = ?
                     WHERE company_number = ?
-                ''', (
-                    co.get('name'), co.get('city'),
-                    co.get('ai_robotics_score'), co.get('matched_keywords'),
-                    co.get('startup_score'), co.get('first_seen_date'),
-                    datetime.now().isoformat(), co['company_number'],
-                ))
+                """,
+                    (
+                        co.get("name"),
+                        co.get("city"),
+                        co.get("ai_robotics_score"),
+                        co.get("matched_keywords"),
+                        co.get("startup_score"),
+                        co.get("first_seen_date"),
+                        datetime.now().isoformat(),
+                        co["company_number"],
+                    ),
+                )
                 skipped_companies += 1
             else:
-                cursor.execute('''
+                cursor.execute(
+                    """
                     INSERT INTO companies (
                         company_number, native_company_number, name, legal_form,
                         current_status, street, postal_code, city, state,
@@ -172,18 +178,31 @@ sys.stdout.flush()
                         startup_score, startup_classification, source,
                         first_seen_date, last_updated
                     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                ''', (
-                    co.get('company_number'), co.get('native_company_number'),
-                    co.get('name'), co.get('legal_form'),
-                    co.get('current_status'), co.get('street'),
-                    co.get('postal_code'), co.get('city'), co.get('state'),
-                    co.get('capital_amount'), co.get('capital_currency'),
-                    co.get('registration_date'), co.get('registry_court'),
-                    co.get('ai_robotics_score'), co.get('matched_keywords'),
-                    co.get('tech_categories'), co.get('startup_score'),
-                    co.get('startup_classification'), co.get('source'),
-                    co.get('first_seen_date'), co.get('last_updated'),
-                ))
+                """,
+                    (
+                        co.get("company_number"),
+                        co.get("native_company_number"),
+                        co.get("name"),
+                        co.get("legal_form"),
+                        co.get("current_status"),
+                        co.get("street"),
+                        co.get("postal_code"),
+                        co.get("city"),
+                        co.get("state"),
+                        co.get("capital_amount"),
+                        co.get("capital_currency"),
+                        co.get("registration_date"),
+                        co.get("registry_court"),
+                        co.get("ai_robotics_score"),
+                        co.get("matched_keywords"),
+                        co.get("tech_categories"),
+                        co.get("startup_score"),
+                        co.get("startup_classification"),
+                        co.get("source"),
+                        co.get("first_seen_date"),
+                        co.get("last_updated"),
+                    ),
+                )
                 imported_companies += 1
         except Exception as e:
             print(f"  Error importing company {co.get('name')}: {e}")
@@ -191,20 +210,17 @@ sys.stdout.flush()
     # Build a mapping from Railway company IDs to local company IDs
     railway_to_local = {}
     for co in companies:
-        cursor.execute(
-            'SELECT id FROM companies WHERE company_number = ?',
-            (co['company_number'],)
-        )
+        cursor.execute("SELECT id FROM companies WHERE company_number = ?", (co["company_number"],))
         row = cursor.fetchone()
         if row:
-            railway_to_local[co['id']] = row[0]
+            railway_to_local[co["id"]] = row[0]
 
     # Import officers
     imported_officers = 0
     skipped_officers = 0
 
     for off in officers:
-        railway_company_id = off.get('company_id')
+        railway_company_id = off.get("company_id")
         local_company_id = railway_to_local.get(railway_company_id)
 
         if not local_company_id:
@@ -212,23 +228,32 @@ sys.stdout.flush()
 
         try:
             # Check if officer already exists (by company_id + name + role)
-            cursor.execute('''
+            cursor.execute(
+                """
                 SELECT id FROM officers
                 WHERE company_id = ? AND name = ? AND role = ?
-            ''', (local_company_id, off.get('name'), off.get('role')))
+            """,
+                (local_company_id, off.get("name"), off.get("role")),
+            )
 
             if cursor.fetchone():
                 skipped_officers += 1
                 continue
 
-            cursor.execute('''
+            cursor.execute(
+                """
                 INSERT INTO officers (company_id, name, role, start_date, end_date, is_current)
                 VALUES (?, ?, ?, ?, ?, ?)
-            ''', (
-                local_company_id, off.get('name'), off.get('role'),
-                off.get('start_date'), off.get('end_date'),
-                off.get('is_current', 1),
-            ))
+            """,
+                (
+                    local_company_id,
+                    off.get("name"),
+                    off.get("role"),
+                    off.get("start_date"),
+                    off.get("end_date"),
+                    off.get("is_current", 1),
+                ),
+            )
             imported_officers += 1
         except Exception as e:
             print(f"  Error importing officer {off.get('name')}: {e}")
@@ -240,9 +265,9 @@ sys.stdout.flush()
     print(f"  Officers:  {imported_officers} new, {skipped_officers} existing")
 
     return {
-        'companies': imported_companies,
-        'companies_updated': skipped_companies,
-        'officers': imported_officers,
+        "companies": imported_companies,
+        "companies_updated": skipped_companies,
+        "officers": imported_officers,
     }
 
 
@@ -259,12 +284,14 @@ def railway_ssh_write_file(data: str, remote_path: str, timeout: int = 60) -> No
     chunk_size = 60000  # ~60KB per chunk, well under 128KB arg limit
 
     for i in range(0, len(encoded), chunk_size):
-        chunk = encoded[i:i+chunk_size]
+        chunk = encoded[i : i + chunk_size]
         op = ">" if i == 0 else ">>"
         cmd = f"echo -n '{chunk}' {op} /tmp/_sync_data.b64"
         result = subprocess.run(
             ["railway", "ssh", cmd],
-            capture_output=True, text=True, timeout=timeout,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
         )
         if result.returncode != 0:
             error_msg = result.stderr.strip() or result.stdout.strip()
@@ -273,7 +300,9 @@ def railway_ssh_write_file(data: str, remote_path: str, timeout: int = 60) -> No
     # Decode the base64 file
     result = subprocess.run(
         ["railway", "ssh", f"base64 -d /tmp/_sync_data.b64 > {remote_path} && rm /tmp/_sync_data.b64"],
-        capture_output=True, text=True, timeout=timeout,
+        capture_output=True,
+        text=True,
+        timeout=timeout,
     )
     if result.returncode != 0:
         error_msg = result.stderr.strip() or result.stdout.strip()
@@ -287,22 +316,22 @@ def push_stealth_founders(local_db: str) -> dict:
     Exports local stealth_founders as JSON, writes to container via temp file,
     then imports via a Python script.
     """
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print("PUSH: Local → Railway (stealth_founders)")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
 
     # Export local stealth founders
     conn = sqlite3.connect(local_db)
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
 
-    cursor.execute('SELECT * FROM stealth_founders')
+    cursor.execute("SELECT * FROM stealth_founders")
     founders = [dict(row) for row in cursor.fetchall()]
     conn.close()
 
     if not founders:
         print("  No stealth founders to push")
-        return {'pushed': 0, 'skipped': 0}
+        return {"pushed": 0, "skipped": 0}
 
     print(f"  Exporting {len(founders)} founders from local DB...")
 
@@ -314,7 +343,7 @@ def push_stealth_founders(local_db: str) -> dict:
         railway_ssh_write_file(founders_json, "/tmp/_sync_founders.json", timeout=60)
     except Exception as e:
         print(f"  ERROR uploading data: {e}")
-        return {'pushed': 0, 'skipped': 0, 'error': str(e)}
+        return {"pushed": 0, "skipped": 0, "error": str(e)}
 
     # Step 2: Run import script that reads from the temp file
     import_script = f"""
@@ -413,34 +442,34 @@ print(imported, skipped, updated)
 
     try:
         raw = railway_ssh_script(import_script, timeout=180)
-        parts = raw.strip().split('\n')[-1].split()
+        parts = raw.strip().split("\n")[-1].split()
         imported = int(parts[0]) if len(parts) >= 1 else 0
         skipped = int(parts[1]) if len(parts) >= 2 else 0
         updated = int(parts[2]) if len(parts) >= 3 else 0
         print(f"  Pushed {imported} new founders, {updated} updated, {skipped} already existed")
-        return {'pushed': imported, 'skipped': skipped}
+        return {"pushed": imported, "skipped": skipped}
     except Exception as e:
         print(f"  ERROR: {e}")
-        return {'pushed': 0, 'skipped': 0, 'error': str(e)}
+        return {"pushed": 0, "skipped": 0, "error": str(e)}
 
 
 def show_stats(local_db: str):
     """Show side-by-side stats for local and Railway DBs."""
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print("DATABASE COMPARISON")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
 
     # Local stats
     conn = sqlite3.connect(local_db)
     cursor = conn.cursor()
 
     local_stats = {}
-    for table in ['companies', 'officers', 'stealth_founders', 'announcements']:
+    for table in ["companies", "officers", "stealth_founders", "announcements"]:
         try:
-            cursor.execute(f'SELECT COUNT(*) FROM {table}')
+            cursor.execute(f"SELECT COUNT(*) FROM {table}")
             local_stats[table] = cursor.fetchone()[0]
         except:
-            local_stats[table] = 'N/A'
+            local_stats[table] = "N/A"
     conn.close()
 
     # Railway stats
@@ -459,24 +488,24 @@ conn.close()
 """
         raw = railway_ssh_script(stats_script, timeout=60)
         railway_stats = {}
-        for line in raw.strip().split('\n'):
+        for line in raw.strip().split("\n"):
             parts = line.split()
             if len(parts) == 2:
                 railway_stats[parts[0]] = int(parts[1])
     except Exception as e:
-        railway_stats = {'error': str(e)}
+        railway_stats = {"error": str(e)}
         print(f"  Could not reach Railway: {e}")
 
     print(f"\n  {'Table':<25} {'Local':>10} {'Railway':>10} {'Delta':>10}")
-    print(f"  {'-'*55}")
-    for table in ['companies', 'officers', 'stealth_founders', 'announcements']:
+    print(f"  {'-' * 55}")
+    for table in ["companies", "officers", "stealth_founders", "announcements"]:
         local = local_stats.get(table, 0)
-        remote = railway_stats.get(table, '?')
+        remote = railway_stats.get(table, "?")
         if isinstance(local, int) and isinstance(remote, int):
             delta = local - remote
             delta_str = f"+{delta}" if delta > 0 else str(delta)
         else:
-            delta_str = '-'
+            delta_str = "-"
         print(f"  {table:<25} {str(local):>10} {str(remote):>10} {delta_str:>10}")
 
     print()
@@ -490,21 +519,21 @@ def sync(local_db: str, pull: bool = True, push: bool = True, days: int = 30):
     results = {}
 
     if pull:
-        results['pull'] = pull_companies_and_officers(local_db, days=days)
+        results["pull"] = pull_companies_and_officers(local_db, days=days)
 
     if push:
-        results['push'] = push_stealth_founders(local_db)
+        results["push"] = push_stealth_founders(local_db)
 
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print("SYNC COMPLETE")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
 
-    if 'pull' in results:
-        r = results['pull']
+    if "pull" in results:
+        r = results["pull"]
         print(f"  Pulled: {r.get('companies', 0)} companies, {r.get('officers', 0)} officers")
 
-    if 'push' in results:
-        r = results['push']
+    if "push" in results:
+        r = results["push"]
         print(f"  Pushed: {r.get('pushed', 0)} stealth founders")
 
     print()
@@ -512,29 +541,12 @@ def sync(local_db: str, pull: bool = True, push: bool = True, days: int = 30):
 
 
 def main():
-    parser = argparse.ArgumentParser(
-        description='Bidirectional DB sync: Railway ↔ Local'
-    )
-    parser.add_argument(
-        '--pull-only', action='store_true',
-        help='Only pull companies/officers from Railway'
-    )
-    parser.add_argument(
-        '--push-only', action='store_true',
-        help='Only push stealth founders to Railway'
-    )
-    parser.add_argument(
-        '--stats', action='store_true',
-        help='Show comparison stats only'
-    )
-    parser.add_argument(
-        '--days', type=int, default=30,
-        help='Pull companies from the last N days (default: 30)'
-    )
-    parser.add_argument(
-        '--db', default=LOCAL_DB_DEFAULT,
-        help='Local database path'
-    )
+    parser = argparse.ArgumentParser(description="Bidirectional DB sync: Railway ↔ Local")
+    parser.add_argument("--pull-only", action="store_true", help="Only pull companies/officers from Railway")
+    parser.add_argument("--push-only", action="store_true", help="Only push stealth founders to Railway")
+    parser.add_argument("--stats", action="store_true", help="Show comparison stats only")
+    parser.add_argument("--days", type=int, default=30, help="Pull companies from the last N days (default: 30)")
+    parser.add_argument("--db", default=LOCAL_DB_DEFAULT, help="Local database path")
 
     args = parser.parse_args()
 
@@ -548,5 +560,5 @@ def main():
     sync(args.db, pull=pull, push=push, days=args.days)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

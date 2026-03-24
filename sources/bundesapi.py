@@ -22,12 +22,14 @@ Form field names (verified 2026-02-02, extended 2026-02-17):
 - Submit: form:btnSuche
 """
 
-import time
 import re
-from datetime import datetime
-from typing import Iterator, Optional, List, Dict, Any
+import time
+from collections.abc import Iterator
 from dataclasses import dataclass
+from datetime import datetime
+from typing import Any, Dict, List, Optional
 from urllib.parse import urljoin
+
 import requests
 from bs4 import BeautifulSoup
 
@@ -35,6 +37,7 @@ from bs4 import BeautifulSoup
 @dataclass
 class BundesAPIConfig:
     """Configuration for bundesAPI scraper."""
+
     base_url: str = "https://www.handelsregister.de"
     requests_per_hour: int = 60
     timeout: int = 45  # Increased timeout for slow portal
@@ -66,10 +69,7 @@ class TokenBucketRateLimiter:
             now = time.time()
             elapsed = now - self.last_update
 
-            self.tokens = min(
-                float(self.rate),
-                self.tokens + elapsed * (self.rate / self.per_seconds)
-            )
+            self.tokens = min(float(self.rate), self.tokens + elapsed * (self.rate / self.per_seconds))
             self.last_update = now
 
             if self.tokens >= 1.0:
@@ -95,15 +95,13 @@ class TokenBucketRateLimiter:
     def tokens_available(self) -> float:
         now = time.time()
         elapsed = now - self.last_update
-        return min(
-            float(self.rate),
-            self.tokens + elapsed * (self.rate / self.per_seconds)
-        )
+        return min(float(self.rate), self.tokens + elapsed * (self.rate / self.per_seconds))
 
 
 @dataclass
 class SearchResult:
     """A single search result from Handelsregister."""
+
     name: str
     native_company_number: str
     registry_court: str
@@ -117,6 +115,7 @@ class SearchResult:
 @dataclass
 class Announcement:
     """A single announcement (Veröffentlichung/Bekanntmachung) from the register."""
+
     company_name: str
     native_company_number: str
     announcement_date: Optional[str]
@@ -142,57 +141,54 @@ class BundesAPISource:
     # German state names as used in form field names (form:{name}_input)
     # The portal uses full German state names, not codes
     STATES = {
-        'bw': 'Baden-Württemberg',
-        'by': 'Bayern',
-        'be': 'Berlin',
-        'bb': 'Brandenburg',
-        'hb': 'Bremen',
-        'hh': 'Hamburg',
-        'he': 'Hessen',
-        'mv': 'Mecklenburg-Vorpommern',
-        'ni': 'Niedersachsen',
-        'nw': 'Nordrhein-Westfalen',
-        'rp': 'Rheinland-Pfalz',
-        'sl': 'Saarland',
-        'sn': 'Sachsen',
-        'st': 'Sachsen-Anhalt',
-        'sh': 'Schleswig-Holstein',
-        'th': 'Thüringen',
+        "bw": "Baden-Württemberg",
+        "by": "Bayern",
+        "be": "Berlin",
+        "bb": "Brandenburg",
+        "hb": "Bremen",
+        "hh": "Hamburg",
+        "he": "Hessen",
+        "mv": "Mecklenburg-Vorpommern",
+        "ni": "Niedersachsen",
+        "nw": "Nordrhein-Westfalen",
+        "rp": "Rheinland-Pfalz",
+        "sl": "Saarland",
+        "sn": "Sachsen",
+        "st": "Sachsen-Anhalt",
+        "sh": "Schleswig-Holstein",
+        "th": "Thüringen",
     }
 
     # Valid register types
-    REGISTER_TYPES = ['HRA', 'HRB', 'GnR', 'PR', 'VR', 'GsR']
+    REGISTER_TYPES = ["HRA", "HRB", "GnR", "PR", "VR", "GsR"]
 
     # Registry court codes for form:registergericht_input
     # Use these to search by specific court (HRB numbers are sequential per court)
     REGISTRY_COURTS = {
-        'Berlin': 'F1103',           # Amtsgericht Charlottenburg
-        'München': 'D2601',          # Amtsgericht München
-        'Hamburg': 'R2101',          # Amtsgericht Hamburg
-        'Frankfurt': 'R3201',       # Amtsgericht Frankfurt am Main
-        'Köln': 'R2707',            # Amtsgericht Köln
-        'Düsseldorf': 'R2701',      # Amtsgericht Düsseldorf
+        "Berlin": "F1103",  # Amtsgericht Charlottenburg
+        "München": "D2601",  # Amtsgericht München
+        "Hamburg": "R2101",  # Amtsgericht Hamburg
+        "Frankfurt": "R3201",  # Amtsgericht Frankfurt am Main
+        "Köln": "R2707",  # Amtsgericht Köln
+        "Düsseldorf": "R2701",  # Amtsgericht Düsseldorf
     }
 
     # Legal form codes for form:rechtsform dropdown
     # (verified from bundesAPI/handelsregister GitHub)
     LEGAL_FORM_CODES = {
-        'AG': '1',               # Aktiengesellschaft
-        'eG': '2',               # Eingetragene Genossenschaft
-        'eV': '3',               # Eingetragener Verein
-        'SE': '6',               # Europäische Aktiengesellschaft
-        'GmbH': '8',             # Gesellschaft mit beschränkter Haftung (includes UG)
-        'KG': '10',              # Kommanditgesellschaft
-        'OHG': '12',             # Offene Handelsgesellschaft
-        'Partnerschaft': '13',   # Partnerschaft
+        "AG": "1",  # Aktiengesellschaft
+        "eG": "2",  # Eingetragene Genossenschaft
+        "eV": "3",  # Eingetragener Verein
+        "SE": "6",  # Europäische Aktiengesellschaft
+        "GmbH": "8",  # Gesellschaft mit beschränkter Haftung (includes UG)
+        "KG": "10",  # Kommanditgesellschaft
+        "OHG": "12",  # Offene Handelsgesellschaft
+        "Partnerschaft": "13",  # Partnerschaft
     }
 
     def __init__(self, config: Optional[BundesAPIConfig] = None):
         self.config = config or BundesAPIConfig()
-        self.rate_limiter = TokenBucketRateLimiter(
-            rate=self.config.requests_per_hour,
-            per_seconds=3600
-        )
+        self.rate_limiter = TokenBucketRateLimiter(rate=self.config.requests_per_hour, per_seconds=3600)
         self._session = None
         self._initialized = False
 
@@ -202,19 +198,21 @@ class BundesAPISource:
         if self._session is None:
             self._session = requests.Session()
             # Use comprehensive browser-like headers to avoid being blocked
-            self._session.headers.update({
-                'User-Agent': self.config.user_agent,
-                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
-                'Accept-Language': 'de-DE,de;q=0.9,en-US;q=0.8,en;q=0.7',
-                'Accept-Encoding': 'gzip, deflate, br',
-                'Connection': 'keep-alive',
-                'Upgrade-Insecure-Requests': '1',
-                'Sec-Fetch-Dest': 'document',
-                'Sec-Fetch-Mode': 'navigate',
-                'Sec-Fetch-Site': 'same-origin',
-                'Sec-Fetch-User': '?1',
-                'Cache-Control': 'max-age=0',
-            })
+            self._session.headers.update(
+                {
+                    "User-Agent": self.config.user_agent,
+                    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
+                    "Accept-Language": "de-DE,de;q=0.9,en-US;q=0.8,en;q=0.7",
+                    "Accept-Encoding": "gzip, deflate, br",
+                    "Connection": "keep-alive",
+                    "Upgrade-Insecure-Requests": "1",
+                    "Sec-Fetch-Dest": "document",
+                    "Sec-Fetch-Mode": "navigate",
+                    "Sec-Fetch-Site": "same-origin",
+                    "Sec-Fetch-User": "?1",
+                    "Cache-Control": "max-age=0",
+                }
+            )
         return self._session
 
     def reset_session(self):
@@ -227,11 +225,11 @@ class BundesAPISource:
 
     def _make_request(self, method: str, url: str, **kwargs) -> requests.Response:
         """Make a request with retry logic."""
-        kwargs.setdefault('timeout', self.config.timeout)
+        kwargs.setdefault("timeout", self.config.timeout)
 
         for attempt in range(self.config.max_retries):
             try:
-                if method.lower() == 'get':
+                if method.lower() == "get":
                     response = self.session.get(url, **kwargs)
                 else:
                     response = self.session.post(url, **kwargs)
@@ -260,10 +258,10 @@ class BundesAPISource:
             advanced_search_url = f"{self.config.base_url}/rp_web/erweitertesuche/welcome.xhtml"
 
             print(f"Navigating to advanced search: {advanced_search_url}")
-            response = self._make_request('get', advanced_search_url)
+            response = self._make_request("get", advanced_search_url)
 
             # Verify we're on the advanced search page by checking for the keywords field
-            if 'schlagwoerter' in response.text.lower() or 'schlagwort' in response.text.lower():
+            if "schlagwoerter" in response.text.lower() or "schlagwort" in response.text.lower():
                 self._initialized = True
                 self._last_response = response
                 print("Successfully reached advanced search page")
@@ -271,7 +269,7 @@ class BundesAPISource:
             else:
                 print(f"Did not reach advanced search page. URL: {response.url}")
                 # Try to diagnose the issue
-                if 'session' in response.text.lower() and 'abgelaufen' in response.text.lower():
+                if "session" in response.text.lower() and "abgelaufen" in response.text.lower():
                     print("Session expired message detected")
                 return False
 
@@ -283,7 +281,7 @@ class BundesAPISource:
     def search(
         self,
         keywords: Optional[List[str]] = None,
-        keyword_mode: str = 'all',  # Changed default to 'all' - more reliable
+        keyword_mode: str = "all",  # Changed default to 'all' - more reliable
         states: Optional[List[str]] = None,
         registry_types: Optional[List[str]] = None,
         include_deleted: bool = False,
@@ -342,77 +340,77 @@ class BundesAPISource:
         # 1 = contain all keywords
         # 2 = contain at least one keyword
         # 3 = contain the exact name of the company
-        mode_map = {'all': '1', 'min': '2', 'exact': '3'}
-        keyword_mode_value = mode_map.get(keyword_mode, '1')
+        mode_map = {"all": "1", "min": "2", "exact": "3"}
+        keyword_mode_value = mode_map.get(keyword_mode, "1")
 
         # Get the search form from the last response
-        soup = BeautifulSoup(self._last_response.text, 'lxml')
+        soup = BeautifulSoup(self._last_response.text, "lxml")
 
         # Find the search form
-        search_form = soup.find('form', {'name': 'form'}) or soup.find('form', id='form')
+        search_form = soup.find("form", {"name": "form"}) or soup.find("form", id="form")
         if not search_form:
             print("Could not find search form on page")
             # Debug: print what forms are available
-            forms = soup.find_all('form')
+            forms = soup.find_all("form")
             print(f"Available forms: {[f.get('name', f.get('id', 'unnamed')) for f in forms]}")
             return
 
         # Get form action
-        form_action = search_form.get('action', '')
+        form_action = search_form.get("action", "")
         form_url = urljoin(self.config.base_url, form_action) if form_action else self._last_response.url
 
         # Get ViewState (required for JSF forms)
-        viewstate = soup.find('input', {'name': 'javax.faces.ViewState'})
-        viewstate_value = viewstate.get('value', '') if viewstate else ''
+        viewstate = soup.find("input", {"name": "javax.faces.ViewState"})
+        viewstate_value = viewstate.get("value", "") if viewstate else ""
 
         if not viewstate_value:
             print("Warning: No ViewState found - form submission may fail")
 
         # Build search form data with verified field names
         form_data = {
-            'form': 'form',
-            'suchTyp': 'e',  # Extended search type
-            'form:schlagwoerter': ' '.join(keywords) if keywords else '',
-            'form:schlagwortOptionen': keyword_mode_value,
-            'javax.faces.ViewState': viewstate_value,
-            'form:btnSuche': '',  # Submit button (empty value triggers the button)
+            "form": "form",
+            "suchTyp": "e",  # Extended search type
+            "form:schlagwoerter": " ".join(keywords) if keywords else "",
+            "form:schlagwortOptionen": keyword_mode_value,
+            "javax.faces.ViewState": viewstate_value,
+            "form:btnSuche": "",  # Submit button (empty value triggers the button)
         }
 
         # Add shareholder/participant name search if specified
         # This searches the "Name des Beteiligten" field
         if shareholder_name:
-            form_data['form:beteiligter'] = shareholder_name
+            form_data["form:beteiligter"] = shareholder_name
 
         # City filter (form:ort) — max 30 chars, supports wildcards * and ?
         if city:
-            form_data['form:ort'] = city[:30]
+            form_data["form:ort"] = city[:30]
 
         # Legal form filter — PrimeFaces SelectOneMenu uses _input suffix
         if legal_form_code:
-            form_data['form:rechtsform_input'] = legal_form_code
+            form_data["form:rechtsform_input"] = legal_form_code
 
         # Postal code filter (form:postleitzahl) — max 5 chars
         if postal_code:
-            form_data['form:postleitzahl'] = postal_code[:5]
+            form_data["form:postleitzahl"] = postal_code[:5]
 
         # Registration number (form:registerNummer) — supports wildcards * and ?
         if register_number:
-            form_data['form:registerNummer'] = register_number[:10]
+            form_data["form:registerNummer"] = register_number[:10]
 
         # Registry court (form:registergericht) — PrimeFaces uses _input suffix
         if register_court:
-            form_data['form:registergericht_input'] = register_court
+            form_data["form:registergericht_input"] = register_court
 
         # Results per page — PrimeFaces SelectOneMenu uses _input suffix
         if results_per_page in (10, 25, 50, 100):
-            form_data['form:ergebnisseProSeite_input'] = str(results_per_page)
+            form_data["form:ergebnisseProSeite_input"] = str(results_per_page)
 
         # Registry type - use select dropdown value
         # For 'all' mode, we can leave it empty (all types)
         # For 'min' mode, a specific type may be required
         if registry_types:
             # Single value for select dropdown
-            form_data['form:registerArt_input'] = registry_types[0] if len(registry_types) == 1 else ''
+            form_data["form:registerArt_input"] = registry_types[0] if len(registry_types) == 1 else ""
         # If no registry_types specified, leave empty for "all"
 
         # Add state checkboxes if specified
@@ -421,14 +419,14 @@ class BundesAPISource:
             for state_code in states:
                 state_name = self.STATES.get(state_code.lower())
                 if state_name:
-                    form_data[f'form:{state_name}_input'] = 'on'
+                    form_data[f"form:{state_name}_input"] = "on"
 
         # Include deleted companies checkbox
         if include_deleted:
             # Find the actual field name for this option
-            deleted_checkbox = soup.find('input', {'type': 'checkbox', 'id': lambda x: x and 'geloescht' in x.lower()})
+            deleted_checkbox = soup.find("input", {"type": "checkbox", "id": lambda x: x and "geloescht" in x.lower()})
             if deleted_checkbox:
-                form_data[deleted_checkbox.get('name', 'form:geloescht')] = 'on'
+                form_data[deleted_checkbox.get("name", "form:geloescht")] = "on"
 
         # Acquire rate limit token for search
         if not self.rate_limiter.acquire():
@@ -436,7 +434,7 @@ class BundesAPISource:
             return
 
         try:
-            search_desc = ' '.join(keywords) if keywords else '[no keywords]'
+            search_desc = " ".join(keywords) if keywords else "[no keywords]"
             if city:
                 search_desc += f" city={city}"
             if legal_form_code:
@@ -447,28 +445,28 @@ class BundesAPISource:
 
             # Submit search with proper headers for form submission
             response = self._make_request(
-                'post',
+                "post",
                 form_url,
                 data=form_data,
                 headers={
-                    'Content-Type': 'application/x-www-form-urlencoded',
-                    'Origin': self.config.base_url,
-                    'Referer': self._last_response.url,
-                }
+                    "Content-Type": "application/x-www-form-urlencoded",
+                    "Origin": self.config.base_url,
+                    "Referer": self._last_response.url,
+                },
             )
 
             # Check if we got results or an error
-            if 'sucheErgebnisse' in response.url or 'Search Result' in response.text:
+            if "sucheErgebnisse" in response.url or "Search Result" in response.text:
                 print(f"Search results page reached: {response.url}")
                 # Store search results page for VÖ fetching
                 self._search_results_response = response
-            elif 'erweitertesuche' in response.url:
+            elif "erweitertesuche" in response.url:
                 # Still on search page - might be a validation error
-                if 'error' in response.text.lower() or 'fehler' in response.text.lower():
+                if "error" in response.text.lower() or "fehler" in response.text.lower():
                     print("Form validation error detected")
                     # Try to extract error message
-                    error_soup = BeautifulSoup(response.text, 'lxml')
-                    error_msgs = error_soup.find_all(class_=lambda c: c and 'error' in c.lower())
+                    error_soup = BeautifulSoup(response.text, "lxml")
+                    error_msgs = error_soup.find_all(class_=lambda c: c and "error" in c.lower())
                     for msg in error_msgs[:3]:
                         print(f"  Error: {msg.get_text(strip=True)[:100]}")
 
@@ -489,9 +487,7 @@ class BundesAPISource:
                 current_response = response
                 while total_yielded < max_results:
                     page_num += 1
-                    page_results = self._fetch_next_page(
-                        current_response, page_num, results_per_page
-                    )
+                    page_results = self._fetch_next_page(current_response, page_num, results_per_page)
                     if not page_results:
                         break  # No more pages or pagination failed
                     print(f"Found {len(page_results)} results on page {page_num}")
@@ -523,46 +519,45 @@ class BundesAPISource:
           - cells[3]: City (registered office)
           - cells[4]: Status like "currently registered"
         """
-        soup = BeautifulSoup(html, 'lxml')
+        soup = BeautifulSoup(html, "lxml")
         results = []
 
         # Find result table (uses role='grid' attribute)
-        table = soup.find('table', {'role': 'grid'})
+        table = soup.find("table", {"role": "grid"})
         if not table:
             # Try alternative: look for data table
-            table = soup.find('table', class_=lambda c: c and 'dataTable' in c)
+            table = soup.find("table", class_=lambda c: c and "dataTable" in c)
 
         if not table:
             # Check if there's a "too many results" error
-            too_many = soup.find(string=re.compile(
-                r'zu viele|too many|ergebnismenge.*zu groß|eingrenzen|narrow',
-                re.IGNORECASE
-            ))
+            too_many = soup.find(
+                string=re.compile(r"zu viele|too many|ergebnismenge.*zu groß|eingrenzen|narrow", re.IGNORECASE)
+            )
             if too_many:
                 print("Too many results — narrow your search (add postal_code or keywords)")
                 return results
 
             # Check if there's an error or no results message
-            no_results = soup.find(string=re.compile(r'keine.*(treffer|ergebnis)|no.*result', re.IGNORECASE))
+            no_results = soup.find(string=re.compile(r"keine.*(treffer|ergebnis)|no.*result", re.IGNORECASE))
             if no_results:
                 print("No results found on page")
             return results
 
         # Find all data rows with data-ri attribute (these are the company rows)
-        tbody = table.find('tbody')
+        tbody = table.find("tbody")
         if tbody:
-            rows = tbody.find_all('tr', {'data-ri': True})
+            rows = tbody.find_all("tr", {"data-ri": True})
         else:
-            rows = table.find_all('tr', {'data-ri': True})
+            rows = table.find_all("tr", {"data-ri": True})
 
         for row in rows:
-            cells = row.find_all('td')
+            cells = row.find_all("td")
             if len(cells) < 5:
                 continue
 
             try:
                 # Get row index from data-ri attribute (for VÖ fetching)
-                row_index = int(row.get('data-ri', -1))
+                row_index = int(row.get("data-ri", -1))
 
                 # Extract data from specific cell positions
                 # cells[1]: Court/registry info
@@ -570,10 +565,10 @@ class BundesAPISource:
                 # cells[3]: City
                 # cells[4]: Status
 
-                court_info = cells[1].get_text(strip=True) if len(cells) > 1 else ''
-                name = cells[2].get_text(strip=True) if len(cells) > 2 else ''
-                city = cells[3].get_text(strip=True) if len(cells) > 3 else ''
-                status = cells[4].get_text(strip=True) if len(cells) > 4 else ''
+                court_info = cells[1].get_text(strip=True) if len(cells) > 1 else ""
+                name = cells[2].get_text(strip=True) if len(cells) > 2 else ""
+                city = cells[3].get_text(strip=True) if len(cells) > 3 else ""
+                status = cells[4].get_text(strip=True) if len(cells) > 4 else ""
 
                 # Skip if no company name
                 if not name:
@@ -582,21 +577,23 @@ class BundesAPISource:
                 # Parse court info to extract state, court, register type, and number
                 # Format: "Bavaria   District court Augsburg HRB 19414"
                 # or German: "Bayern   Amtsgericht München HRB 123456"
-                state = ''
-                registry_court = ''
-                registry_type = ''
-                register_number = ''
+                state = ""
+                registry_court = ""
+                registry_type = ""
+                register_number = ""
 
                 # English pattern
                 match = re.match(
-                    r'([\w\-\s]+?)\s+District court\s+([\w\-\s]+?)\s+(HRB|HRA|GnR|PR|VR|GsR)\s*(\d+)',
-                    court_info, re.IGNORECASE
+                    r"([\w\-\s]+?)\s+District court\s+([\w\-\s]+?)\s+(HRB|HRA|GnR|PR|VR|GsR)\s*(\d+)",
+                    court_info,
+                    re.IGNORECASE,
                 )
                 if not match:
                     # German pattern
                     match = re.match(
-                        r'([\w\-\s]+?)\s+Amtsgericht\s+([\w\-\s]+?)\s+(HRB|HRA|GnR|PR|VR|GsR)\s*(\d+)',
-                        court_info, re.IGNORECASE
+                        r"([\w\-\s]+?)\s+Amtsgericht\s+([\w\-\s]+?)\s+(HRB|HRA|GnR|PR|VR|GsR)\s*(\d+)",
+                        court_info,
+                        re.IGNORECASE,
                     )
 
                 if match:
@@ -607,37 +604,39 @@ class BundesAPISource:
                     registry_court = f"District court {court_city}"
                 else:
                     # Fallback: try to extract at least registry type and number
-                    type_match = re.search(r'(HRB|HRA|GnR|PR|VR|GsR)\s*(\d+)', court_info, re.IGNORECASE)
+                    type_match = re.search(r"(HRB|HRA|GnR|PR|VR|GsR)\s*(\d+)", court_info, re.IGNORECASE)
                     if type_match:
                         registry_type = type_match.group(1).upper()
                         register_number = type_match.group(2)
 
                 # Build native company number
                 native_company_number = f"{registry_court} {registry_type} {register_number}".strip()
-                if not native_company_number or native_company_number == '  ':
+                if not native_company_number or native_company_number == "  ":
                     native_company_number = court_info  # Fallback to full court info
 
                 # Normalize status
                 normalized_status = status
                 if status:
                     status_lower = status.lower()
-                    if 'aktuell' in status_lower or 'currently' in status_lower or 'registered' in status_lower:
-                        normalized_status = 'currently registered'
-                    elif 'gelöscht' in status_lower or 'deleted' in status_lower:
-                        normalized_status = 'deleted'
-                    elif 'aufgelöst' in status_lower or 'dissolved' in status_lower:
-                        normalized_status = 'dissolved'
+                    if "aktuell" in status_lower or "currently" in status_lower or "registered" in status_lower:
+                        normalized_status = "currently registered"
+                    elif "gelöscht" in status_lower or "deleted" in status_lower:
+                        normalized_status = "deleted"
+                    elif "aufgelöst" in status_lower or "dissolved" in status_lower:
+                        normalized_status = "dissolved"
 
-                results.append(SearchResult(
-                    name=name,
-                    native_company_number=native_company_number,
-                    registry_court=registry_court,
-                    registry_type=registry_type,
-                    status=normalized_status if normalized_status else None,
-                    state=state if state else None,  # Don't use city as state fallback
-                    city=city if city else None,
-                    row_index=row_index,
-                ))
+                results.append(
+                    SearchResult(
+                        name=name,
+                        native_company_number=native_company_number,
+                        registry_court=registry_court,
+                        registry_type=registry_type,
+                        status=normalized_status if normalized_status else None,
+                        state=state if state else None,  # Don't use city as state fallback
+                        city=city if city else None,
+                        row_index=row_index,
+                    )
+                )
 
             except Exception as e:
                 print(f"Error parsing row: {e}")
@@ -650,7 +649,7 @@ class BundesAPISource:
         current_response: requests.Response,
         page_num: int,
         rows_per_page: int,
-    ) -> List['SearchResult']:
+    ) -> List["SearchResult"]:
         """
         Fetch the next page of search results using PrimeFaces AJAX pagination.
 
@@ -671,10 +670,10 @@ class BundesAPISource:
             return []
 
         try:
-            soup = BeautifulSoup(current_response.text, 'lxml')
+            soup = BeautifulSoup(current_response.text, "lxml")
 
             # Find the DataTable component ID from the grid table
-            table = soup.find('table', {'role': 'grid'})
+            table = soup.find("table", {"role": "grid"})
             if not table:
                 print("No DataTable found for pagination")
                 return []
@@ -685,29 +684,29 @@ class BundesAPISource:
 
             # PrimeFaces DataTable has id like "form:ergebnisListe" or "form:data"
             # The table itself or its parent div usually has an id
-            if table.get('id'):
-                datatable_id = table['id'].replace('_data', '')
+            if table.get("id"):
+                datatable_id = table["id"].replace("_data", "")
             else:
                 # Check parent elements
                 parent = table.parent
                 while parent and not datatable_id:
-                    if parent.get('id') and 'data' in parent.get('class', []):
-                        datatable_id = parent['id']
+                    if parent.get("id") and "data" in parent.get("class", []):
+                        datatable_id = parent["id"]
                         break
                     parent = parent.parent if parent.parent else None
 
             # Also try to find paginator elements
-            paginator = soup.find('div', class_=lambda c: c and 'ui-paginator' in c)
+            paginator = soup.find("div", class_=lambda c: c and "ui-paginator" in c)
             if paginator:
                 # Extract DataTable ID from paginator's id (e.g., "form:ergebnisListe_paginator_top")
-                pag_id = paginator.get('id', '')
-                if '_paginator' in pag_id:
-                    datatable_id = pag_id.split('_paginator')[0]
+                pag_id = paginator.get("id", "")
+                if "_paginator" in pag_id:
+                    datatable_id = pag_id.split("_paginator")[0]
 
             if not datatable_id:
                 # Fallback: search for common PrimeFaces DataTable IDs
-                for candidate_id in ['form:ergebnisListe', 'form:dataList', 'form:data', 'form:suchergebnisseForm']:
-                    if soup.find(id=candidate_id) or soup.find(id=f'{candidate_id}_data'):
+                for candidate_id in ["form:ergebnisListe", "form:dataList", "form:data", "form:suchergebnisseForm"]:
+                    if soup.find(id=candidate_id) or soup.find(id=f"{candidate_id}_data"):
                         datatable_id = candidate_id
                         break
 
@@ -718,39 +717,39 @@ class BundesAPISource:
             print(f"Pagination: DataTable ID = {datatable_id}, fetching page {page_num}")
 
             # Get current ViewState
-            viewstate = soup.find('input', {'name': 'javax.faces.ViewState'})
-            viewstate_value = viewstate.get('value', '') if viewstate else ''
+            viewstate = soup.find("input", {"name": "javax.faces.ViewState"})
+            viewstate_value = viewstate.get("value", "") if viewstate else ""
 
             # Calculate first row offset (0-based)
             first_row = (page_num - 1) * rows_per_page
 
             # Build PrimeFaces AJAX pagination request
             # The form on the results page is 'ergebnissForm', not 'form'
-            form_name = datatable_id.split(':')[0] if ':' in datatable_id else 'ergebnissForm'
+            form_name = datatable_id.split(":")[0] if ":" in datatable_id else "ergebnissForm"
             ajax_data = {
-                'javax.faces.partial.ajax': 'true',
-                'javax.faces.source': datatable_id,
-                'javax.faces.partial.execute': datatable_id,
-                'javax.faces.partial.render': datatable_id,
-                f'{datatable_id}_pagination': 'true',
-                f'{datatable_id}_first': str(first_row),
-                f'{datatable_id}_rows': str(rows_per_page),
+                "javax.faces.partial.ajax": "true",
+                "javax.faces.source": datatable_id,
+                "javax.faces.partial.execute": datatable_id,
+                "javax.faces.partial.render": datatable_id,
+                f"{datatable_id}_pagination": "true",
+                f"{datatable_id}_first": str(first_row),
+                f"{datatable_id}_rows": str(rows_per_page),
                 form_name: form_name,
-                'javax.faces.ViewState': viewstate_value,
+                "javax.faces.ViewState": viewstate_value,
             }
 
             # Submit AJAX request with appropriate headers
             response = self._make_request(
-                'post',
+                "post",
                 current_response.url,
                 data=ajax_data,
                 headers={
-                    'Content-Type': 'application/x-www-form-urlencoded',
-                    'Origin': self.config.base_url,
-                    'Referer': current_response.url,
-                    'Faces-Request': 'partial/ajax',
-                    'X-Requested-With': 'XMLHttpRequest',
-                }
+                    "Content-Type": "application/x-www-form-urlencoded",
+                    "Origin": self.config.base_url,
+                    "Referer": current_response.url,
+                    "Faces-Request": "partial/ajax",
+                    "X-Requested-With": "XMLHttpRequest",
+                },
             )
 
             # PrimeFaces AJAX returns XML with partial HTML updates
@@ -759,10 +758,7 @@ class BundesAPISource:
             response_text = response.text
 
             # Parse all update sections with their IDs
-            all_updates = re.findall(
-                r'<update id="([^"]+)"><!\[CDATA\[(.*?)\]\]></update>',
-                response_text, re.DOTALL
-            )
+            all_updates = re.findall(r'<update id="([^"]+)"><!\[CDATA\[(.*?)\]\]></update>', response_text, re.DOTALL)
 
             # Find the DataTable update (matches our datatable_id)
             html_content = None
@@ -793,9 +789,9 @@ class BundesAPISource:
     def get_rate_limit_status(self) -> Dict[str, Any]:
         """Get current rate limit status."""
         return {
-            'requests_made': self.rate_limiter.requests_made,
-            'tokens_available': self.rate_limiter.tokens_available,
-            'max_per_hour': self.config.requests_per_hour,
+            "requests_made": self.rate_limiter.requests_made,
+            "tokens_available": self.rate_limiter.tokens_available,
+            "max_per_hour": self.config.requests_per_hour,
         }
 
     def fetch_announcements(
@@ -817,7 +813,7 @@ class BundesAPISource:
         Returns:
             List of Announcement objects
         """
-        if not hasattr(self, '_search_results_response') or not self._search_results_response:
+        if not hasattr(self, "_search_results_response") or not self._search_results_response:
             print("No search results page available. Run search() first.")
             return []
 
@@ -826,37 +822,35 @@ class BundesAPISource:
             return []
 
         # Parse the search results page
-        soup = BeautifulSoup(self._search_results_response.text, 'lxml')
-        viewstate = soup.find('input', {'name': 'javax.faces.ViewState'})
-        viewstate_value = viewstate.get('value', '') if viewstate else ''
+        soup = BeautifulSoup(self._search_results_response.text, "lxml")
+        viewstate = soup.find("input", {"name": "javax.faces.ViewState"})
+        viewstate_value = viewstate.get("value", "") if viewstate else ""
 
         # Find the VÖ link for this row
         # Pattern: ergebnissForm:selectedSuchErgebnisFormTable:{row}:j_idt227:5:fade1_
         # The j_idt number can vary, so use regex
         row_idx = search_result.row_index
-        vo_link = soup.find('a', id=re.compile(
-            f'ergebnissForm:selectedSuchErgebnisFormTable:{row_idx}:j_idt\\d+:5:fade'
-        ))
+        vo_link = soup.find(
+            "a", id=re.compile(f"ergebnissForm:selectedSuchErgebnisFormTable:{row_idx}:j_idt\\d+:5:fade")
+        )
 
         if not vo_link:
             # Try alternate pattern without trailing underscore
-            vo_link = soup.find('a', id=re.compile(
-                f'ergebnissForm:selectedSuchErgebnisFormTable:{row_idx}:.*:5:'
-            ))
+            vo_link = soup.find("a", id=re.compile(f"ergebnissForm:selectedSuchErgebnisFormTable:{row_idx}:.*:5:"))
 
         if not vo_link:
             print(f"No VÖ link found for row {row_idx}")
             return []
 
-        link_id = vo_link.get('id')
+        link_id = vo_link.get("id")
 
         # Build form data to click the VÖ button
         form_data = {
-            'ergebnissForm': 'ergebnissForm',
-            'property2': '',
-            'property': 'Global.Dokumentart.VÖ',
+            "ergebnissForm": "ergebnissForm",
+            "property2": "",
+            "property": "Global.Dokumentart.VÖ",
             link_id: link_id,
-            'javax.faces.ViewState': viewstate_value,
+            "javax.faces.ViewState": viewstate_value,
         }
 
         try:
@@ -867,14 +861,14 @@ class BundesAPISource:
 
             # Submit the VÖ request
             response = self._make_request(
-                'post',
+                "post",
                 self._search_results_response.url,
                 data=form_data,
                 headers={
-                    'Content-Type': 'application/x-www-form-urlencoded',
-                    'Origin': self.config.base_url,
-                    'Referer': self._search_results_response.url,
-                }
+                    "Content-Type": "application/x-www-form-urlencoded",
+                    "Origin": self.config.base_url,
+                    "Referer": self._search_results_response.url,
+                },
             )
 
             # Parse the announcements page
@@ -902,24 +896,24 @@ class BundesAPISource:
         - List items: li.ui-datalist-item containing announcement text
         - Empty state: div.ui-datalist-empty-message
         """
-        soup = BeautifulSoup(html, 'lxml')
+        soup = BeautifulSoup(html, "lxml")
         announcements = []
 
         # Find all list items
-        list_items = soup.find_all('li', class_='ui-datalist-item')
+        list_items = soup.find_all("li", class_="ui-datalist-item")
 
         if not list_items:
             # Check for empty message
-            empty_msg = soup.find('div', class_='ui-datalist-empty-message')
+            empty_msg = soup.find("div", class_="ui-datalist-empty-message")
             if empty_msg:
                 return []  # No announcements
 
         for item in list_items:
-            text = item.get_text(separator='\n', strip=True)
+            text = item.get_text(separator="\n", strip=True)
 
             # Try to extract date from text
             # Common patterns: "12.03.2024", "2024-03-12"
-            date_match = re.search(r'(\d{2}\.\d{2}\.\d{4}|\d{4}-\d{2}-\d{2})', text)
+            date_match = re.search(r"(\d{2}\.\d{2}\.\d{4}|\d{4}-\d{2}-\d{2})", text)
             announcement_date = date_match.group(1) if date_match else None
 
             # Try to determine announcement type
@@ -928,15 +922,17 @@ class BundesAPISource:
             # Try to extract capital amounts
             capital_old, capital_new = self._extract_capital_amounts(text)
 
-            announcements.append(Announcement(
-                company_name=company_name,
-                native_company_number=native_company_number,
-                announcement_date=announcement_date,
-                announcement_type=announcement_type,
-                text=text,
-                capital_old=capital_old,
-                capital_new=capital_new,
-            ))
+            announcements.append(
+                Announcement(
+                    company_name=company_name,
+                    native_company_number=native_company_number,
+                    announcement_date=announcement_date,
+                    announcement_type=announcement_type,
+                    text=text,
+                    capital_old=capital_old,
+                    capital_new=capital_new,
+                )
+            )
 
         return announcements
 
@@ -959,38 +955,64 @@ class BundesAPISource:
         text_lower = text.lower()
 
         # Check patterns in order of specificity
-        if any(kw in text_lower for kw in ['neueintragung', 'erstmalige eintragung', 'neue firma', 'ist eingetragen']):
-            return 'neueintragung'
+        if any(kw in text_lower for kw in ["neueintragung", "erstmalige eintragung", "neue firma", "ist eingetragen"]):
+            return "neueintragung"
 
-        if any(kw in text_lower for kw in ['kapitalerhöhung', 'erhöhung des stammkapitals', 'erhöhung des grundkapitals',
-                                            'kapital erhöht', 'capital increase']):
-            return 'kapitalerhoehung'
+        if any(
+            kw in text_lower
+            for kw in [
+                "kapitalerhöhung",
+                "erhöhung des stammkapitals",
+                "erhöhung des grundkapitals",
+                "kapital erhöht",
+                "capital increase",
+            ]
+        ):
+            return "kapitalerhoehung"
 
-        if any(kw in text_lower for kw in ['kapitalherabsetzung', 'herabsetzung des stammkapitals',
-                                            'kapital herabgesetzt', 'capital decrease']):
-            return 'kapitalherabsetzung'
+        if any(
+            kw in text_lower
+            for kw in [
+                "kapitalherabsetzung",
+                "herabsetzung des stammkapitals",
+                "kapital herabgesetzt",
+                "capital decrease",
+            ]
+        ):
+            return "kapitalherabsetzung"
 
-        if any(kw in text_lower for kw in ['geschäftsführer', 'geschäftsführerin', 'managing director',
-                                            'bestellt', 'abberufen', 'nicht mehr geschäftsführer']):
-            return 'geschaeftsfuehrer'
+        if any(
+            kw in text_lower
+            for kw in [
+                "geschäftsführer",
+                "geschäftsführerin",
+                "managing director",
+                "bestellt",
+                "abberufen",
+                "nicht mehr geschäftsführer",
+            ]
+        ):
+            return "geschaeftsfuehrer"
 
-        if any(kw in text_lower for kw in ['sitzverlegung', 'sitz verlegt', 'neuer sitz', 'registered office changed']):
-            return 'sitzverlegung'
+        if any(kw in text_lower for kw in ["sitzverlegung", "sitz verlegt", "neuer sitz", "registered office changed"]):
+            return "sitzverlegung"
 
-        if any(kw in text_lower for kw in ['umwandlung', 'verschmelzung', 'spaltung', 'formwechsel',
-                                            'merger', 'transformation']):
-            return 'umwandlung'
+        if any(
+            kw in text_lower
+            for kw in ["umwandlung", "verschmelzung", "spaltung", "formwechsel", "merger", "transformation"]
+        ):
+            return "umwandlung"
 
-        if any(kw in text_lower for kw in ['auflösung', 'liquidation', 'dissolution', 'aufgelöst']):
-            return 'aufloesung'
+        if any(kw in text_lower for kw in ["auflösung", "liquidation", "dissolution", "aufgelöst"]):
+            return "aufloesung"
 
-        if any(kw in text_lower for kw in ['löschung', 'gelöscht', 'deletion', 'von amts wegen gelöscht']):
-            return 'loeschung'
+        if any(kw in text_lower for kw in ["löschung", "gelöscht", "deletion", "von amts wegen gelöscht"]):
+            return "loeschung"
 
-        if any(kw in text_lower for kw in ['prokura', 'prokurist', 'power of attorney']):
-            return 'prokura'
+        if any(kw in text_lower for kw in ["prokura", "prokurist", "power of attorney"]):
+            return "prokura"
 
-        return 'sonstiges'
+        return "sonstiges"
 
     def _extract_capital_amounts(self, text: str) -> tuple:
         """
@@ -1003,7 +1025,7 @@ class BundesAPISource:
         # "25.000,00 EUR" or "25.000 EUR" or "EUR 25.000,00"
         # "Stammkapital: 25.000,00 EUR"
 
-        capital_pattern = r'(\d{1,3}(?:\.\d{3})*(?:,\d{2})?)\s*(?:EUR|€)'
+        capital_pattern = r"(\d{1,3}(?:\.\d{3})*(?:,\d{2})?)\s*(?:EUR|€)"
 
         # Find all capital amounts
         matches = re.findall(capital_pattern, text)
@@ -1014,7 +1036,7 @@ class BundesAPISource:
         # Convert to float
         def to_float(s):
             # "25.000,00" -> 25000.00
-            return float(s.replace('.', '').replace(',', '.'))
+            return float(s.replace(".", "").replace(",", "."))
 
         amounts = [to_float(m) for m in matches]
 
@@ -1067,31 +1089,31 @@ class BundesAPISource:
         bk_url = f"{self.config.base_url}/rp_web/bekanntmachungen/welcome.xhtml"
 
         try:
-            response = self._make_request('get', bk_url)
+            response = self._make_request("get", bk_url)
         except requests.RequestException as e:
             print(f"Error navigating to Registerbekanntmachungen: {e}")
             return
 
-        soup = BeautifulSoup(response.text, 'lxml')
-        viewstate = soup.find('input', {'name': 'javax.faces.ViewState'})
-        viewstate_value = viewstate.get('value', '') if viewstate else ''
+        soup = BeautifulSoup(response.text, "lxml")
+        viewstate = soup.find("input", {"name": "javax.faces.ViewState"})
+        viewstate_value = viewstate.get("value", "") if viewstate else ""
 
         # Map state code to state name
-        state_name = ''
+        state_name = ""
         if state:
-            state_name = self.STATES.get(state.lower(), '')
+            state_name = self.STATES.get(state.lower(), "")
 
         # Build form data
         form_data = {
-            'bekanntMachungenForm': 'bekanntMachungenForm',
-            'bekanntMachungenForm:datum_von_input': date_from,
-            'bekanntMachungenForm:datum_bis_input': date_to,
-            'bekanntMachungenForm:land_input': state_name,
-            'bekanntMachungenForm:registergericht_input': '',
-            'bekanntMachungenForm:sitz': '',
-            'bekanntMachungenForm:kategorie_input': category or '',
-            'javax.faces.ViewState': viewstate_value,
-            'bekanntMachungenForm:rrbSuche': '',
+            "bekanntMachungenForm": "bekanntMachungenForm",
+            "bekanntMachungenForm:datum_von_input": date_from,
+            "bekanntMachungenForm:datum_bis_input": date_to,
+            "bekanntMachungenForm:land_input": state_name,
+            "bekanntMachungenForm:registergericht_input": "",
+            "bekanntMachungenForm:sitz": "",
+            "bekanntMachungenForm:kategorie_input": category or "",
+            "javax.faces.ViewState": viewstate_value,
+            "bekanntMachungenForm:rrbSuche": "",
         }
 
         # Acquire rate limit token for search
@@ -1103,14 +1125,14 @@ class BundesAPISource:
             print(f"Searching announcements from {date_from} to {date_to}...")
 
             search_response = self._make_request(
-                'post',
+                "post",
                 response.url,
                 data=form_data,
                 headers={
-                    'Content-Type': 'application/x-www-form-urlencoded',
-                    'Origin': self.config.base_url,
-                    'Referer': response.url,
-                }
+                    "Content-Type": "application/x-www-form-urlencoded",
+                    "Origin": self.config.base_url,
+                    "Referer": response.url,
+                },
             )
 
             # Parse results
@@ -1135,24 +1157,24 @@ class BundesAPISource:
         - State and court (e.g., "Bayern Amtsgericht München HRB 12345")
         - Company name and city
         """
-        soup = BeautifulSoup(html, 'lxml')
+        soup = BeautifulSoup(html, "lxml")
         announcements = []
 
         # Find datalist container
-        datalist = soup.find('div', class_='ui-datalist')
+        datalist = soup.find("div", class_="ui-datalist")
         if not datalist:
             return announcements
 
         # Find all announcement links
-        items = datalist.find_all('a', class_='ui-commandlink')
+        items = datalist.find_all("a", class_="ui-commandlink")
 
         for item in items:
-            label = item.find('label')
+            label = item.find("label")
             if not label:
                 continue
 
-            text = label.get_text(separator='\n', strip=True)
-            lines = [l.strip() for l in text.split('\n') if l.strip()]
+            text = label.get_text(separator="\n", strip=True)
+            lines = [l.strip() for l in text.split("\n") if l.strip()]
 
             if len(lines) < 3:
                 continue
@@ -1163,28 +1185,28 @@ class BundesAPISource:
             # Line 2: Company Name – City
 
             category = lines[0]
-            court_info = lines[1] if len(lines) > 1 else ''
-            company_info = lines[2] if len(lines) > 2 else ''
+            court_info = lines[1] if len(lines) > 1 else ""
+            company_info = lines[2] if len(lines) > 2 else ""
 
             # Extract registry number from court info
-            registry_match = re.search(r'(HRB|HRA|GnR|PR|VR|GsR)\s*(\d+)', court_info)
-            registry_type = registry_match.group(1) if registry_match else ''
-            registry_number = registry_match.group(2) if registry_match else ''
+            registry_match = re.search(r"(HRB|HRA|GnR|PR|VR|GsR)\s*(\d+)", court_info)
+            registry_type = registry_match.group(1) if registry_match else ""
+            registry_number = registry_match.group(2) if registry_match else ""
 
             # Extract company name and city
-            if '–' in company_info:
-                parts = company_info.split('–')
+            if "–" in company_info:
+                parts = company_info.split("–")
                 company_name = parts[0].strip()
-                city = parts[1].strip() if len(parts) > 1 else ''
+                city = parts[1].strip() if len(parts) > 1 else ""
             else:
                 company_name = company_info
-                city = ''
+                city = ""
 
             # Build native company number
             native_number = f"{registry_type} {registry_number}".strip()
 
             # Extract date from onclick if available
-            onclick = item.get('onclick', '')
+            onclick = item.get("onclick", "")
             date_match = re.search(r"'(\w+ \w+ \d+ \d+:\d+:\d+ \w+ \d+)'", onclick)
             announcement_date = None
             if date_match:
@@ -1199,25 +1221,27 @@ class BundesAPISource:
             announcement_type = self._classify_announcement_type(category)
 
             # Extract state from court_info (first word(s) before "Amtsgericht")
-            state_match = re.match(r'^(.+?)\s+(?:Amtsgericht|District court)', court_info)
+            state_match = re.match(r"^(.+?)\s+(?:Amtsgericht|District court)", court_info)
             state_from_court = state_match.group(1).strip() if state_match else None
 
-            announcements.append(Announcement(
-                company_name=company_name,
-                native_company_number=native_number,
-                announcement_date=announcement_date,
-                announcement_type=announcement_type,
-                text=text,
-                city=city if city else None,
-                state=state_from_court,
-                registry_type=registry_type if registry_type else None,
-            ))
+            announcements.append(
+                Announcement(
+                    company_name=company_name,
+                    native_company_number=native_number,
+                    announcement_date=announcement_date,
+                    announcement_type=announcement_type,
+                    text=text,
+                    city=city if city else None,
+                    state=state_from_court,
+                    registry_type=registry_type if registry_type else None,
+                )
+            )
 
         return announcements
 
 
 def create_daily_scan_job(
-    db: 'Database',
+    db: "Database",
     keywords: List[str],
     max_requests: int = 50,
 ) -> Dict[str, int]:
@@ -1241,9 +1265,9 @@ def create_daily_scan_job(
     filter_ = AIRoboticsFilter()
 
     stats = {
-        'new_companies': 0,
-        'total_checked': 0,
-        'requests_used': 0,
+        "new_companies": 0,
+        "total_checked": 0,
+        "requests_used": 0,
     }
 
     for keyword in keywords:
@@ -1256,10 +1280,10 @@ def create_daily_scan_job(
         try:
             for result in source.search(
                 keywords=[keyword],
-                keyword_mode='all',  # Use 'all' mode - works without specifying registry type
+                keyword_mode="all",  # Use 'all' mode - works without specifying registry type
                 max_results=50,
             ):
-                stats['total_checked'] += 1
+                stats["total_checked"] += 1
 
                 # Check if already in database
                 existing = db.get_company_by_native_number(result.native_company_number)
@@ -1277,7 +1301,7 @@ def create_daily_scan_job(
                     company_id = db.insert_company(
                         company_number=f"bundesapi_{hash(result.native_company_number) & 0xFFFFFFFF:08x}",
                         name=result.name,
-                        source='bundesapi',
+                        source="bundesapi",
                         native_company_number=result.native_company_number,
                         current_status=result.status,
                         registry_court=result.registry_court,
@@ -1289,14 +1313,14 @@ def create_daily_scan_job(
                     )
 
                     # Add to enrichment queue
-                    db.add_to_enrichment_queue(company_id, priority=1, reason='new_from_bundesapi')
+                    db.add_to_enrichment_queue(company_id, priority=1, reason="new_from_bundesapi")
 
-                    stats['new_companies'] += 1
+                    stats["new_companies"] += 1
                     print(f"  New: {result.name} (score: {filter_result.relevance_score})")
 
         except Exception as e:
             print(f"Error searching for '{keyword}': {e}")
             continue
 
-    stats['requests_used'] = source.rate_limiter.requests_made
+    stats["requests_used"] = source.rate_limiter.requests_made
     return stats

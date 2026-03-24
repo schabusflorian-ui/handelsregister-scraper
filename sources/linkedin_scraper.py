@@ -5,197 +5,511 @@ Scrapes publicly accessible LinkedIn profile information including
 name, headline, location, and summary/about section.
 """
 
+import json
+import logging
+import random
 import re
 import time
-import random
-import logging
-import json
-import requests
-import cloudscraper
-from typing import Optional, List, Dict, Any
 from dataclasses import dataclass, field
 from datetime import datetime
-from urllib.parse import urlparse
+from typing import Any, Dict, List, Optional
+
+import cloudscraper
+import requests
 from bs4 import BeautifulSoup
 
 logger = logging.getLogger(__name__)
 
 
 USER_AGENTS = [
-    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15',
-    'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:121.0) Gecko/20100101 Firefox/121.0',
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:121.0) Gecko/20100101 Firefox/121.0",
 ]
 
 
 # Keywords that indicate stealth mode
 STEALTH_KEYWORDS = [
-    'stealth', 'stealth mode', 'building something',
-    'something new', 'exciting news soon', 'coming soon',
-    'new venture', 'working on', 'exploring opportunities',
-    'next chapter', 'what\'s next', 'in transition',
-    'building in public', 'stay tuned', 'announcement soon',
-    'secret project', 'unannounced', 'pre-launch',
+    "stealth",
+    "stealth mode",
+    "building something",
+    "something new",
+    "exciting news soon",
+    "coming soon",
+    "new venture",
+    "working on",
+    "exploring opportunities",
+    "next chapter",
+    "what's next",
+    "in transition",
+    "building in public",
+    "stay tuned",
+    "announcement soon",
+    "secret project",
+    "unannounced",
+    "pre-launch",
 ]
 
 # Career transition signals (Specter-inspired)
 TRANSITION_KEYWORDS = [
-    'just left', 'recently left', 'former', 'ex-',
-    'taking time', 'on sabbatical', 'between roles',
-    'exploring', 'advising', 'angel investing',
-    'on a break', 'career break', 'recharging',
-    'left to', 'departed', 'moved on from',
+    "just left",
+    "recently left",
+    "former",
+    "ex-",
+    "taking time",
+    "on sabbatical",
+    "between roles",
+    "exploring",
+    "advising",
+    "angel investing",
+    "on a break",
+    "career break",
+    "recharging",
+    "left to",
+    "departed",
+    "moved on from",
 ]
 
 # Urgency/traction signals
 URGENCY_KEYWORDS = [
-    'hiring', 'looking for', 'building team',
-    'raising', 'fundraising', 'backed by',
-    'launching soon', 'beta', 'early access',
-    'first customers', 'growing fast', 'scaling',
-    'just launched', 'now live', 'open for business',
+    "hiring",
+    "looking for",
+    "building team",
+    "raising",
+    "fundraising",
+    "backed by",
+    "launching soon",
+    "beta",
+    "early access",
+    "first customers",
+    "growing fast",
+    "scaling",
+    "just launched",
+    "now live",
+    "open for business",
 ]
 
 # Traction/validation signals
 TRACTION_KEYWORDS = [
-    'customers', 'users', 'revenue', 'arr', 'mrr',
-    'growing', 'scaling', 'series a', 'series b',
-    'raised', 'funding', 'backed', 'invested',
-    'yc', 'y combinator', 'techstars', 'accelerator',
+    "customers",
+    "users",
+    "revenue",
+    "arr",
+    "mrr",
+    "growing",
+    "scaling",
+    "series a",
+    "series b",
+    "raised",
+    "funding",
+    "backed",
+    "invested",
+    "yc",
+    "y combinator",
+    "techstars",
+    "accelerator",
 ]
 
 # Repeat founder signals
 REPEAT_FOUNDER_KEYWORDS = [
-    'serial entrepreneur', 'second time founder', '2x founder',
-    'exited', 'sold my', 'acquired by', 'previous exit',
-    'built and sold', 'founded and exited', 'serial founder',
-    '3x founder', 'multiple exits', 'prev founder',
+    "serial entrepreneur",
+    "second time founder",
+    "2x founder",
+    "exited",
+    "sold my",
+    "acquired by",
+    "previous exit",
+    "built and sold",
+    "founded and exited",
+    "serial founder",
+    "3x founder",
+    "multiple exits",
+    "prev founder",
 ]
 
 # High-value background companies
 HIGH_VALUE_COMPANIES = [
-    'google', 'meta', 'facebook', 'amazon', 'apple', 'microsoft',
-    'stripe', 'airbnb', 'uber', 'lyft', 'spotify', 'netflix',
-    'klarna', 'n26', 'revolut', 'wise', 'transferwise',
-    'delivery hero', 'zalando', 'celonis', 'personio', 'flixbus',
-    'soundcloud', 'contentful', 'gorillas', 'flink',
-    'mckinsey', 'bcg', 'bain', 'ycombinator', 'y combinator',
-    'sequoia', 'andreessen', 'a16z', 'index ventures', 'accel',
+    "google",
+    "meta",
+    "facebook",
+    "amazon",
+    "apple",
+    "microsoft",
+    "stripe",
+    "airbnb",
+    "uber",
+    "lyft",
+    "spotify",
+    "netflix",
+    "klarna",
+    "n26",
+    "revolut",
+    "wise",
+    "transferwise",
+    "delivery hero",
+    "zalando",
+    "celonis",
+    "personio",
+    "flixbus",
+    "soundcloud",
+    "contentful",
+    "gorillas",
+    "flink",
+    "mckinsey",
+    "bcg",
+    "bain",
+    "ycombinator",
+    "y combinator",
+    "sequoia",
+    "andreessen",
+    "a16z",
+    "index ventures",
+    "accel",
 ]
 
 # Founder-related keywords
 FOUNDER_KEYWORDS = [
-    'founder', 'co-founder', 'cofounder', 'gründer', 'mitgründer',
-    'ceo', 'chief executive', 'managing director', 'geschäftsführer',
-    'entrepreneur', 'serial entrepreneur', 'angel investor',
+    "founder",
+    "co-founder",
+    "cofounder",
+    "gründer",
+    "mitgründer",
+    "ceo",
+    "chief executive",
+    "managing director",
+    "geschäftsführer",
+    "entrepreneur",
+    "serial entrepreneur",
+    "angel investor",
 ]
 
 # Co-founder seeking signals
 COFOUNDER_SEEKING_KEYWORDS = [
-    'looking for co-founder', 'looking for cofounder', 'seeking co-founder',
-    'seeking cofounder', 'need a co-founder', 'need a cofounder',
-    'suche mitgründer', 'suche co-founder', 'looking for a technical',
-    'looking for a business', 'need technical co-founder', 'need business co-founder',
-    'open to co-founding', 'want to co-found', 'looking to co-found',
-    'seeking technical partner', 'seeking business partner',
-    'building with someone', 'looking for founding team',
+    "looking for co-founder",
+    "looking for cofounder",
+    "seeking co-founder",
+    "seeking cofounder",
+    "need a co-founder",
+    "need a cofounder",
+    "suche mitgründer",
+    "suche co-founder",
+    "looking for a technical",
+    "looking for a business",
+    "need technical co-founder",
+    "need business co-founder",
+    "open to co-founding",
+    "want to co-found",
+    "looking to co-found",
+    "seeking technical partner",
+    "seeking business partner",
+    "building with someone",
+    "looking for founding team",
 ]
 
 # Technical role indicators
 TECHNICAL_KEYWORDS = [
-    'engineer', 'developer', 'programmer', 'software', 'backend', 'frontend',
-    'full stack', 'fullstack', 'devops', 'sre', 'data scientist', 'ml engineer',
-    'machine learning', 'ai engineer', 'cto', 'tech lead', 'architect',
-    'python', 'javascript', 'java', 'golang', 'rust', 'react', 'node',
-    'cloud', 'aws', 'infrastructure', 'platform', 'security engineer',
-    'mobile developer', 'ios', 'android', 'blockchain', 'web3',
+    "engineer",
+    "developer",
+    "programmer",
+    "software",
+    "backend",
+    "frontend",
+    "full stack",
+    "fullstack",
+    "devops",
+    "sre",
+    "data scientist",
+    "ml engineer",
+    "machine learning",
+    "ai engineer",
+    "cto",
+    "tech lead",
+    "architect",
+    "python",
+    "javascript",
+    "java",
+    "golang",
+    "rust",
+    "react",
+    "node",
+    "cloud",
+    "aws",
+    "infrastructure",
+    "platform",
+    "security engineer",
+    "mobile developer",
+    "ios",
+    "android",
+    "blockchain",
+    "web3",
 ]
 
 # Business role indicators
 BUSINESS_KEYWORDS = [
-    'business', 'sales', 'marketing', 'growth', 'operations', 'strategy',
-    'coo', 'cfo', 'cmo', 'cro', 'head of sales', 'head of marketing',
-    'business development', 'bd', 'partnerships', 'account', 'customer success',
-    'general manager', 'managing director', 'investment', 'finance',
-    'consulting', 'consultant', 'mba', 'analyst', 'venture',
+    "business",
+    "sales",
+    "marketing",
+    "growth",
+    "operations",
+    "strategy",
+    "coo",
+    "cfo",
+    "cmo",
+    "cro",
+    "head of sales",
+    "head of marketing",
+    "business development",
+    "bd",
+    "partnerships",
+    "account",
+    "customer success",
+    "general manager",
+    "managing director",
+    "investment",
+    "finance",
+    "consulting",
+    "consultant",
+    "mba",
+    "analyst",
+    "venture",
 ]
 
 # Product role indicators
 PRODUCT_KEYWORDS = [
-    'product', 'product manager', 'pm', 'cpo', 'product lead',
-    'product owner', 'product director', 'head of product',
-    'ux', 'user experience', 'user research', 'product design',
+    "product",
+    "product manager",
+    "pm",
+    "cpo",
+    "product lead",
+    "product owner",
+    "product director",
+    "head of product",
+    "ux",
+    "user experience",
+    "user research",
+    "product design",
 ]
 
 # Design role indicators
 DESIGN_KEYWORDS = [
-    'design', 'designer', 'ux', 'ui', 'creative', 'art director',
-    'visual', 'brand', 'graphic', 'illustration', 'figma', 'sketch',
+    "design",
+    "designer",
+    "ux",
+    "ui",
+    "creative",
+    "art director",
+    "visual",
+    "brand",
+    "graphic",
+    "illustration",
+    "figma",
+    "sketch",
 ]
 
 # Common skills to extract
 COMMON_SKILLS = [
     # Programming languages
-    'python', 'javascript', 'typescript', 'java', 'golang', 'go', 'rust',
-    'c++', 'c#', 'ruby', 'php', 'swift', 'kotlin', 'scala', 'r',
+    "python",
+    "javascript",
+    "typescript",
+    "java",
+    "golang",
+    "go",
+    "rust",
+    "c++",
+    "c#",
+    "ruby",
+    "php",
+    "swift",
+    "kotlin",
+    "scala",
+    "r",
     # Frameworks
-    'react', 'angular', 'vue', 'node.js', 'django', 'flask', 'rails',
-    'spring', 'nextjs', 'express', 'fastapi',
+    "react",
+    "angular",
+    "vue",
+    "node.js",
+    "django",
+    "flask",
+    "rails",
+    "spring",
+    "nextjs",
+    "express",
+    "fastapi",
     # Cloud/Infra
-    'aws', 'gcp', 'azure', 'kubernetes', 'docker', 'terraform',
+    "aws",
+    "gcp",
+    "azure",
+    "kubernetes",
+    "docker",
+    "terraform",
     # Data
-    'sql', 'postgresql', 'mongodb', 'redis', 'elasticsearch',
-    'spark', 'kafka', 'airflow', 'dbt',
+    "sql",
+    "postgresql",
+    "mongodb",
+    "redis",
+    "elasticsearch",
+    "spark",
+    "kafka",
+    "airflow",
+    "dbt",
     # ML/AI
-    'machine learning', 'deep learning', 'tensorflow', 'pytorch',
-    'nlp', 'computer vision', 'data science',
+    "machine learning",
+    "deep learning",
+    "tensorflow",
+    "pytorch",
+    "nlp",
+    "computer vision",
+    "data science",
     # Business skills
-    'fundraising', 'sales', 'marketing', 'growth hacking', 'seo',
-    'product management', 'strategy', 'operations', 'finance',
-    'business development', 'partnerships', 'negotiation',
+    "fundraising",
+    "sales",
+    "marketing",
+    "growth hacking",
+    "seo",
+    "product management",
+    "strategy",
+    "operations",
+    "finance",
+    "business development",
+    "partnerships",
+    "negotiation",
 ]
 
 # DACH region location indicators for filtering (Germany, Austria, Switzerland)
 DACH_LOCATIONS = [
     # === GERMANY ===
     # Country
-    'germany', 'deutschland', 'german',
+    "germany",
+    "deutschland",
+    "german",
     # Major cities
-    'berlin', 'munich', 'münchen', 'hamburg', 'frankfurt', 'cologne', 'köln',
-    'düsseldorf', 'dusseldorf', 'stuttgart', 'dortmund', 'essen', 'leipzig',
-    'bremen', 'dresden', 'hanover', 'hannover', 'nuremberg', 'nürnberg',
-    'duisburg', 'bochum', 'wuppertal', 'bielefeld', 'bonn', 'münster',
-    'karlsruhe', 'mannheim', 'augsburg', 'wiesbaden', 'aachen', 'heidelberg',
+    "berlin",
+    "munich",
+    "münchen",
+    "hamburg",
+    "frankfurt",
+    "cologne",
+    "köln",
+    "düsseldorf",
+    "dusseldorf",
+    "stuttgart",
+    "dortmund",
+    "essen",
+    "leipzig",
+    "bremen",
+    "dresden",
+    "hanover",
+    "hannover",
+    "nuremberg",
+    "nürnberg",
+    "duisburg",
+    "bochum",
+    "wuppertal",
+    "bielefeld",
+    "bonn",
+    "münster",
+    "karlsruhe",
+    "mannheim",
+    "augsburg",
+    "wiesbaden",
+    "aachen",
+    "heidelberg",
     # Regions/States
-    'bavaria', 'bayern', 'baden-württemberg', 'north rhine-westphalia',
-    'nordrhein-westfalen', 'hesse', 'hessen', 'saxony', 'sachsen',
-    'lower saxony', 'niedersachsen', 'rhineland-palatinate', 'rheinland-pfalz',
+    "bavaria",
+    "bayern",
+    "baden-württemberg",
+    "north rhine-westphalia",
+    "nordrhein-westfalen",
+    "hesse",
+    "hessen",
+    "saxony",
+    "sachsen",
+    "lower saxony",
+    "niedersachsen",
+    "rhineland-palatinate",
+    "rheinland-pfalz",
     # Tech hubs
-    'potsdam', 'freiburg', 'darmstadt', 'regensburg', 'wolfsburg',
-
+    "potsdam",
+    "freiburg",
+    "darmstadt",
+    "regensburg",
+    "wolfsburg",
     # === AUSTRIA ===
     # Country
-    'austria', 'österreich', 'austrian',
+    "austria",
+    "österreich",
+    "austrian",
     # Major cities
-    'vienna', 'wien', 'graz', 'linz', 'salzburg', 'innsbruck', 'klagenfurt',
-    'villach', 'wels', 'st. pölten', 'dornbirn', 'wiener neustadt', 'steyr',
+    "vienna",
+    "wien",
+    "graz",
+    "linz",
+    "salzburg",
+    "innsbruck",
+    "klagenfurt",
+    "villach",
+    "wels",
+    "st. pölten",
+    "dornbirn",
+    "wiener neustadt",
+    "steyr",
     # Regions
-    'tyrol', 'tirol', 'styria', 'steiermark', 'carinthia', 'kärnten',
-    'upper austria', 'oberösterreich', 'lower austria', 'niederösterreich',
-    'vorarlberg', 'burgenland',
-
+    "tyrol",
+    "tirol",
+    "styria",
+    "steiermark",
+    "carinthia",
+    "kärnten",
+    "upper austria",
+    "oberösterreich",
+    "lower austria",
+    "niederösterreich",
+    "vorarlberg",
+    "burgenland",
     # === SWITZERLAND ===
     # Country
-    'switzerland', 'schweiz', 'suisse', 'svizzera', 'swiss',
+    "switzerland",
+    "schweiz",
+    "suisse",
+    "svizzera",
+    "swiss",
     # Major cities
-    'zurich', 'zürich', 'geneva', 'genève', 'genf', 'basel', 'bern', 'berne',
-    'lausanne', 'winterthur', 'lucerne', 'luzern', 'st. gallen', 'lugano',
-    'biel', 'thun', 'köniz', 'la chaux-de-fonds', 'fribourg', 'schaffhausen',
-    'chur', 'neuchâtel', 'zug',
+    "zurich",
+    "zürich",
+    "geneva",
+    "genève",
+    "genf",
+    "basel",
+    "bern",
+    "berne",
+    "lausanne",
+    "winterthur",
+    "lucerne",
+    "luzern",
+    "st. gallen",
+    "lugano",
+    "biel",
+    "thun",
+    "köniz",
+    "la chaux-de-fonds",
+    "fribourg",
+    "schaffhausen",
+    "chur",
+    "neuchâtel",
+    "zug",
     # Regions/Cantons
-    'canton of zurich', 'kanton zürich', 'canton of bern', 'canton of geneva',
-    'canton of vaud', 'ticino', 'valais', 'wallis', 'graubünden', 'aargau',
+    "canton of zurich",
+    "kanton zürich",
+    "canton of bern",
+    "canton of geneva",
+    "canton of vaud",
+    "ticino",
+    "valais",
+    "wallis",
+    "graubünden",
+    "aargau",
 ]
 
 # Alias for backwards compatibility
@@ -205,6 +519,7 @@ GERMAN_LOCATIONS = DACH_LOCATIONS
 @dataclass
 class WorkExperience:
     """A single work experience entry."""
+
     title: str
     company: str
     duration: Optional[str] = None
@@ -216,6 +531,7 @@ class WorkExperience:
 @dataclass
 class LinkedInProfile:
     """Extracted LinkedIn profile data."""
+
     url: str
     name: Optional[str] = None
     headline: Optional[str] = None
@@ -261,36 +577,46 @@ class LinkedInProfile:
         """Convert to dictionary for database storage."""
         # Combine all signals for storage
         all_signals = {
-            'stealth': self.stealth_signals,
-            'founder': self.founder_signals,
-            'transition': self.transition_signals,
-            'urgency': self.urgency_signals,
-            'traction': self.traction_signals,
-            'cofounder': self.cofounder_signals,
-            'background': self.high_value_background,
+            "stealth": self.stealth_signals,
+            "founder": self.founder_signals,
+            "transition": self.transition_signals,
+            "urgency": self.urgency_signals,
+            "traction": self.traction_signals,
+            "cofounder": self.cofounder_signals,
+            "background": self.high_value_background,
         }
 
         return {
-            'linkedin_url': self.url,
-            'name': self.name,
-            'headline': self.headline,
-            'location': self.location,
-            'summary': self.summary,
-            'current_company': self.current_company,
-            'previous_companies': json.dumps(self.previous_companies) if self.previous_companies else None,
-            'skills': json.dumps(self.skills) if self.skills else None,
-            'experience': json.dumps([{
-                'title': e.title, 'company': e.company, 'duration': e.duration,
-                'location': e.location, 'is_current': e.is_current
-            } for e in self.experience]) if self.experience else None,
-            'education': json.dumps(self.education) if self.education else None,
-            'looking_for_cofounder': self.looking_for_cofounder,
-            'cofounder_signals': json.dumps(self.cofounder_signals) if self.cofounder_signals else None,
-            'primary_function': self.primary_function,
-            'stealth_signals': json.dumps(all_signals),  # Store all signals as JSON
-            'confidence_score': self.confidence_score,
-            'is_repeat_founder': self.is_repeat_founder,
-            'company_tier': self.company_tier,
+            "linkedin_url": self.url,
+            "name": self.name,
+            "headline": self.headline,
+            "location": self.location,
+            "summary": self.summary,
+            "current_company": self.current_company,
+            "previous_companies": json.dumps(self.previous_companies) if self.previous_companies else None,
+            "skills": json.dumps(self.skills) if self.skills else None,
+            "experience": json.dumps(
+                [
+                    {
+                        "title": e.title,
+                        "company": e.company,
+                        "duration": e.duration,
+                        "location": e.location,
+                        "is_current": e.is_current,
+                    }
+                    for e in self.experience
+                ]
+            )
+            if self.experience
+            else None,
+            "education": json.dumps(self.education) if self.education else None,
+            "looking_for_cofounder": self.looking_for_cofounder,
+            "cofounder_signals": json.dumps(self.cofounder_signals) if self.cofounder_signals else None,
+            "primary_function": self.primary_function,
+            "stealth_signals": json.dumps(all_signals),  # Store all signals as JSON
+            "confidence_score": self.confidence_score,
+            "is_repeat_founder": self.is_repeat_founder,
+            "company_tier": self.company_tier,
         }
 
 
@@ -313,7 +639,7 @@ class LinkedInProfileScraper:
         # Use cloudscraper for better bot bypass
         if use_cloudscraper:
             self.session = cloudscraper.create_scraper(
-                browser={'browser': 'chrome', 'platform': 'darwin', 'mobile': False}
+                browser={"browser": "chrome", "platform": "darwin", "mobile": False}
             )
         else:
             self.session = requests.Session()
@@ -321,17 +647,17 @@ class LinkedInProfileScraper:
     def _get_headers(self) -> Dict[str, str]:
         """Get randomized headers."""
         return {
-            'User-Agent': random.choice(USER_AGENTS),
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-            'Accept-Language': 'en-US,en;q=0.9,de;q=0.8',
-            'Accept-Encoding': 'gzip, deflate, br',
-            'DNT': '1',
-            'Connection': 'keep-alive',
-            'Upgrade-Insecure-Requests': '1',
-            'Sec-Fetch-Dest': 'document',
-            'Sec-Fetch-Mode': 'navigate',
-            'Sec-Fetch-Site': 'none',
-            'Cache-Control': 'max-age=0',
+            "User-Agent": random.choice(USER_AGENTS),
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+            "Accept-Language": "en-US,en;q=0.9,de;q=0.8",
+            "Accept-Encoding": "gzip, deflate, br",
+            "DNT": "1",
+            "Connection": "keep-alive",
+            "Upgrade-Insecure-Requests": "1",
+            "Sec-Fetch-Dest": "document",
+            "Sec-Fetch-Mode": "navigate",
+            "Sec-Fetch-Site": "none",
+            "Cache-Control": "max-age=0",
         }
 
     def _delay(self):
@@ -349,7 +675,7 @@ class LinkedInProfileScraper:
         Returns:
             HTML content or None if error
         """
-        proxies = {'http': self.proxy, 'https': self.proxy} if self.proxy else None
+        proxies = {"http": self.proxy, "https": self.proxy} if self.proxy else None
 
         try:
             response = self.session.get(
@@ -373,7 +699,7 @@ class LinkedInProfileScraper:
                 return None
 
             # Check for auth wall
-            if 'authwall' in response.url or 'login' in response.url:
+            if "authwall" in response.url or "login" in response.url:
                 logger.debug(f"Auth wall hit: {url}")
                 # Still try to parse - some data might be in the HTML
                 pass
@@ -392,7 +718,7 @@ class LinkedInProfileScraper:
         multiple strategies to extract data.
         """
         profile = LinkedInProfile(url=url, raw_html=html)
-        soup = BeautifulSoup(html, 'html.parser')
+        soup = BeautifulSoup(html, "html.parser")
 
         # Strategy 1: Look for JSON-LD structured data
         profile = self._extract_from_json_ld(soup, profile)
@@ -413,17 +739,17 @@ class LinkedInProfileScraper:
 
     def _extract_from_json_ld(self, soup: BeautifulSoup, profile: LinkedInProfile) -> LinkedInProfile:
         """Extract data from JSON-LD script tags."""
-        for script in soup.find_all('script', type='application/ld+json'):
+        for script in soup.find_all("script", type="application/ld+json"):
             try:
                 data = json.loads(script.string)
 
                 if isinstance(data, dict):
-                    if data.get('@type') == 'Person':
-                        profile.name = profile.name or data.get('name')
-                        if 'address' in data:
-                            addr = data['address']
+                    if data.get("@type") == "Person":
+                        profile.name = profile.name or data.get("name")
+                        if "address" in data:
+                            addr = data["address"]
                             if isinstance(addr, dict):
-                                profile.location = addr.get('addressLocality') or addr.get('addressCountry')
+                                profile.location = addr.get("addressLocality") or addr.get("addressCountry")
                             elif isinstance(addr, str):
                                 profile.location = addr
 
@@ -437,27 +763,27 @@ class LinkedInProfileScraper:
 
         # Name - various selectors LinkedIn has used
         name_selectors = [
-            'h1.top-card-layout__title',
-            'h1.text-heading-xlarge',
-            '.pv-top-card--list li:first-child',
-            '.top-card__title',
-            'h1',
+            "h1.top-card-layout__title",
+            "h1.text-heading-xlarge",
+            ".pv-top-card--list li:first-child",
+            ".top-card__title",
+            "h1",
         ]
         for selector in name_selectors:
             elem = soup.select_one(selector)
             if elem and elem.get_text(strip=True):
                 name = elem.get_text(strip=True)
                 # Filter out non-name content
-                if len(name) < 100 and not any(x in name.lower() for x in ['linkedin', 'sign in', 'join']):
+                if len(name) < 100 and not any(x in name.lower() for x in ["linkedin", "sign in", "join"]):
                     profile.name = profile.name or name
                     break
 
         # Headline
         headline_selectors = [
-            '.top-card-layout__headline',
-            'h2.top-card-layout__headline',
-            '.text-body-medium',
-            '.top-card__subline',
+            ".top-card-layout__headline",
+            "h2.top-card-layout__headline",
+            ".text-body-medium",
+            ".top-card__subline",
         ]
         for selector in headline_selectors:
             elem = soup.select_one(selector)
@@ -469,25 +795,27 @@ class LinkedInProfileScraper:
 
         # Location
         location_selectors = [
-            '.top-card-layout__first-subline',
-            '.top-card__subline-item',
-            '.profile-info-subheader',
+            ".top-card-layout__first-subline",
+            ".top-card__subline-item",
+            ".profile-info-subheader",
         ]
         for selector in location_selectors:
             elem = soup.select_one(selector)
             if elem:
                 text = elem.get_text(strip=True)
                 # Look for location patterns
-                if any(x in text.lower() for x in ['germany', 'berlin', 'munich', 'frankfurt', 'hamburg', 'deutschland']):
+                if any(
+                    x in text.lower() for x in ["germany", "berlin", "munich", "frankfurt", "hamburg", "deutschland"]
+                ):
                     profile.location = profile.location or text
                     break
 
         # Summary/About
         summary_selectors = [
-            '.core-section-container__content p',
-            '.pv-about__summary-text',
-            '#about ~ .display-flex p',
-            'section.summary p',
+            ".core-section-container__content p",
+            ".pv-about__summary-text",
+            "#about ~ .display-flex p",
+            "section.summary p",
         ]
         for selector in summary_selectors:
             elems = soup.select(selector)
@@ -503,39 +831,44 @@ class LinkedInProfileScraper:
         """Extract data from meta tags."""
 
         # Title often contains name and headline
-        title = soup.find('title')
+        title = soup.find("title")
         if title:
             title_text = title.get_text()
             # Pattern: "Name - Title | LinkedIn"
-            match = re.match(r'^([^-|]+)\s*[-|]\s*([^|]+)', title_text)
+            match = re.match(r"^([^-|]+)\s*[-|]\s*([^|]+)", title_text)
             if match:
                 profile.name = profile.name or match.group(1).strip()
                 profile.headline = profile.headline or match.group(2).strip()
 
         # OG tags
-        og_title = soup.find('meta', property='og:title')
-        if og_title and og_title.get('content'):
-            content = og_title['content']
-            if ' - ' in content:
-                parts = content.split(' - ', 1)
+        og_title = soup.find("meta", property="og:title")
+        if og_title and og_title.get("content"):
+            content = og_title["content"]
+            if " - " in content:
+                parts = content.split(" - ", 1)
                 profile.name = profile.name or parts[0].strip()
                 if len(parts) > 1:
                     profile.headline = profile.headline or parts[1].strip()
 
-        og_description = soup.find('meta', property='og:description')
-        if og_description and og_description.get('content'):
-            profile.summary = profile.summary or og_description['content'][:2000]
+        og_description = soup.find("meta", property="og:description")
+        if og_description and og_description.get("content"):
+            profile.summary = profile.summary or og_description["content"][:2000]
 
         return profile
 
     def _detect_signals(self, profile: LinkedInProfile) -> LinkedInProfile:
         """Detect stealth signals and calculate confidence score (v2 - enhanced)."""
 
-        text_to_check = ' '.join(filter(None, [
-            profile.headline,
-            profile.summary,
-            profile.name,
-        ])).lower()
+        text_to_check = " ".join(
+            filter(
+                None,
+                [
+                    profile.headline,
+                    profile.summary,
+                    profile.name,
+                ],
+            )
+        ).lower()
 
         # Check for stealth keywords
         for keyword in STEALTH_KEYWORDS:
@@ -602,10 +935,10 @@ class LinkedInProfileScraper:
             return 0
 
         tier = 0
-        faang = {'google', 'meta', 'facebook', 'amazon', 'apple', 'microsoft'}
-        unicorns = {'stripe', 'airbnb', 'uber', 'spotify', 'klarna', 'revolut', 'celonis'}
-        top_vcs = {'sequoia', 'andreessen', 'a16z', 'ycombinator', 'y combinator', 'index ventures', 'accel'}
-        consulting = {'mckinsey', 'bcg', 'bain'}
+        faang = {"google", "meta", "facebook", "amazon", "apple", "microsoft"}
+        unicorns = {"stripe", "airbnb", "uber", "spotify", "klarna", "revolut", "celonis"}
+        top_vcs = {"sequoia", "andreessen", "a16z", "ycombinator", "y combinator", "index ventures", "accel"}
+        consulting = {"mckinsey", "bcg", "bain"}
 
         for company in companies:
             company_lower = company.lower()
@@ -620,7 +953,7 @@ class LinkedInProfileScraper:
 
         return tier
 
-    def _calculate_confidence_v2(self, profile: 'LinkedInProfile') -> float:
+    def _calculate_confidence_v2(self, profile: "LinkedInProfile") -> float:
         """
         Enhanced confidence scoring based on Specter/Harmonic signals.
 
@@ -636,7 +969,7 @@ class LinkedInProfileScraper:
         # Tier 1: Direct stealth signals (0.35 max)
         if profile.stealth_signals:
             # Direct "stealth" keyword is very strong
-            if any('stealth' in s for s in profile.stealth_signals):
+            if any("stealth" in s for s in profile.stealth_signals):
                 score += 0.25
             else:
                 score += min(0.15, len(profile.stealth_signals) * 0.05)
@@ -672,9 +1005,14 @@ class LinkedInProfileScraper:
         # Tier 5: Location in DACH (0.10 max)
         if profile.location:
             loc_lower = profile.location.lower()
-            if any(x in loc_lower for x in ['germany', 'deutschland', 'austria', 'österreich', 'switzerland', 'schweiz']):
+            if any(
+                x in loc_lower for x in ["germany", "deutschland", "austria", "österreich", "switzerland", "schweiz"]
+            ):
                 score += 0.08
-            elif any(x in loc_lower for x in ['berlin', 'munich', 'münchen', 'hamburg', 'frankfurt', 'vienna', 'wien', 'zurich', 'zürich']):
+            elif any(
+                x in loc_lower
+                for x in ["berlin", "munich", "münchen", "hamburg", "frankfurt", "vienna", "wien", "zurich", "zürich"]
+            ):
                 score += 0.10
 
         return min(1.0, score)
@@ -693,15 +1031,15 @@ class LinkedInProfileScraper:
 
         # Determine primary function
         scores = {
-            'technical': tech_score,
-            'business': biz_score,
-            'product': product_score,
-            'design': design_score,
+            "technical": tech_score,
+            "business": biz_score,
+            "product": product_score,
+            "design": design_score,
         }
         if max(scores.values()) >= 2:
             profile.primary_function = max(scores, key=scores.get)
         else:
-            profile.primary_function = 'other'
+            profile.primary_function = "other"
 
         return profile
 
@@ -711,7 +1049,7 @@ class LinkedInProfileScraper:
         for skill in COMMON_SKILLS:
             # Use word boundary matching for short skills
             if len(skill) <= 3:
-                if re.search(rf'\b{re.escape(skill)}\b', text, re.I):
+                if re.search(rf"\b{re.escape(skill)}\b", text, re.I):
                     found_skills.append(skill)
             else:
                 if skill in text:
@@ -725,22 +1063,24 @@ class LinkedInProfileScraper:
         experiences = []
 
         # Look for experience section
-        exp_section = soup.find('section', {'id': 'experience'}) or \
-                      soup.find('section', class_=re.compile(r'experience', re.I))
+        exp_section = soup.find("section", {"id": "experience"}) or soup.find(
+            "section", class_=re.compile(r"experience", re.I)
+        )
 
         if exp_section:
-            for item in exp_section.find_all('li', class_=re.compile(r'position|experience', re.I)):
+            for item in exp_section.find_all("li", class_=re.compile(r"position|experience", re.I)):
                 try:
-                    title_elem = item.find(['h3', 'span'], class_=re.compile(r'title', re.I))
-                    company_elem = item.find(['h4', 'span'], class_=re.compile(r'company|subtitle', re.I))
-                    duration_elem = item.find('span', class_=re.compile(r'date|duration', re.I))
+                    title_elem = item.find(["h3", "span"], class_=re.compile(r"title", re.I))
+                    company_elem = item.find(["h4", "span"], class_=re.compile(r"company|subtitle", re.I))
+                    duration_elem = item.find("span", class_=re.compile(r"date|duration", re.I))
 
                     if title_elem and company_elem:
                         exp = WorkExperience(
                             title=title_elem.get_text(strip=True),
                             company=company_elem.get_text(strip=True),
                             duration=duration_elem.get_text(strip=True) if duration_elem else None,
-                            is_current='present' in (duration_elem.get_text(strip=True).lower() if duration_elem else '')
+                            is_current="present"
+                            in (duration_elem.get_text(strip=True).lower() if duration_elem else ""),
                         )
                         experiences.append(exp)
                 except Exception:
@@ -784,7 +1124,7 @@ class LinkedInProfileScraper:
         profiles = []
 
         for i, url in enumerate(urls):
-            logger.info(f"Profile {i+1}/{len(urls)}: {url}")
+            logger.info(f"Profile {i + 1}/{len(urls)}: {url}")
 
             profile = self.scrape_profile(url)
             if profile:
@@ -812,7 +1152,7 @@ def is_dach_location(location: Optional[str], headline: Optional[str] = None, su
     """
     # Combine all text to check
     texts = [location, headline, summary]
-    combined = ' '.join(t.lower() for t in texts if t)
+    combined = " ".join(t.lower() for t in texts if t)
 
     # Check for DACH location indicators
     for loc in DACH_LOCATIONS:
@@ -880,10 +1220,10 @@ def is_dach_from_search_result(
     # Get DACH terms from the search query that we need to ignore
     query_dach_terms = _extract_dach_terms_from_query(search_query)
 
-    snippet_lower = (snippet or '').lower()
-    title_lower = (title or '').lower()
-    url_lower = (url or '').lower()
-    headline_lower = (headline or '').lower()
+    snippet_lower = (snippet or "").lower()
+    title_lower = (title or "").lower()
+    url_lower = (url or "").lower()
+    headline_lower = (headline or "").lower()
 
     # --- Signal 1: Structured location patterns in snippet ---
     # LinkedIn snippets often contain "City, State, Country" or "Greater X Metropolitan Area"
@@ -892,21 +1232,21 @@ def is_dach_from_search_result(
     # Pattern: "City, Country" or "City, State, Country" (e.g., "Berlin, Germany", "Munich, Bavaria, Germany")
     location_patterns = [
         # "City, Country" at word boundaries
-        r'\b([A-Z][a-zäöüß]+(?:\s[A-Z][a-zäöüß]+)*),\s*(Germany|Deutschland|Austria|Österreich|Switzerland|Schweiz|Suisse)\b',
+        r"\b([A-Z][a-zäöüß]+(?:\s[A-Z][a-zäöüß]+)*),\s*(Germany|Deutschland|Austria|Österreich|Switzerland|Schweiz|Suisse)\b",
         # "City, State, Country"
-        r'\b([A-Z][a-zäöüß]+(?:\s[A-Z][a-zäöüß]+)*),\s*[A-Z][a-zäöüß]+(?:\s[A-Z][a-zäöüß]+)*,\s*(Germany|Deutschland|Austria|Österreich|Switzerland|Schweiz|Suisse)\b',
+        r"\b([A-Z][a-zäöüß]+(?:\s[A-Z][a-zäöüß]+)*),\s*[A-Z][a-zäöüß]+(?:\s[A-Z][a-zäöüß]+)*,\s*(Germany|Deutschland|Austria|Österreich|Switzerland|Schweiz|Suisse)\b",
         # "Greater X Metropolitan Area" or "Greater X Area"
-        r'Greater\s+(Berlin|Munich|Hamburg|Frankfurt|Vienna|Zurich|Zürich|Wien|Cologne|Stuttgart|Düsseldorf)\s+(?:Metropolitan\s+)?Area',
+        r"Greater\s+(Berlin|Munich|Hamburg|Frankfurt|Vienna|Zurich|Zürich|Wien|Cologne|Stuttgart|Düsseldorf)\s+(?:Metropolitan\s+)?Area",
     ]
 
-    snippet_raw = snippet or ''
+    snippet_raw = snippet or ""
     for pattern in location_patterns:
         match = re.search(pattern, snippet_raw)
         if match:
             return True, match.group(0)
 
     # Also check title for structured location
-    title_raw = title or ''
+    title_raw = title or ""
     for pattern in location_patterns:
         match = re.search(pattern, title_raw)
         if match:
@@ -915,22 +1255,56 @@ def is_dach_from_search_result(
     # --- Signal 2: DACH city names in URL slug ---
     # LinkedIn URLs like /in/john-doe-berlin-123/ contain genuine location info
     # Extract the slug part after /in/
-    url_slug = ''
-    slug_match = re.search(r'linkedin\.com/in/([^/?]+)', url_lower)
+    url_slug = ""
+    slug_match = re.search(r"linkedin\.com/in/([^/?]+)", url_lower)
     if slug_match:
-        url_slug = slug_match.group(1).replace('-', ' ')
+        url_slug = slug_match.group(1).replace("-", " ")
 
     # Check for DACH cities in URL slug (use a curated list of cities, not country names)
     dach_cities = [
         # Germany
-        'berlin', 'munich', 'münchen', 'hamburg', 'frankfurt', 'cologne', 'köln',
-        'düsseldorf', 'dusseldorf', 'stuttgart', 'leipzig', 'dresden', 'hannover',
-        'nuremberg', 'nürnberg', 'bonn', 'karlsruhe', 'mannheim', 'heidelberg',
-        'darmstadt', 'potsdam', 'freiburg', 'aachen',
+        "berlin",
+        "munich",
+        "münchen",
+        "hamburg",
+        "frankfurt",
+        "cologne",
+        "köln",
+        "düsseldorf",
+        "dusseldorf",
+        "stuttgart",
+        "leipzig",
+        "dresden",
+        "hannover",
+        "nuremberg",
+        "nürnberg",
+        "bonn",
+        "karlsruhe",
+        "mannheim",
+        "heidelberg",
+        "darmstadt",
+        "potsdam",
+        "freiburg",
+        "aachen",
         # Austria
-        'vienna', 'wien', 'graz', 'linz', 'salzburg', 'innsbruck', 'klagenfurt',
+        "vienna",
+        "wien",
+        "graz",
+        "linz",
+        "salzburg",
+        "innsbruck",
+        "klagenfurt",
         # Switzerland
-        'zurich', 'zürich', 'geneva', 'genève', 'basel', 'bern', 'lausanne', 'lucerne', 'luzern', 'zug',
+        "zurich",
+        "zürich",
+        "geneva",
+        "genève",
+        "basel",
+        "bern",
+        "lausanne",
+        "lucerne",
+        "luzern",
+        "zug",
     ]
     for city in dach_cities:
         if city in url_slug:
@@ -954,7 +1328,7 @@ def is_dach_from_search_result(
         for term in sorted(query_dach_terms, key=len, reverse=True):
             # Remove the term but be careful not to break other words
             # Use word boundary-aware replacement
-            cleaned_snippet = re.sub(r'\b' + re.escape(term) + r'\b', '', cleaned_snippet)
+            cleaned_snippet = re.sub(r"\b" + re.escape(term) + r"\b", "", cleaned_snippet)
 
         # Now check cleaned snippet for remaining DACH indicators
         for loc in DACH_LOCATIONS:
@@ -1034,12 +1408,12 @@ def scrape_and_detect(
     return ranked
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
 
     # Test with a sample URL (replace with real URL for testing)
     test_urls = [
-        'https://www.linkedin.com/in/example-profile',
+        "https://www.linkedin.com/in/example-profile",
     ]
 
     results = scrape_and_detect(test_urls, min_confidence=0.0)

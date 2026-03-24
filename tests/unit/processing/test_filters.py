@@ -6,26 +6,16 @@ are identified as AI/robotics related.
 """
 
 import pytest
-import sys
-from pathlib import Path
-
-# Add project root to path
-sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
 
 from processing.filters import (
     AIRoboticsFilter,
     FilterConfig,
-    FilterResult,
     extract_legal_form,
-    DEFAULT_AI_KEYWORDS,
-    HIGH_SIGNAL_KEYWORDS,
-    TECH_CATEGORIES,
 )
 from tests.fixtures.sample_data import (
-    TRUE_POSITIVES,
     FALSE_POSITIVES,
-    EDGE_CASES,
     LEGAL_FORMS,
+    TRUE_POSITIVES,
 )
 
 
@@ -328,14 +318,16 @@ class TestTruePositives:
         result = filter_instance.filter_company(name=name, status="active")
 
         assert result.passes == expected_passes, f"'{name}' should pass={expected_passes}"
-        assert result.relevance_score >= expected_min_score, \
+        assert result.relevance_score >= expected_min_score, (
             f"'{name}' should score >= {expected_min_score}, got {result.relevance_score}"
+        )
 
         # Check at least one expected category is present
         if expected_categories:
             categories_matched = any(cat in result.tech_categories for cat in expected_categories)
-            assert categories_matched, \
+            assert categories_matched, (
                 f"'{name}' should have one of {expected_categories}, got {result.tech_categories}"
+            )
 
 
 class TestFalsePositives:
@@ -352,8 +344,7 @@ class TestFalsePositives:
             # Either doesn't pass OR has score 0
             # Some false positives might technically pass with score 1 from generic matches
             # but the key is they shouldn't have high scores
-            assert result.relevance_score <= 1, \
-                f"'{name}' ({reason}) should score <= 1, got {result.relevance_score}"
+            assert result.relevance_score <= 1, f"'{name}' ({reason}) should score <= 1, got {result.relevance_score}"
 
 
 class TestLegalFormExtraction:

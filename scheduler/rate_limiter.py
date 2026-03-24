@@ -10,12 +10,12 @@ The state is stored in SQLite so that:
 3. We never exceed the legal limit even after crashes
 """
 
-import time
-import sqlite3
-from datetime import datetime, timedelta
-from typing import Optional, Tuple
-from dataclasses import dataclass
 import logging
+import sqlite3
+import time
+from dataclasses import dataclass
+from datetime import datetime
+from typing import Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -23,6 +23,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class RateLimitState:
     """Current state of the rate limiter."""
+
     tokens_available: float
     last_updated: datetime
     requests_this_hour: int
@@ -85,24 +86,26 @@ class PersistentRateLimiter:
         """Load existing state or initialize fresh state."""
         conn = self._get_connection()
         try:
-            row = conn.execute(
-                "SELECT * FROM rate_limiter_state WHERE id = 1"
-            ).fetchone()
+            row = conn.execute("SELECT * FROM rate_limiter_state WHERE id = 1").fetchone()
 
             if row is None:
                 # Initialize with full bucket
                 now = datetime.utcnow()
-                conn.execute("""
+                conn.execute(
+                    """
                     INSERT INTO rate_limiter_state
                     (id, tokens_available, last_updated, requests_this_hour, hour_started)
                     VALUES (1, ?, ?, 0, ?)
-                """, (self.MAX_TOKENS, now.isoformat(), now.isoformat()))
+                """,
+                    (self.MAX_TOKENS, now.isoformat(), now.isoformat()),
+                )
                 conn.commit()
                 logger.info("Initialized rate limiter with %d tokens", self.MAX_TOKENS)
             else:
                 logger.info(
                     "Loaded rate limiter state: %.1f tokens, %d requests this hour",
-                    row['tokens_available'], row['requests_this_hour']
+                    row["tokens_available"],
+                    row["requests_this_hour"],
                 )
         finally:
             conn.close()
@@ -114,12 +117,10 @@ class PersistentRateLimiter:
         Returns:
             Tuple of (current_tokens, requests_this_hour)
         """
-        row = conn.execute(
-            "SELECT * FROM rate_limiter_state WHERE id = 1"
-        ).fetchone()
+        row = conn.execute("SELECT * FROM rate_limiter_state WHERE id = 1").fetchone()
 
-        last_updated = datetime.fromisoformat(row['last_updated'])
-        hour_started = datetime.fromisoformat(row['hour_started']) if row['hour_started'] else last_updated
+        last_updated = datetime.fromisoformat(row["last_updated"])
+        hour_started = datetime.fromisoformat(row["hour_started"]) if row["hour_started"] else last_updated
         now = datetime.utcnow()
 
         # Calculate tokens regenerated since last update
@@ -127,26 +128,26 @@ class PersistentRateLimiter:
         tokens_regenerated = elapsed_seconds * self.TOKENS_PER_SECOND
 
         # Cap at maximum
-        current_tokens = min(
-            row['tokens_available'] + tokens_regenerated,
-            self.MAX_TOKENS
-        )
+        current_tokens = min(row["tokens_available"] + tokens_regenerated, self.MAX_TOKENS)
 
         # Reset hourly counter if hour has passed
-        requests_this_hour = row['requests_this_hour']
+        requests_this_hour = row["requests_this_hour"]
         if (now - hour_started).total_seconds() >= 3600:
             requests_this_hour = 0
             hour_started = now
 
         # Update state
-        conn.execute("""
+        conn.execute(
+            """
             UPDATE rate_limiter_state
             SET tokens_available = ?,
                 last_updated = ?,
                 requests_this_hour = ?,
                 hour_started = ?
             WHERE id = 1
-        """, (current_tokens, now.isoformat(), requests_this_hour, hour_started.isoformat()))
+        """,
+            (current_tokens, now.isoformat(), requests_this_hour, hour_started.isoformat()),
+        )
 
         return current_tokens, requests_this_hour
 
@@ -200,18 +201,18 @@ class PersistentRateLimiter:
 
                 if tokens >= count:
                     # Consume tokens
-                    conn.execute("""
+                    conn.execute(
+                        """
                         UPDATE rate_limiter_state
                         SET tokens_available = tokens_available - ?,
                             requests_this_hour = requests_this_hour + ?
                         WHERE id = 1
-                    """, (count, count))
+                    """,
+                        (count, count),
+                    )
                     conn.commit()
 
-                    logger.debug(
-                        "Acquired %d token(s), %.1f remaining",
-                        count, tokens - count
-                    )
+                    logger.debug("Acquired %d token(s), %.1f remaining", count, tokens - count)
                     return True
 
                 conn.commit()
@@ -235,10 +236,7 @@ class PersistentRateLimiter:
             # Add small buffer to avoid tight loops
             wait_time = min(wait_time + 0.5, 60)
 
-            logger.info(
-                "Rate limited - waiting %.1f seconds for tokens (have %.1f, need %d)",
-                wait_time, tokens, count
-            )
+            logger.info("Rate limited - waiting %.1f seconds for tokens (have %.1f, need %d)", wait_time, tokens, count)
             time.sleep(wait_time)
 
     def available_tokens(self) -> float:
@@ -255,14 +253,17 @@ class PersistentRateLimiter:
         conn = self._get_connection()
         try:
             now = datetime.utcnow()
-            conn.execute("""
+            conn.execute(
+                """
                 UPDATE rate_limiter_state
                 SET tokens_available = ?,
                     last_updated = ?,
                     requests_this_hour = 0,
                     hour_started = ?
                 WHERE id = 1
-            """, (self.MAX_TOKENS, now.isoformat(), now.isoformat()))
+            """,
+                (self.MAX_TOKENS, now.isoformat(), now.isoformat()),
+            )
             conn.commit()
             logger.info("Rate limiter reset to %d tokens", self.MAX_TOKENS)
         finally:
@@ -275,8 +276,8 @@ def print_rate_limit_status(db_path: str):
     limiter = PersistentRateLimiter(db_path)
     state = limiter.get_state()
 
-    print(f"Rate Limiter Status")
-    print(f"=" * 40)
+    print("Rate Limiter Status")
+    print("=" * 40)
     print(f"Tokens available: {state.tokens_available:.1f} / {limiter.MAX_TOKENS}")
     print(f"Requests this hour: {state.requests_this_hour} / {limiter.REQUESTS_PER_HOUR}")
     print(f"Can make request: {'Yes' if state.can_request else 'No'}")

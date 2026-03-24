@@ -6,29 +6,24 @@ location extraction, confidence scoring, and result parsing.
 """
 
 import pytest
-import sys
-from pathlib import Path
-
-# Add project root to path
-sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
 
 from processing.officer_linkedin_search import (
-    build_search_query,
-    build_fallback_query,
-    _extract_name_and_headline,
-    _extract_companies_from_text,
-    _extract_location,
-    _calculate_match_confidence,
-    _clean_company_name,
-    parse_search_result,
     OfficerLinkedInMatch,
     RateLimitedError,
+    _calculate_match_confidence,
+    _clean_company_name,
+    _extract_companies_from_text,
+    _extract_location,
+    _extract_name_and_headline,
+    build_fallback_query,
+    build_search_query,
+    parse_search_result,
 )
-
 
 # ============================================================================
 # Query Builder Tests
 # ============================================================================
+
 
 class TestBuildSearchQuery:
     """Test search query construction."""
@@ -36,7 +31,7 @@ class TestBuildSearchQuery:
     def test_basic_query(self):
         """Standard name + company produces correct query."""
         query = build_search_query("Max Mustermann", "TechStartup Berlin")
-        assert 'linkedin.com/in' in query
+        assert "linkedin.com/in" in query
         assert '"Max Mustermann"' in query
         assert '"TechStartup Berlin"' in query
 
@@ -44,26 +39,26 @@ class TestBuildSearchQuery:
         """GmbH suffix is stripped from company name."""
         query = build_search_query("Anna Schmidt", "RoboTech GmbH")
         assert '"RoboTech"' in query
-        assert 'GmbH' not in query
+        assert "GmbH" not in query
 
     def test_strips_gmbh_co_kg(self):
         """GmbH & Co. KG suffix is stripped."""
         query = build_search_query("Jan Müller", "AutoPilot GmbH & Co. KG")
         assert '"AutoPilot"' in query
-        assert 'GmbH' not in query
-        assert 'KG' not in query
+        assert "GmbH" not in query
+        assert "KG" not in query
 
     def test_strips_ug(self):
         """UG (haftungsbeschränkt) suffix is stripped."""
         query = build_search_query("Lisa Weber", "DroneAI UG (haftungsbeschränkt)")
         assert '"DroneAI"' in query
-        assert 'UG' not in query
+        assert "UG" not in query
 
     def test_strips_ag(self):
         """AG suffix is stripped."""
         query = build_search_query("Hans Fischer", "DataVision AG")
         assert '"DataVision"' in query
-        assert ' AG' not in query
+        assert " AG" not in query
 
 
 class TestBuildFallbackQuery:
@@ -72,18 +67,18 @@ class TestBuildFallbackQuery:
     def test_with_city(self):
         """Fallback query includes city."""
         query = build_fallback_query("Max Mustermann", "Berlin")
-        assert 'linkedin.com/in' in query
+        assert "linkedin.com/in" in query
         assert '"Max Mustermann"' in query
         assert '"Berlin"' in query
 
     def test_without_city(self):
         """Fallback query without city omits city."""
         query = build_fallback_query("Max Mustermann")
-        assert 'linkedin.com/in' in query
+        assert "linkedin.com/in" in query
         assert '"Max Mustermann"' in query
         # Should not contain empty quotes or None
         assert '""' not in query
-        assert 'None' not in query
+        assert "None" not in query
 
 
 class TestCleanCompanyName:
@@ -112,14 +107,13 @@ class TestCleanCompanyName:
 # Extraction Tests
 # ============================================================================
 
+
 class TestExtractNameAndHeadline:
     """Test LinkedIn title parsing."""
 
     def test_standard_pipe_linkedin(self):
         """Standard LinkedIn title: 'Name - Headline | LinkedIn'."""
-        name, headline = _extract_name_and_headline(
-            "Max Müller - CEO at StartupX | LinkedIn"
-        )
+        name, headline = _extract_name_and_headline("Max Müller - CEO at StartupX | LinkedIn")
         assert name == "Max Müller"
         assert headline == "CEO at StartupX"
 
@@ -131,9 +125,7 @@ class TestExtractNameAndHeadline:
 
     def test_dash_linkedin(self):
         """Alternative format: 'Name - Headline - LinkedIn'."""
-        name, headline = _extract_name_and_headline(
-            "Max Müller - CEO at StartupX - LinkedIn"
-        )
+        name, headline = _extract_name_and_headline("Max Müller - CEO at StartupX - LinkedIn")
         assert name == "Max Müller"
         # The headline includes everything after first ' - '
         assert "CEO at StartupX" in headline
@@ -150,17 +142,13 @@ class TestExtractCompaniesFromText:
 
     def test_finds_faang(self):
         """Finds FAANG companies in text."""
-        companies = _extract_companies_from_text(
-            "Previously worked at Google and then joined Meta"
-        )
+        companies = _extract_companies_from_text("Previously worked at Google and then joined Meta")
         assert "Google" in companies
         assert "Meta" in companies
 
     def test_european_tech(self):
         """Finds European tech companies."""
-        companies = _extract_companies_from_text(
-            "Experience at N26, now leading engineering at Celonis"
-        )
+        companies = _extract_companies_from_text("Experience at N26, now leading engineering at Celonis")
         assert "N26" in companies
         assert "Celonis" in companies
 
@@ -176,32 +164,24 @@ class TestExtractCompaniesFromText:
 
     def test_deduplicates(self):
         """Same company mentioned twice → one result."""
-        companies = _extract_companies_from_text(
-            "Google engineer, then Google manager"
-        )
+        companies = _extract_companies_from_text("Google engineer, then Google manager")
         assert companies.count("Google") == 1
 
     def test_no_false_positive_ey(self):
         """'previously' does NOT match 'ernst & young' (ey was removed)."""
-        companies = _extract_companies_from_text(
-            "He previously worked at a bank"
-        )
+        companies = _extract_companies_from_text("He previously worked at a bank")
         # Should not find Ernst & Young in this text
         assert "Ernst & Young" not in companies
         assert len(companies) == 0
 
     def test_ernst_young_full_name(self):
         """'ernst & young' as full name is found."""
-        companies = _extract_companies_from_text(
-            "Consulting at Ernst & Young for 3 years"
-        )
+        companies = _extract_companies_from_text("Consulting at Ernst & Young for 3 years")
         assert "Ernst & Young" in companies
 
     def test_consulting_firms(self):
         """Finds consulting firms."""
-        companies = _extract_companies_from_text(
-            "McKinsey consultant, then BCG partner"
-        )
+        companies = _extract_companies_from_text("McKinsey consultant, then BCG partner")
         assert "Mckinsey" in companies
         assert "Bcg" in companies
 
@@ -211,9 +191,7 @@ class TestExtractCompaniesFromText:
 
     def test_no_companies(self):
         """Text with no high-value companies returns empty list."""
-        companies = _extract_companies_from_text(
-            "He works at a small local bakery in Munich"
-        )
+        companies = _extract_companies_from_text("He works at a small local bakery in Munich")
         assert len(companies) == 0
 
 
@@ -253,6 +231,7 @@ class TestExtractLocation:
 # ============================================================================
 # Confidence Scoring Tests
 # ============================================================================
+
 
 class TestCalculateMatchConfidence:
     """Test 3-factor confidence scoring."""
@@ -356,6 +335,7 @@ class TestCalculateMatchConfidence:
 # Parse Search Result Tests
 # ============================================================================
 
+
 class TestParseSearchResult:
     """Test full result parsing pipeline."""
 
@@ -411,6 +391,7 @@ class TestParseSearchResult:
 # ============================================================================
 # Error Classes
 # ============================================================================
+
 
 class TestRateLimitedError:
     """Test RateLimitedError exception."""

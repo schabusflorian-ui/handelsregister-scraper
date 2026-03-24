@@ -12,13 +12,13 @@ Runs daily to catch new registrations and capital events.
 
 import logging
 from datetime import datetime, timedelta
-from typing import Dict, List, Optional, Any
+from typing import Any, Dict, Optional
 
 from persistence.database import Database
-from sources.bundesapi import BundesAPISource, Announcement
 from processing.filters import AIRoboticsFilter
 from processing.startup_scorer import StartupScorer
 from scheduler.rate_limiter import PersistentRateLimiter
+from sources.bundesapi import Announcement, BundesAPISource
 
 logger = logging.getLogger(__name__)
 
@@ -35,10 +35,10 @@ class AnnouncementMonitoringJob:
     """
 
     # Announcement types that indicate new companies
-    NEW_COMPANY_TYPES = ['neueintragung', 'sonstiges']
+    NEW_COMPANY_TYPES = ["neueintragung", "sonstiges"]
 
     # Announcement types that might indicate capital changes
-    CAPITAL_TYPES = ['kapitalerhoehung', 'kapitalherabsetzung', 'sonstiges']
+    CAPITAL_TYPES = ["kapitalerhoehung", "kapitalherabsetzung", "sonstiges"]
 
     def __init__(
         self,
@@ -84,7 +84,7 @@ class AnnouncementMonitoringJob:
         """
         filter_result = self.filter.filter_company(
             name=company_name,
-            status='currently registered',
+            status="currently registered",
         )
         return (filter_result.passes, filter_result)
 
@@ -101,11 +101,14 @@ class AnnouncementMonitoringJob:
         # Try with registry type prefix variations
         # e.g., "HRB 12345" might be stored as "District court München HRB 12345"
         cursor = self.db.conn.cursor()
-        cursor.execute("""
+        cursor.execute(
+            """
             SELECT * FROM companies
             WHERE native_company_number LIKE ?
             LIMIT 1
-        """, (f'%{native_company_number}%',))
+        """,
+            (f"%{native_company_number}%",),
+        )
 
         row = cursor.fetchone()
         return dict(row) if row else None
@@ -130,8 +133,8 @@ class AnnouncementMonitoringJob:
         # Check if already in database
         existing = self._find_existing_company(ann.native_company_number)
         if existing:
-            stats['already_tracked'] += 1
-            return existing['id']
+            stats["already_tracked"] += 1
+            return existing["id"]
 
         # Calculate startup score
         startup_result = self.startup_scorer.score_company(
@@ -144,9 +147,9 @@ class AnnouncementMonitoringJob:
         )
 
         # Extract registry type from native number
-        registry_type = ''
+        registry_type = ""
         if ann.native_company_number:
-            for rt in ['HRB', 'HRA', 'GnR', 'PR', 'VR', 'GsR']:
+            for rt in ["HRB", "HRA", "GnR", "PR", "VR", "GsR"]:
                 if rt in ann.native_company_number:
                     registry_type = rt
                     break
@@ -155,9 +158,9 @@ class AnnouncementMonitoringJob:
         company_id = self.db.insert_company(
             company_number=f"announcement_{hash(ann.native_company_number) & 0xFFFFFFFF:08x}",
             name=ann.company_name,
-            source='announcement',
+            source="announcement",
             native_company_number=ann.native_company_number,
-            current_status='currently registered',
+            current_status="currently registered",
             registry_type=registry_type,
             ai_robotics_score=filter_result.relevance_score,
             climate_score=filter_result.climate_score,
@@ -168,12 +171,14 @@ class AnnouncementMonitoringJob:
         )
 
         # Add to enrichment queue for detailed lookup
-        self.db.add_to_enrichment_queue(company_id, priority=1, reason='new_from_announcement')
+        self.db.add_to_enrichment_queue(company_id, priority=1, reason="new_from_announcement")
 
-        stats['new_companies'] += 1
+        stats["new_companies"] += 1
         logger.info(
             "New AI company from announcement: %s (score: %d, class: %s)",
-            ann.company_name, filter_result.relevance_score, classification
+            ann.company_name,
+            filter_result.relevance_score,
+            classification,
         )
 
         return company_id
@@ -195,14 +200,22 @@ class AnnouncementMonitoringJob:
         if not company:
             return False
 
-        company_id = company['id']
+        company_id = company["id"]
 
         # Check if this looks like a capital change
         text_lower = ann.text.lower()
-        is_capital_change = any(kw in text_lower for kw in [
-            'kapitalerhöhung', 'kapitalherabsetzung', 'stammkapital',
-            'grundkapital', 'erhöhung', 'herabsetzung', 'kapital',
-        ])
+        is_capital_change = any(
+            kw in text_lower
+            for kw in [
+                "kapitalerhöhung",
+                "kapitalherabsetzung",
+                "stammkapital",
+                "grundkapital",
+                "erhöhung",
+                "herabsetzung",
+                "kapital",
+            ]
+        )
 
         if not is_capital_change:
             return False
@@ -211,12 +224,14 @@ class AnnouncementMonitoringJob:
         capital_old, capital_new = self.source._extract_capital_amounts(ann.text)
 
         # Determine event type
-        if ann.announcement_type == 'kapitalerhoehung' or (capital_new and capital_old and capital_new > capital_old):
-            event_type = 'capital_increase'
-        elif ann.announcement_type == 'kapitalherabsetzung' or (capital_new and capital_old and capital_new < capital_old):
-            event_type = 'capital_decrease'
+        if ann.announcement_type == "kapitalerhoehung" or (capital_new and capital_old and capital_new > capital_old):
+            event_type = "capital_increase"
+        elif ann.announcement_type == "kapitalherabsetzung" or (
+            capital_new and capital_old and capital_new < capital_old
+        ):
+            event_type = "capital_decrease"
         else:
-            event_type = 'capital_change'
+            event_type = "capital_change"
 
         # Calculate change amount
         change_amount = None
@@ -239,16 +254,18 @@ class AnnouncementMonitoringJob:
         if capital_new:
             self.db.update_company(company_id, capital_amount=capital_new)
 
-        stats['capital_events'] += 1
+        stats["capital_events"] += 1
         logger.info(
             "Capital event detected: %s - %s (%.0f -> %.0f)",
-            company['name'], event_type,
-            capital_old or 0, capital_new or 0
+            company["name"],
+            event_type,
+            capital_old or 0,
+            capital_new or 0,
         )
 
         return True
 
-    OFFICER_TYPES = {'geschaeftsfuehrer', 'neueintragung', 'prokura'}
+    OFFICER_TYPES = {"geschaeftsfuehrer", "neueintragung", "prokura"}
 
     def _store_announcement(
         self,
@@ -271,6 +288,7 @@ class AnnouncementMonitoringJob:
         if company_id and ann.announcement_type in self.OFFICER_TYPES and ann.text:
             try:
                 from processing.officer_extractor import extract_officers_from_text, persist_officers
+
                 officers = extract_officers_from_text(ann.text)
                 if officers:
                     persist_officers(self.db, company_id, officers, ann.announcement_date)
@@ -291,14 +309,14 @@ class AnnouncementMonitoringJob:
             Statistics dict
         """
         stats = {
-            'announcements_fetched': 0,
-            'announcements_stored': 0,
-            'new_companies': 0,
-            'already_tracked': 0,
-            'capital_events': 0,
-            'linked_to_existing': 0,
-            'requests_used': 0,
-            'errors': 0,
+            "announcements_fetched": 0,
+            "announcements_stored": 0,
+            "new_companies": 0,
+            "already_tracked": 0,
+            "capital_events": 0,
+            "linked_to_existing": 0,
+            "requests_used": 0,
+            "errors": 0,
         }
 
         # Initialize source
@@ -315,7 +333,7 @@ class AnnouncementMonitoringJob:
                 date_to=date_to,
                 max_results=1000,  # Get all available
             ):
-                stats['announcements_fetched'] += 1
+                stats["announcements_fetched"] += 1
                 company_id = None
 
                 # Process based on announcement type
@@ -331,19 +349,19 @@ class AnnouncementMonitoringJob:
                 if company_id is None:
                     existing = self._find_existing_company(ann.native_company_number)
                     if existing:
-                        company_id = existing['id']
-                        stats['linked_to_existing'] += 1
+                        company_id = existing["id"]
+                        stats["linked_to_existing"] += 1
 
                 # Store announcement
                 if not dry_run:
                     self._store_announcement(ann, company_id)
-                    stats['announcements_stored'] += 1
+                    stats["announcements_stored"] += 1
 
-            stats['requests_used'] = self.source.rate_limiter.requests_made
+            stats["requests_used"] = self.source.rate_limiter.requests_made
 
         except Exception as e:
             logger.exception("Error in announcement monitoring job: %s", e)
-            stats['errors'] += 1
+            stats["errors"] += 1
 
         return stats
 

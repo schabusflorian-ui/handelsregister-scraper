@@ -11,4 +11,4 @@ This module provides:
 from .rate_limiter import PersistentRateLimiter
 from .scheduler import HandelsregisterScheduler
 
-__all__ = ['PersistentRateLimiter', 'HandelsregisterScheduler']
+__all__ = ["PersistentRateLimiter", "HandelsregisterScheduler"]

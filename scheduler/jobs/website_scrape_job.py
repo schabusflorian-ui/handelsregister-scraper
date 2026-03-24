@@ -15,7 +15,7 @@ from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 
 from processing.investor_matcher import InvestorMatcher
-from sources.website_scraper import WebsiteScraper, ScrapedWebsiteData
+from sources.website_scraper import WebsiteScraper
 
 logger = logging.getLogger(__name__)
 
@@ -56,14 +56,14 @@ class WebsiteScrapeJob:
     def run(self) -> Dict[str, Any]:
         """Execute the website scraping job."""
         stats = {
-            'companies_checked': 0,
-            'companies_enriched': 0,
-            'descriptions_added': 0,
-            'tech_keywords_added': 0,
-            'investors_detected': 0,
-            'investments_created': 0,
-            'linkedin_found': 0,
-            'errors': 0,
+            "companies_checked": 0,
+            "companies_enriched": 0,
+            "descriptions_added": 0,
+            "tech_keywords_added": 0,
+            "investors_detected": 0,
+            "investments_created": 0,
+            "linkedin_found": 0,
+            "errors": 0,
         }
 
         # Ensure we have the website_scraped_at column
@@ -74,35 +74,35 @@ class WebsiteScrapeJob:
         logger.info("Website scrape job: %d companies to process", len(companies))
 
         for company in companies:
-            stats['companies_checked'] += 1
+            stats["companies_checked"] += 1
 
             try:
                 result = self._scrape_company(company)
 
                 if result:
-                    stats['companies_enriched'] += 1
-                    if result.get('description_added'):
-                        stats['descriptions_added'] += 1
-                    if result.get('tech_keywords_added'):
-                        stats['tech_keywords_added'] += 1
-                    if result.get('investors_detected'):
-                        stats['investors_detected'] += result['investors_detected']
-                    stats['investments_created'] += result.get('investments_created', 0)
-                    if result.get('linkedin_found'):
-                        stats['linkedin_found'] += 1
+                    stats["companies_enriched"] += 1
+                    if result.get("description_added"):
+                        stats["descriptions_added"] += 1
+                    if result.get("tech_keywords_added"):
+                        stats["tech_keywords_added"] += 1
+                    if result.get("investors_detected"):
+                        stats["investors_detected"] += result["investors_detected"]
+                    stats["investments_created"] += result.get("investments_created", 0)
+                    if result.get("linkedin_found"):
+                        stats["linkedin_found"] += 1
 
             except Exception as e:
-                logger.error("Error scraping %s: %s", company['name'], e)
-                stats['errors'] += 1
+                logger.error("Error scraping %s: %s", company["name"], e)
+                stats["errors"] += 1
 
         logger.info(
             "Website scrape complete: %d checked, %d enriched, %d descriptions, "
             "%d investors detected, %d investment records created",
-            stats['companies_checked'],
-            stats['companies_enriched'],
-            stats['descriptions_added'],
-            stats['investors_detected'],
-            stats['investments_created'],
+            stats["companies_checked"],
+            stats["companies_enriched"],
+            stats["descriptions_added"],
+            stats["investors_detected"],
+            stats["investments_created"],
         )
 
         return stats
@@ -115,11 +115,11 @@ class WebsiteScrapeJob:
             columns = [row[1] for row in cursor.fetchall()]
 
             new_columns = [
-                ('website_scraped_at', 'TEXT'),
-                ('linkedin_url', 'TEXT'),
-                ('twitter_url', 'TEXT'),
-                ('website_scrape_quality', 'REAL'),
-                ('funding_mentions', 'TEXT'),
+                ("website_scraped_at", "TEXT"),
+                ("linkedin_url", "TEXT"),
+                ("twitter_url", "TEXT"),
+                ("website_scrape_quality", "REAL"),
+                ("funding_mentions", "TEXT"),
             ]
 
             for col, col_type in new_columns:
@@ -136,7 +136,8 @@ class WebsiteScrapeJob:
         cutoff = (datetime.utcnow() - timedelta(days=self.min_scrape_interval_days)).isoformat()
 
         # Companies with websites but missing purpose, not recently scraped
-        rows = self.db.conn.execute('''
+        rows = self.db.conn.execute(
+            """
             SELECT id, name, website, purpose, matched_keywords,
                    startup_classification, startup_score, ai_robotics_score
             FROM companies
@@ -149,51 +150,53 @@ class WebsiteScrapeJob:
                 ai_robotics_score DESC,
                 id DESC
             LIMIT ?
-        ''', (cutoff, self.batch_size)).fetchall()
+        """,
+            (cutoff, self.batch_size),
+        ).fetchall()
 
         return [dict(r) for r in rows]
 
     def _scrape_company(self, company: Dict) -> Optional[Dict]:
         """Scrape a single company website and update the database."""
-        url = company['website']
-        company_id = company['id']
+        url = company["website"]
+        company_id = company["id"]
 
-        logger.debug("Scraping website for %s: %s", company['name'], url)
+        logger.debug("Scraping website for %s: %s", company["name"], url)
 
         # Scrape the website
         data = self.scraper.scrape(url)
         now = datetime.utcnow().isoformat()
 
         result = {
-            'description_added': False,
-            'tech_keywords_added': False,
-            'investors_detected': 0,
-            'linkedin_found': False,
+            "description_added": False,
+            "tech_keywords_added": False,
+            "investors_detected": 0,
+            "linkedin_found": False,
         }
 
         # Build update dict
         update = {
-            'website_scraped_at': now,
-            'website_scrape_quality': data.scrape_quality,
+            "website_scraped_at": now,
+            "website_scrape_quality": data.scrape_quality,
         }
 
         # Add description/purpose if found and not already set
-        if data.description and not company.get('purpose'):
-            update['purpose'] = data.description[:1000]  # Limit length
-            result['description_added'] = True
+        if data.description and not company.get("purpose"):
+            update["purpose"] = data.description[:1000]  # Limit length
+            result["description_added"] = True
 
         # Add LinkedIn URL if found
         if data.linkedin_url:
-            update['linkedin_url'] = data.linkedin_url
-            result['linkedin_found'] = True
+            update["linkedin_url"] = data.linkedin_url
+            result["linkedin_found"] = True
 
         # Add Twitter URL if found
         if data.twitter_url:
-            update['twitter_url'] = data.twitter_url
+            update["twitter_url"] = data.twitter_url
 
         # Merge tech keywords with existing
         if data.tech_keywords:
-            existing = company.get('matched_keywords')
+            existing = company.get("matched_keywords")
             if existing:
                 try:
                     existing_list = json.loads(existing)
@@ -206,59 +209,53 @@ class WebsiteScrapeJob:
             new_keywords = set(data.tech_keywords) - set(existing_list)
             if new_keywords:
                 merged = existing_list + list(new_keywords)
-                update['matched_keywords'] = json.dumps(merged[:50])  # Cap at 50
-                result['tech_keywords_added'] = True
+                update["matched_keywords"] = json.dumps(merged[:50])  # Cap at 50
+                result["tech_keywords_added"] = True
 
         # Match investor mentions against known VCs and persist investment records
         if data.investors_mentioned:
-            result['investors_detected'] = len(data.investors_mentioned)
+            result["investors_detected"] = len(data.investors_mentioned)
             investments_created = 0
             for investor_name in data.investors_mentioned:
-                matches = self.investor_matcher.match(
-                    investor_name, min_confidence=0.8
-                )
+                matches = self.investor_matcher.match(investor_name, min_confidence=0.8)
                 if matches:
                     best = matches[0]  # Highest confidence first
                     created = self._record_investment(
                         company_id=company_id,
                         investor_id=best.investor_id,
-                        source='website',
+                        source="website",
                         # Slightly discount website mentions vs direct capital events
                         confidence=best.confidence * 0.9,
-                        notes=f"Mentioned on website: '{best.matched_text}'"
+                        notes=f"Mentioned on website: '{best.matched_text}'",
                     )
                     if created:
                         investments_created += 1
                         logger.info(
                             "Investment recorded: %s → %s (confidence=%.2f)",
-                            company['name'], best.investor_name, best.confidence
+                            company["name"],
+                            best.investor_name,
+                            best.confidence,
                         )
                 else:
-                    logger.debug(
-                        "No investor match for '%s' mentioned on %s",
-                        investor_name, company['name']
-                    )
-            result['investments_created'] = investments_created
+                    logger.debug("No investor match for '%s' mentioned on %s", investor_name, company["name"])
+            result["investments_created"] = investments_created
 
         # Store funding mentions as JSON for later analysis
         if data.funding_mentions:
-            update['funding_mentions'] = json.dumps(data.funding_mentions[:5])
-            logger.info(
-                "Funding mentions for %s: %s",
-                company['name'], data.funding_mentions
-            )
+            update["funding_mentions"] = json.dumps(data.funding_mentions[:5])
+            logger.info("Funding mentions for %s: %s", company["name"], data.funding_mentions)
 
         # Update the database
         self.db.update_company(company_id, **update)
 
-        if result['description_added'] or result['linkedin_found'] or result['investors_detected']:
+        if result["description_added"] or result["linkedin_found"] or result["investors_detected"]:
             logger.info(
                 "Enriched %s: desc=%s, linkedin=%s, investors=%d, investments=%d",
-                company['name'],
-                'yes' if result['description_added'] else 'no',
-                'yes' if result['linkedin_found'] else 'no',
-                result['investors_detected'],
-                result.get('investments_created', 0),
+                company["name"],
+                "yes" if result["description_added"] else "no",
+                "yes" if result["linkedin_found"] else "no",
+                result["investors_detected"],
+                result.get("investments_created", 0),
             )
 
         return result
@@ -266,9 +263,7 @@ class WebsiteScrapeJob:
     def _ensure_investors_seeded(self):
         """Ensure investor data is in the database (needed for matching)."""
         try:
-            count = self.db.conn.execute(
-                "SELECT COUNT(*) FROM investors"
-            ).fetchone()[0]
+            count = self.db.conn.execute("SELECT COUNT(*) FROM investors").fetchone()[0]
             if count == 0:
                 logger.info("Seeding investor data from YAML...")
                 self.investor_matcher.seed_to_database(self.db)
@@ -292,37 +287,43 @@ class WebsiteScrapeJob:
         conn = self.db.conn
         try:
             # Check if already exists (same company, investor, source)
-            existing = conn.execute("""
+            existing = conn.execute(
+                """
                 SELECT id FROM investments
                 WHERE company_id = ? AND investor_id = ?
                   AND detection_source = ?
-            """, (company_id, investor_id, source)).fetchone()
+            """,
+                (company_id, investor_id, source),
+            ).fetchone()
 
             if existing:
                 # Update confidence if this match is better
-                conn.execute("""
+                conn.execute(
+                    """
                     UPDATE investments
                     SET confidence = MAX(confidence, ?)
                     WHERE id = ?
-                """, (confidence, existing['id']))
+                """,
+                    (confidence, existing["id"]),
+                )
                 conn.commit()
                 return False
 
             # Insert new investment record
             # round_type, amount, investment_date are NULL for website mentions
             # — they can be enriched later from capital events or announcements
-            conn.execute("""
+            conn.execute(
+                """
                 INSERT INTO investments
                 (company_id, investor_id, round_type, amount, currency,
                  investment_date, detection_source, confidence, notes)
                 VALUES (?, ?, NULL, NULL, 'EUR', NULL, ?, ?, ?)
-            """, (company_id, investor_id, source, confidence, notes))
+            """,
+                (company_id, investor_id, source, confidence, notes),
+            )
             conn.commit()
             return True
 
         except Exception as e:
-            logger.error(
-                "Error recording investment for company %d, investor %d: %s",
-                company_id, investor_id, e
-            )
+            logger.error("Error recording investment for company %d, investor %d: %s", company_id, investor_id, e)
             return False

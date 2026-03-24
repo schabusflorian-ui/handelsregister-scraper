@@ -34,14 +34,12 @@ SEARCH_KEYWORDS = [
     "maschinelles lernen",
     "deep learning",
     "neural network",
-    
     # Robotics Keywords
     "robotik",
     "robotics",
     "roboter",
     "autonomous",
     "autonome systeme",
-    
     # Specific Technologies
     "computer vision",
     "natural language processing",
@@ -49,7 +47,6 @@ SEARCH_KEYWORDS = [
     "chatbot",
     "automation",
     "predictive analytics",
-
     # Climate Tech / Cleantech
     "cleantech",
     "greentech",
@@ -70,7 +67,6 @@ SEARCH_KEYWORDS = [
     "geothermie",
     "agritech",
     "carbon capture",
-
     # Deeptech / Research Spinoffs
     "quantum",
     "quanten",
@@ -99,7 +95,7 @@ RECENT_MONTHS = 24
 MIN_RELEVANCE_SCORE = 1
 
 # Filter by status
-ALLOWED_STATUSES = ['ACTIVE']  # Can include: 'ACTIVE', 'LIQUIDATION', 'DELETED', etc.
+ALLOWED_STATUSES = ["ACTIVE"]  # Can include: 'ACTIVE', 'LIQUIDATION', 'DELETED', etc.
 
 # Geographic filters (leave empty to include all locations)
 # Example: ['München', 'Berlin', 'Hamburg']
@@ -125,9 +121,9 @@ MIN_CAPITAL_AMOUNT = 0
 # - 'annual_financial_statements': Annual reports
 
 FEATURES = [
-    'related_persons',
-    'publications',
-    'financial_kpi',
+    "related_persons",
+    "publications",
+    "financial_kpi",
 ]
 
 # Use AI-powered search for better entity matching
@@ -157,24 +153,24 @@ CAPITAL_RAISE_KEYWORDS = [
 # =============================================================================
 
 # Output file names
-CSV_OUTPUT_FILE = 'ai_robotics_startups.csv'
-JSON_OUTPUT_FILE = 'ai_robotics_startups.json'
+CSV_OUTPUT_FILE = "ai_robotics_startups.csv"
+JSON_OUTPUT_FILE = "ai_robotics_startups.json"
 
 # CSV field order and selection
 CSV_FIELDS = [
-    'name',
-    'entity_id',
-    'status',
-    'registration_date',
-    'purpose',
-    'capital_amount',
-    'capital_currency',
-    'management_count',
-    'capital_raises_count',
-    'ai_robotics_score',
-    'website',
-    'city',
-    'address_full',
+    "name",
+    "entity_id",
+    "status",
+    "registration_date",
+    "purpose",
+    "capital_amount",
+    "capital_currency",
+    "management_count",
+    "capital_raises_count",
+    "ai_robotics_score",
+    "website",
+    "city",
+    "address_full",
 ]
 
 # Maximum length for text fields in CSV (to avoid huge cells)
@@ -186,12 +182,12 @@ CSV_TEXT_TRUNCATE_LENGTH = 200
 # =============================================================================
 
 # Database file for change tracking (used in advanced_monitoring.py)
-DATABASE_FILE = 'startups.db'
+DATABASE_FILE = "startups.db"
 
 # Email notifications (placeholder - implement your own)
 EMAIL_NOTIFICATIONS = False
-EMAIL_TO = 'your-email@example.com'
-EMAIL_FROM = 'scraper@example.com'
+EMAIL_TO = "your-email@example.com"
+EMAIL_FROM = "scraper@example.com"
 
 # Slack notifications (placeholder - implement your own)
 SLACK_NOTIFICATIONS = False
@@ -202,36 +198,37 @@ SLACK_WEBHOOK_URL = None
 # ADVANCED FILTERS
 # =============================================================================
 
+
 def custom_filter(company_analysis: dict) -> bool:
     """
     Custom filter function for advanced filtering logic
-    
+
     Args:
         company_analysis: Dictionary with analyzed company data
-        
+
     Returns:
         True to include the company, False to skip it
-        
+
     Example custom filters:
     - Only companies with websites
     - Only GmbH or AG legal forms
     - Only companies with specific keywords in exact positions
     - Only companies with multiple management members
     """
-    
+
     # Example: Only include companies with a website
     # if not company_analysis.get('website'):
     #     return False
-    
+
     # Example: Only include GmbH companies
     # legal_form = company_analysis.get('registration', {}).get('legal_form', '')
     # if 'GmbH' not in legal_form:
     #     return False
-    
+
     # Example: Only include companies with at least 2 managers
     # if len(company_analysis.get('management', [])) < 2:
     #     return False
-    
+
     # Default: accept all companies that pass basic filters
     return True
 
@@ -242,58 +239,59 @@ def custom_filter(company_analysis: dict) -> bool:
 
 # Define specific technology categories for classification
 TECH_CATEGORIES = {
-    'computer_vision': [
-        'computer vision',
-        'bildverarbeitung',
-        'image recognition',
-        'objekterkennung',
-        'visual ai',
+    "computer_vision": [
+        "computer vision",
+        "bildverarbeitung",
+        "image recognition",
+        "objekterkennung",
+        "visual ai",
     ],
-    'nlp': [
-        'natural language processing',
-        'sprachverarbeitung',
-        'nlp',
-        'text analytics',
-        'chatbot',
-        'conversational ai',
+    "nlp": [
+        "natural language processing",
+        "sprachverarbeitung",
+        "nlp",
+        "text analytics",
+        "chatbot",
+        "conversational ai",
     ],
-    'robotics': [
-        'robotik',
-        'robotics',
-        'autonomous',
-        'drone',
-        'cobots',
-        'industrial automation',
+    "robotics": [
+        "robotik",
+        "robotics",
+        "autonomous",
+        "drone",
+        "cobots",
+        "industrial automation",
     ],
-    'predictive_analytics': [
-        'predictive analytics',
-        'forecasting',
-        'prognose',
-        'data science',
-        'business intelligence',
+    "predictive_analytics": [
+        "predictive analytics",
+        "forecasting",
+        "prognose",
+        "data science",
+        "business intelligence",
     ],
 }
+
 
 def classify_company_tech(purpose: str) -> list:
     """
     Classify company by technology categories
-    
+
     Args:
         purpose: Company business purpose text
-        
+
     Returns:
         List of matching technology categories
     """
     if not purpose:
         return []
-    
+
     purpose_lower = purpose.lower()
     matches = []
-    
+
     for category, keywords in TECH_CATEGORIES.items():
         if any(keyword in purpose_lower for keyword in keywords):
             matches.append(category)
-    
+
     return matches
 
 

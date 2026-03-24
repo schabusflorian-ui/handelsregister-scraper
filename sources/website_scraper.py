@@ -14,25 +14,25 @@ Can operate in two modes:
 2. LLM extraction (accurate, requires API key)
 """
 
-import re
 import logging
+import re
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Set, Tuple
+from typing import Dict, List, Optional, Tuple
 from urllib.parse import urljoin, urlparse
 
 import requests
 from bs4 import BeautifulSoup
-from rapidfuzz import fuzz
 
 logger = logging.getLogger(__name__)
 
-USER_AGENT = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36'
+USER_AGENT = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"
 REQUEST_TIMEOUT = 15
 
 
 @dataclass
 class ScrapedWebsiteData:
     """Structured data extracted from a company website."""
+
     # Core company info
     description: Optional[str] = None  # What the company does (1-3 sentences)
     tagline: Optional[str] = None  # Short slogan/tagline
@@ -70,53 +70,149 @@ class ScrapedWebsiteData:
 # Known tech keywords to look for
 TECH_KEYWORDS = {
     # AI/ML
-    'artificial intelligence', 'machine learning', 'deep learning', 'neural network',
-    'nlp', 'natural language', 'computer vision', 'generative ai', 'llm', 'gpt',
-    'transformer', 'reinforcement learning', 'predictive', 'ai-powered',
+    "artificial intelligence",
+    "machine learning",
+    "deep learning",
+    "neural network",
+    "nlp",
+    "natural language",
+    "computer vision",
+    "generative ai",
+    "llm",
+    "gpt",
+    "transformer",
+    "reinforcement learning",
+    "predictive",
+    "ai-powered",
     # Robotics
-    'robotics', 'robotic', 'automation', 'autonomous', 'robot', 'cobot',
-    'industrial automation', 'rpa', 'drone', 'uav',
+    "robotics",
+    "robotic",
+    "automation",
+    "autonomous",
+    "robot",
+    "cobot",
+    "industrial automation",
+    "rpa",
+    "drone",
+    "uav",
     # Software
-    'saas', 'cloud', 'api', 'platform', 'software', 'app', 'mobile',
+    "saas",
+    "cloud",
+    "api",
+    "platform",
+    "software",
+    "app",
+    "mobile",
     # Data
-    'big data', 'analytics', 'data science', 'data-driven',
+    "big data",
+    "analytics",
+    "data science",
+    "data-driven",
     # Hardware
-    'iot', 'sensor', 'embedded', 'hardware', 'edge computing',
+    "iot",
+    "sensor",
+    "embedded",
+    "hardware",
+    "edge computing",
     # Industry-specific
-    'fintech', 'healthtech', 'medtech', 'cleantech', 'climate tech', 'proptech',
-    'insurtech', 'legaltech', 'agritech', 'foodtech', 'biotech', 'edtech',
+    "fintech",
+    "healthtech",
+    "medtech",
+    "cleantech",
+    "climate tech",
+    "proptech",
+    "insurtech",
+    "legaltech",
+    "agritech",
+    "foodtech",
+    "biotech",
+    "edtech",
 }
 
 # Tech stack keywords
 TECH_STACK_KEYWORDS = {
-    'python', 'javascript', 'typescript', 'react', 'node.js', 'golang', 'rust',
-    'kubernetes', 'docker', 'aws', 'azure', 'gcp', 'tensorflow', 'pytorch',
-    'postgresql', 'mongodb', 'redis', 'elasticsearch',
+    "python",
+    "javascript",
+    "typescript",
+    "react",
+    "node.js",
+    "golang",
+    "rust",
+    "kubernetes",
+    "docker",
+    "aws",
+    "azure",
+    "gcp",
+    "tensorflow",
+    "pytorch",
+    "postgresql",
+    "mongodb",
+    "redis",
+    "elasticsearch",
 }
 
 # Known investor names to detect
 KNOWN_INVESTORS = {
     # Major VCs
-    'sequoia', 'a16z', 'andreessen horowitz', 'accel', 'benchmark', 'greylock',
-    'index ventures', 'insight partners', 'general catalyst', 'lightspeed',
-    'bessemer', 'founders fund', 'khosla', 'nea', 'battery ventures',
+    "sequoia",
+    "a16z",
+    "andreessen horowitz",
+    "accel",
+    "benchmark",
+    "greylock",
+    "index ventures",
+    "insight partners",
+    "general catalyst",
+    "lightspeed",
+    "bessemer",
+    "founders fund",
+    "khosla",
+    "nea",
+    "battery ventures",
     # European VCs
-    'atomico', 'balderton', 'northzone', 'eqt ventures', 'lakestar', 'hv capital',
-    'cherry ventures', 'project a', 'earlybird', 'point nine', 'speedinvest',
-    'cavalry ventures', 'fly ventures', 'la famiglia', 'visionaries club',
+    "atomico",
+    "balderton",
+    "northzone",
+    "eqt ventures",
+    "lakestar",
+    "hv capital",
+    "cherry ventures",
+    "project a",
+    "earlybird",
+    "point nine",
+    "speedinvest",
+    "cavalry ventures",
+    "fly ventures",
+    "la famiglia",
+    "visionaries club",
     # German VCs
-    'htgf', 'high-tech gründerfonds', 'coparion', 'btov', 'capnamic', 'tengelmann',
-    'signals', 'mig capital', 'burda principal', 'vc fonds technologie',
+    "htgf",
+    "high-tech gründerfonds",
+    "coparion",
+    "btov",
+    "capnamic",
+    "tengelmann",
+    "signals",
+    "mig capital",
+    "burda principal",
+    "vc fonds technologie",
     # Corporate VCs
-    'google ventures', 'intel capital', 'salesforce ventures', 'microsoft ventures',
-    'samsung next', 'siemens', 'bosch', 'porsche ventures', 'bmw i ventures',
+    "google ventures",
+    "intel capital",
+    "salesforce ventures",
+    "microsoft ventures",
+    "samsung next",
+    "siemens",
+    "bosch",
+    "porsche ventures",
+    "bmw i ventures",
 }
 
 # Social media URL patterns
 SOCIAL_PATTERNS = {
-    'linkedin': re.compile(r'https?://(?:www\.)?linkedin\.com/company/[a-zA-Z0-9\-_]+/?', re.I),
-    'twitter': re.compile(r'https?://(?:www\.)?(?:twitter\.com|x\.com)/[a-zA-Z0-9_]+/?', re.I),
-    'github': re.compile(r'https?://(?:www\.)?github\.com/[a-zA-Z0-9\-_]+/?', re.I),
+    "linkedin": re.compile(r"https?://(?:www\.)?linkedin\.com/company/[a-zA-Z0-9\-_]+/?", re.I),
+    "twitter": re.compile(r"https?://(?:www\.)?(?:twitter\.com|x\.com)/[a-zA-Z0-9_]+/?", re.I),
+    "github": re.compile(r"https?://(?:www\.)?github\.com/[a-zA-Z0-9\-_]+/?", re.I),
 }
 
 
@@ -126,20 +222,20 @@ def _fetch_page(url: str) -> Optional[Tuple[str, BeautifulSoup]]:
         resp = requests.get(
             url,
             timeout=REQUEST_TIMEOUT,
-            headers={'User-Agent': USER_AGENT},
+            headers={"User-Agent": USER_AGENT},
         )
         if resp.status_code >= 400:
             return None
 
-        soup = BeautifulSoup(resp.text[:512_000], 'lxml')
+        soup = BeautifulSoup(resp.text[:512_000], "lxml")
 
         # Remove non-content elements
-        for tag in soup.find_all(['script', 'style', 'nav', 'footer', 'header', 'aside']):
+        for tag in soup.find_all(["script", "style", "nav", "footer", "header", "aside"]):
             tag.decompose()
 
-        text = soup.get_text(separator=' ', strip=True)
+        text = soup.get_text(separator=" ", strip=True)
         # Normalize whitespace
-        text = re.sub(r'\s+', ' ', text)
+        text = re.sub(r"\s+", " ", text)
 
         return text, soup
     except requests.RequestException as e:
@@ -153,23 +249,23 @@ def _find_page_urls(soup: BeautifulSoup, base_url: str) -> Dict[str, str]:
 
     # Patterns to match
     patterns = {
-        'about': ['about', 'über uns', 'ueber-uns', 'unternehmen', 'company', 'who-we-are'],
-        'team': ['team', 'people', 'founders', 'leadership', 'management', 'about-us'],
-        'careers': ['careers', 'jobs', 'karriere', 'stellenangebote', 'work-with-us', 'join'],
-        'press': ['press', 'news', 'presse', 'media', 'newsroom', 'blog'],
-        'contact': ['contact', 'kontakt', 'imprint', 'impressum'],
+        "about": ["about", "über uns", "ueber-uns", "unternehmen", "company", "who-we-are"],
+        "team": ["team", "people", "founders", "leadership", "management", "about-us"],
+        "careers": ["careers", "jobs", "karriere", "stellenangebote", "work-with-us", "join"],
+        "press": ["press", "news", "presse", "media", "newsroom", "blog"],
+        "contact": ["contact", "kontakt", "imprint", "impressum"],
     }
 
-    for a in soup.find_all('a', href=True):
-        href = a['href'].lower()
-        text = (a.get_text() or '').lower().strip()
+    for a in soup.find_all("a", href=True):
+        href = a["href"].lower()
+        text = (a.get_text() or "").lower().strip()
 
         for page_type, keywords in patterns.items():
             if page_type in pages:
                 continue
             for kw in keywords:
                 if kw in href or kw in text:
-                    full_url = urljoin(base_url, a['href'])
+                    full_url = urljoin(base_url, a["href"])
                     # Only accept same-domain links
                     if urlparse(full_url).netloc == urlparse(base_url).netloc:
                         pages[page_type] = full_url
@@ -184,18 +280,18 @@ def _extract_description(text: str, soup: BeautifulSoup) -> Tuple[Optional[str],
     description = None
 
     # Try meta description first
-    meta = soup.find('meta', attrs={'name': 'description'})
-    if meta and meta.get('content'):
-        description = meta['content'].strip()[:500]
+    meta = soup.find("meta", attrs={"name": "description"})
+    if meta and meta.get("content"):
+        description = meta["content"].strip()[:500]
 
     # Try og:description
     if not description:
-        og = soup.find('meta', attrs={'property': 'og:description'})
-        if og and og.get('content'):
-            description = og['content'].strip()[:500]
+        og = soup.find("meta", attrs={"property": "og:description"})
+        if og and og.get("content"):
+            description = og["content"].strip()[:500]
 
     # Look for tagline in h1/h2
-    for tag in ['h1', 'h2']:
+    for tag in ["h1", "h2"]:
         heading = soup.find(tag)
         if heading:
             h_text = heading.get_text(strip=True)
@@ -205,7 +301,7 @@ def _extract_description(text: str, soup: BeautifulSoup) -> Tuple[Optional[str],
 
     # If no meta description, try to extract from first paragraph
     if not description:
-        for p in soup.find_all('p'):
+        for p in soup.find_all("p"):
             p_text = p.get_text(strip=True)
             if len(p_text) > 50:
                 description = p_text[:500]
@@ -226,7 +322,7 @@ def _extract_tech_keywords(text: str) -> Tuple[List[str], List[str]]:
     found_stack = []
     for tech in TECH_STACK_KEYWORDS:
         # Use word boundary matching
-        if re.search(rf'\b{re.escape(tech)}\b', text_lower):
+        if re.search(rf"\b{re.escape(tech)}\b", text_lower):
             found_stack.append(tech)
 
     return found_keywords, found_stack
@@ -236,8 +332,8 @@ def _extract_social_links(soup: BeautifulSoup) -> Dict[str, str]:
     """Extract social media links."""
     links = {}
 
-    for a in soup.find_all('a', href=True):
-        href = a['href']
+    for a in soup.find_all("a", href=True):
+        href = a["href"]
         for platform, pattern in SOCIAL_PATTERNS.items():
             if platform not in links and pattern.match(href):
                 links[platform] = href
@@ -264,13 +360,13 @@ def _extract_funding_mentions(text: str) -> List[str]:
 
     # Patterns for funding rounds
     patterns = [
-        r'(?:raised|secured|closed)\s+(?:€|EUR|\$|USD)?\s*(\d+(?:\.\d+)?)\s*(?:million|mio|m\b)',
-        r'series\s+[a-d](?:\s+funding|\s+round)?',
-        r'seed\s+(?:funding|round|investment)',
-        r'pre-seed',
-        r'(?:€|EUR|\$|USD)\s*(\d+(?:\.\d+)?)\s*(?:million|mio|m)\s+(?:funding|investment|raised)',
-        r'backed\s+by\s+[\w\s,&]+',
-        r'(?:angel|vc|venture)\s+(?:funding|investment|backed)',
+        r"(?:raised|secured|closed)\s+(?:€|EUR|\$|USD)?\s*(\d+(?:\.\d+)?)\s*(?:million|mio|m\b)",
+        r"series\s+[a-d](?:\s+funding|\s+round)?",
+        r"seed\s+(?:funding|round|investment)",
+        r"pre-seed",
+        r"(?:€|EUR|\$|USD)\s*(\d+(?:\.\d+)?)\s*(?:million|mio|m)\s+(?:funding|investment|raised)",
+        r"backed\s+by\s+[\w\s,&]+",
+        r"(?:angel|vc|venture)\s+(?:funding|investment|backed)",
     ]
 
     for pattern in patterns:
@@ -278,7 +374,7 @@ def _extract_funding_mentions(text: str) -> List[str]:
         if matches:
             # Get the full match context
             for m in re.finditer(pattern, text, re.IGNORECASE):
-                context = text[max(0, m.start()-20):m.end()+20].strip()
+                context = text[max(0, m.start() - 20) : m.end() + 20].strip()
                 if context and context not in mentions:
                     mentions.append(context)
 
@@ -292,9 +388,9 @@ def _extract_team(soup: BeautifulSoup, text: str) -> Tuple[List[Dict], Optional[
 
     # Look for team size mentions
     size_patterns = [
-        r'(\d+)\+?\s*(?:employees|team members|mitarbeiter)',
-        r'team\s+of\s+(\d+)',
-        r'(?:we are|we\'re)\s+(\d+)\s+(?:people|employees)',
+        r"(\d+)\+?\s*(?:employees|team members|mitarbeiter)",
+        r"team\s+of\s+(\d+)",
+        r"(?:we are|we\'re)\s+(\d+)\s+(?:people|employees)",
     ]
 
     for pattern in size_patterns:
@@ -305,21 +401,21 @@ def _extract_team(soup: BeautifulSoup, text: str) -> Tuple[List[Dict], Optional[
 
     # Look for structured team data (common patterns)
     # This is basic - could be enhanced with more patterns
-    for div in soup.find_all(['div', 'article', 'section'], class_=re.compile(r'team|member|founder|people', re.I)):
-        name_elem = div.find(['h3', 'h4', 'strong', 'span'], class_=re.compile(r'name', re.I))
-        role_elem = div.find(['p', 'span'], class_=re.compile(r'role|title|position', re.I))
+    for div in soup.find_all(["div", "article", "section"], class_=re.compile(r"team|member|founder|people", re.I)):
+        name_elem = div.find(["h3", "h4", "strong", "span"], class_=re.compile(r"name", re.I))
+        role_elem = div.find(["p", "span"], class_=re.compile(r"role|title|position", re.I))
 
         if name_elem:
-            member = {'name': name_elem.get_text(strip=True)}
+            member = {"name": name_elem.get_text(strip=True)}
             if role_elem:
-                member['role'] = role_elem.get_text(strip=True)
+                member["role"] = role_elem.get_text(strip=True)
 
             # Look for LinkedIn link
-            linkedin = div.find('a', href=re.compile(r'linkedin\.com', re.I))
+            linkedin = div.find("a", href=re.compile(r"linkedin\.com", re.I))
             if linkedin:
-                member['linkedin'] = linkedin['href']
+                member["linkedin"] = linkedin["href"]
 
-            if member['name'] and len(member['name']) > 2:
+            if member["name"] and len(member["name"]) > 2:
                 members.append(member)
 
     return members[:20], size_indicator  # Limit to 20 members
@@ -331,17 +427,17 @@ def _extract_jobs(soup: BeautifulSoup, text: str) -> Tuple[int, List[str]]:
 
     # Look for job listing structures
     job_patterns = [
-        re.compile(r'job|position|opening|stelle|karriere', re.I),
+        re.compile(r"job|position|opening|stelle|karriere", re.I),
     ]
 
     for pattern in job_patterns:
-        for elem in soup.find_all(['a', 'h3', 'h4', 'li'], string=pattern):
+        for elem in soup.find_all(["a", "h3", "h4", "li"], string=pattern):
             title = elem.get_text(strip=True)
             if 5 < len(title) < 100:
                 titles.append(title)
 
     # Also look for job count mentions
-    count_match = re.search(r'(\d+)\s*(?:open\s+)?(?:positions?|jobs?|openings?|stellen?)', text, re.I)
+    count_match = re.search(r"(\d+)\s*(?:open\s+)?(?:positions?|jobs?|openings?|stellen?)", text, re.I)
     job_count = int(count_match.group(1)) if count_match else len(titles)
 
     return job_count, titles[:10]
@@ -392,15 +488,15 @@ class WebsiteScraper:
         # Extract from homepage
         data.description, data.tagline = _extract_description(homepage_text, homepage_soup)
         social = _extract_social_links(homepage_soup)
-        data.linkedin_url = social.get('linkedin')
-        data.twitter_url = social.get('twitter')
-        data.github_url = social.get('github')
+        data.linkedin_url = social.get("linkedin")
+        data.twitter_url = social.get("twitter")
+        data.github_url = social.get("github")
 
         # Find and fetch subpages
         if self.fetch_subpages:
             subpages = _find_page_urls(homepage_soup, url)
 
-            for page_type, page_url in list(subpages.items())[:self.max_pages - 1]:
+            for page_type, page_url in list(subpages.items())[: self.max_pages - 1]:
                 result = _fetch_page(page_url)
                 if result:
                     page_text, page_soup = result
@@ -408,16 +504,16 @@ class WebsiteScraper:
                     all_text += page_text + " "
 
                     # Store about page text
-                    if page_type == 'about':
+                    if page_type == "about":
                         data.about_text = page_text[:10000]
                         # Try to get better description from about page
                         if not data.description or len(data.description) < 100:
                             desc, _ = _extract_description(page_text, page_soup)
-                            if desc and len(desc) > len(data.description or ''):
+                            if desc and len(desc) > len(data.description or ""):
                                 data.description = desc
 
                     # Extract team from team page
-                    if page_type == 'team':
+                    if page_type == "team":
                         members, size = _extract_team(page_soup, page_text)
                         if members:
                             data.team_members = members
@@ -425,16 +521,16 @@ class WebsiteScraper:
                             data.team_size_indicator = size
 
                     # Extract jobs from careers page
-                    if page_type == 'careers':
+                    if page_type == "careers":
                         count, titles = _extract_jobs(page_soup, page_text)
                         data.job_count = count
                         data.job_titles = titles
 
                     # Update social links if found
                     social = _extract_social_links(page_soup)
-                    data.linkedin_url = data.linkedin_url or social.get('linkedin')
-                    data.twitter_url = data.twitter_url or social.get('twitter')
-                    data.github_url = data.github_url or social.get('github')
+                    data.linkedin_url = data.linkedin_url or social.get("linkedin")
+                    data.twitter_url = data.twitter_url or social.get("twitter")
+                    data.github_url = data.github_url or social.get("github")
 
         # Extract from all collected text
         data.tech_keywords, data.tech_stack = _extract_tech_keywords(all_text)
@@ -461,8 +557,12 @@ class WebsiteScraper:
 
         logger.info(
             "Scraped %s: %d pages, quality=%.2f, keywords=%d, team=%d, investors=%d",
-            url, len(data.pages_fetched), data.scrape_quality,
-            len(data.tech_keywords), len(data.team_members), len(data.investors_mentioned)
+            url,
+            len(data.pages_fetched),
+            data.scrape_quality,
+            len(data.tech_keywords),
+            len(data.team_members),
+            len(data.investors_mentioned),
         )
 
         return data
@@ -481,27 +581,27 @@ def scrape_for_enrichment(url: str) -> Dict:
 
     # Purpose/description
     if data.description:
-        enrichment['purpose'] = data.description
+        enrichment["purpose"] = data.description
 
     # Tech keywords - merge with existing
     if data.tech_keywords:
-        enrichment['detected_tech_keywords'] = data.tech_keywords
+        enrichment["detected_tech_keywords"] = data.tech_keywords
 
     # Social links
     if data.linkedin_url:
-        enrichment['linkedin_url'] = data.linkedin_url
+        enrichment["linkedin_url"] = data.linkedin_url
     if data.twitter_url:
-        enrichment['twitter_url'] = data.twitter_url
+        enrichment["twitter_url"] = data.twitter_url
 
     # Metadata
-    enrichment['_scrape_quality'] = data.scrape_quality
-    enrichment['_pages_fetched'] = len(data.pages_fetched)
-    enrichment['_team_size'] = data.team_size_indicator
-    enrichment['_job_count'] = data.job_count
-    enrichment['_investors_mentioned'] = data.investors_mentioned
-    enrichment['_funding_mentions'] = data.funding_mentions
-    enrichment['_raw_homepage'] = data.homepage_text
-    enrichment['_raw_about'] = data.about_text
+    enrichment["_scrape_quality"] = data.scrape_quality
+    enrichment["_pages_fetched"] = len(data.pages_fetched)
+    enrichment["_team_size"] = data.team_size_indicator
+    enrichment["_job_count"] = data.job_count
+    enrichment["_investors_mentioned"] = data.investors_mentioned
+    enrichment["_funding_mentions"] = data.funding_mentions
+    enrichment["_raw_homepage"] = data.homepage_text
+    enrichment["_raw_about"] = data.about_text
 
     return enrichment
 
@@ -571,15 +671,13 @@ def extract_with_llm(
 
     try:
         # Try Anthropic client first
-        if hasattr(llm_client, 'messages'):
+        if hasattr(llm_client, "messages"):
             response = llm_client.messages.create(
-                model=model,
-                max_tokens=1000,
-                messages=[{"role": "user", "content": prompt}]
+                model=model, max_tokens=1000, messages=[{"role": "user", "content": prompt}]
             )
             text = response.content[0].text
         # OpenAI client
-        elif hasattr(llm_client, 'chat'):
+        elif hasattr(llm_client, "chat"):
             response = llm_client.chat.completions.create(
                 model=model,
                 messages=[{"role": "user", "content": prompt}],
@@ -592,10 +690,10 @@ def extract_with_llm(
 
         # Parse JSON response
         # Handle potential markdown code blocks
-        if '```json' in text:
-            text = text.split('```json')[1].split('```')[0]
-        elif '```' in text:
-            text = text.split('```')[1].split('```')[0]
+        if "```json" in text:
+            text = text.split("```json")[1].split("```")[0]
+        elif "```" in text:
+            text = text.split("```")[1].split("```")[0]
 
         return json.loads(text.strip())
 

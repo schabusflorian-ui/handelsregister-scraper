@@ -20,8 +20,8 @@ import argparse
 import base64
 import json
 import sys
-from pathlib import Path
 from datetime import datetime, timedelta
+from pathlib import Path
 
 # Add parent to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -86,34 +86,13 @@ def export_founders(
 
 def main():
     parser = argparse.ArgumentParser(description="Export stealth founders for sync")
-    parser.add_argument(
-        "--db", default="handelsregister.db",
-        help="Database path (default: handelsregister.db)"
-    )
-    parser.add_argument(
-        "--output", "-o",
-        help="Output file path (default: stdout)"
-    )
-    parser.add_argument(
-        "--base64", "-b", action="store_true",
-        help="Output as base64 encoded JSON (easier to paste)"
-    )
-    parser.add_argument(
-        "--min-confidence", type=float, default=0.0,
-        help="Minimum confidence score (default: 0.0)"
-    )
-    parser.add_argument(
-        "--days", type=int,
-        help="Only export founders discovered in last N days"
-    )
-    parser.add_argument(
-        "--limit", type=int,
-        help="Maximum number of founders to export"
-    )
-    parser.add_argument(
-        "--pretty", action="store_true",
-        help="Pretty print JSON (not compatible with --base64)"
-    )
+    parser.add_argument("--db", default="handelsregister.db", help="Database path (default: handelsregister.db)")
+    parser.add_argument("--output", "-o", help="Output file path (default: stdout)")
+    parser.add_argument("--base64", "-b", action="store_true", help="Output as base64 encoded JSON (easier to paste)")
+    parser.add_argument("--min-confidence", type=float, default=0.0, help="Minimum confidence score (default: 0.0)")
+    parser.add_argument("--days", type=int, help="Only export founders discovered in last N days")
+    parser.add_argument("--limit", type=int, help="Maximum number of founders to export")
+    parser.add_argument("--pretty", action="store_true", help="Pretty print JSON (not compatible with --base64)")
 
     args = parser.parse_args()
 
@@ -142,7 +121,7 @@ def main():
 
     # Write output
     if args.output:
-        with open(args.output, 'w', encoding='utf-8') as f:
+        with open(args.output, "w", encoding="utf-8") as f:
             f.write(output)
         print(f"Written to {args.output}", file=sys.stderr)
     else:

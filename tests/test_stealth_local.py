@@ -11,16 +11,11 @@ Requirements:
 """
 
 import logging
-import sys
-import os
-
-# Add project root to path
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s %(levelname)s %(message)s',
-    datefmt='%H:%M:%S',
+    format="%(asctime)s %(levelname)s %(message)s",
+    datefmt="%H:%M:%S",
 )
 
 logger = logging.getLogger(__name__)
@@ -40,7 +35,7 @@ def test_duckduckgo_search():
     )
 
     # Run a single query
-    results = scraper.search_query('linkedin.com/in stealth founder berlin')
+    results = scraper.search_query("linkedin.com/in stealth founder berlin")
 
     print(f"\nFound {len(results)} LinkedIn profiles:")
     for r in results[:5]:
@@ -58,7 +53,7 @@ def test_linkedin_scraping(urls: list):
 
     if not urls:
         print("No URLs to test. Using sample URL...")
-        urls = ['https://www.linkedin.com/in/satyanadella']
+        urls = ["https://www.linkedin.com/in/satyanadella"]
 
     from sources.linkedin_scraper import LinkedInProfileScraper
 
@@ -94,7 +89,7 @@ def test_full_discovery():
     from persistence.database import Database
     from scheduler.jobs.stealth_founder_job import StealthFounderJob
 
-    db = Database('handelsregister.db')
+    db = Database("handelsregister.db")
     try:
         job = StealthFounderJob(
             db=db,
@@ -146,7 +141,7 @@ def test_manual_import():
 
     stats = import_and_scrape_urls(
         urls=sample_urls,
-        db_path='handelsregister.db',
+        db_path="handelsregister.db",
         min_confidence=0.1,
     )
 
@@ -157,7 +152,7 @@ def test_manual_import():
     return stats
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     print("=" * 60)
     print("STEALTH FOUNDER DISCOVERY - LOCAL TEST")
     print("=" * 60)

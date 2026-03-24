@@ -9,9 +9,8 @@ structural and naming signals to identify likely startups.
 """
 
 import re
-from typing import List, Dict, Optional, Tuple
 from dataclasses import dataclass
-
+from typing import Dict, List, Optional, Tuple
 
 # ============================================================================
 # SCORING CONSTANTS
@@ -19,174 +18,170 @@ from dataclasses import dataclass
 
 # Legal forms that strongly indicate startups (require minimal capital)
 STARTUP_LEGAL_FORMS = {
-    'UG (haftungsbeschränkt)': 5,  # "Mini-GmbH" - only needs 1 EUR capital
-    'UG': 5,                        # Short form
+    "UG (haftungsbeschränkt)": 5,  # "Mini-GmbH" - only needs 1 EUR capital
+    "UG": 5,  # Short form
 }
 
 # Traditional/established legal forms (less likely to be startups)
 ESTABLISHED_LEGAL_FORMS = {
-    'AG': -1,                       # Stock corporation - usually larger
-    'SE': -1,                       # European company - usually larger
-    'KGaA': -1,                     # Partnership limited by shares
-    'e.V.': -2,                     # Association - typically non-profit
-    'eV': -2,
+    "AG": -1,  # Stock corporation - usually larger
+    "SE": -1,  # European company - usually larger
+    "KGaA": -1,  # Partnership limited by shares
+    "e.V.": -2,  # Association - typically non-profit
+    "eV": -2,
 }
 
 # Startup hub cities (major points)
 STARTUP_HUB_CITIES = {
-    'Berlin': 3,
-    'München': 3,
-    'Munich': 3,
-    'Hamburg': 2,
-    'Frankfurt am Main': 1,
-    'Frankfurt': 1,
-    'Köln': 1,
-    'Cologne': 1,
-    'Düsseldorf': 1,
-    'Stuttgart': 1,
+    "Berlin": 3,
+    "München": 3,
+    "Munich": 3,
+    "Hamburg": 2,
+    "Frankfurt am Main": 1,
+    "Frankfurt": 1,
+    "Köln": 1,
+    "Cologne": 1,
+    "Düsseldorf": 1,
+    "Stuttgart": 1,
 }
 
 # Secondary tech cities
 TECH_CITIES = {
-    'Karlsruhe': 1,      # KIT / tech hub
-    'Aachen': 1,         # RWTH / tech hub
-    'Dresden': 1,        # Silicon Saxony
-    'Darmstadt': 1,      # TU Darmstadt
-    'Heidelberg': 1,     # BioTech hub
-    'Tübingen': 2,       # AI hub (Cyber Valley)
-    'Leipzig': 1,        # Growing startup scene / SpinLab
-    'Nürnberg': 1,       # Digital hub
-    'Bonn': 1,           # AI / Cyber Security
-    'Potsdam': 1,        # Digital / Media hub
-    'Garching': 2,       # TUM / UnternehmerTUM
-    'Jülich': 1,         # Forschungszentrum Jülich
-    'Kaiserslautern': 1, # DFKI / AI research
-    'Erlangen': 1,       # FAU / Fraunhofer
-    'Jena': 1,           # Optics / photonics hub
-    'Greifswald': 1,     # Helmholtz / plasma research
+    "Karlsruhe": 1,  # KIT / tech hub
+    "Aachen": 1,  # RWTH / tech hub
+    "Dresden": 1,  # Silicon Saxony
+    "Darmstadt": 1,  # TU Darmstadt
+    "Heidelberg": 1,  # BioTech hub
+    "Tübingen": 2,  # AI hub (Cyber Valley)
+    "Leipzig": 1,  # Growing startup scene / SpinLab
+    "Nürnberg": 1,  # Digital hub
+    "Bonn": 1,  # AI / Cyber Security
+    "Potsdam": 1,  # Digital / Media hub
+    "Garching": 2,  # TUM / UnternehmerTUM
+    "Jülich": 1,  # Forschungszentrum Jülich
+    "Kaiserslautern": 1,  # DFKI / AI research
+    "Erlangen": 1,  # FAU / Fraunhofer
+    "Jena": 1,  # Optics / photonics hub
+    "Greifswald": 1,  # Helmholtz / plasma research
 }
 
 # Name patterns that indicate startups/tech companies
 # Tuple of (pattern, score, description)
 STARTUP_NAME_PATTERNS = [
     # Tech suffix patterns (high signal)
-    (r'\bLabs?\b', 3, 'Labs'),
-    (r'\b\.io\b', 2, '.io domain hint'),
-    (r'\b\.ai\b', 3, '.ai domain hint'),
-    (r'\b\.co\b', 1, '.co domain hint'),
-    (r'\b\.dev\b', 2, '.dev domain hint'),
-
+    (r"\bLabs?\b", 3, "Labs"),
+    (r"\b\.io\b", 2, ".io domain hint"),
+    (r"\b\.ai\b", 3, ".ai domain hint"),
+    (r"\b\.co\b", 1, ".co domain hint"),
+    (r"\b\.dev\b", 2, ".dev domain hint"),
     # English tech terms (medium signal)
-    (r'\bTech\b', 2, 'Tech'),
-    (r'\bSolutions\b', 1, 'Solutions'),
-    (r'\bSoftware\b', 1, 'Software'),
-    (r'\bDigital\b', 1, 'Digital'),
-    (r'\bData\b', 1, 'Data'),
-    (r'\bCloud\b', 2, 'Cloud'),
-    (r'\bApp\b', 1, 'App'),
-    (r'\bApps\b', 1, 'Apps'),
-    (r'\bPlatform\b', 2, 'Platform'),
-    (r'\bAnalytics\b', 2, 'Analytics'),
-    (r'\bVentures?\b', 2, 'Ventures'),
-    (r'\bAPI\b', 2, 'API'),
-    (r'\bSaaS\b', 3, 'SaaS'),
-    (r'\bFintech\b', 3, 'Fintech'),
-    (r'\bHealthtech\b', 3, 'Healthtech'),
-    (r'\bEdtech\b', 3, 'Edtech'),
-    (r'\bInsurtech\b', 3, 'Insurtech'),
-    (r'\bProptech\b', 3, 'Proptech'),
-    (r'\bDeeptech\b', 3, 'Deeptech'),
-    (r'\bCleantech\b', 3, 'Cleantech'),
-    (r'\bGreentech\b', 3, 'Greentech'),
-    (r'\bClimatech\b', 3, 'Climatech'),
-    (r'\bClimate\b', 2, 'Climate'),
-    (r'\bBiotech\b', 2, 'Biotech'),
-    (r'\bMedtech\b', 2, 'Medtech'),
-    (r'\bAgritech\b', 3, 'Agritech'),
-    (r'\bFoodtech\b', 3, 'Foodtech'),
-    (r'\bEnergytech\b', 3, 'Energytech'),
-    (r'\bMobility\b', 2, 'Mobility'),
-    (r'\bSolar\b', 2, 'Solar'),
-    (r'\bHydrogen\b', 2, 'Hydrogen'),
-    (r'\bWasserstoff\b', 2, 'Wasserstoff'),
-    (r'\bEnergy\b', 1, 'Energy'),
-    (r'\bEnergie\b', 1, 'Energie'),
-    (r'\bSustainab', 2, 'Sustainable'),
-    (r'\bNachhaltig', 2, 'Nachhaltig'),
-    (r'\bCircular\b', 2, 'Circular'),
-    (r'\bCarbon\b', 2, 'Carbon'),
-    (r'\bBattery\b', 2, 'Battery'),
-    (r'\bBatterie\b', 2, 'Batterie'),
-    (r'\bCharging\b', 1, 'Charging'),
-    (r'\bRecycling\b', 1, 'Recycling'),
-
+    (r"\bTech\b", 2, "Tech"),
+    (r"\bSolutions\b", 1, "Solutions"),
+    (r"\bSoftware\b", 1, "Software"),
+    (r"\bDigital\b", 1, "Digital"),
+    (r"\bData\b", 1, "Data"),
+    (r"\bCloud\b", 2, "Cloud"),
+    (r"\bApp\b", 1, "App"),
+    (r"\bApps\b", 1, "Apps"),
+    (r"\bPlatform\b", 2, "Platform"),
+    (r"\bAnalytics\b", 2, "Analytics"),
+    (r"\bVentures?\b", 2, "Ventures"),
+    (r"\bAPI\b", 2, "API"),
+    (r"\bSaaS\b", 3, "SaaS"),
+    (r"\bFintech\b", 3, "Fintech"),
+    (r"\bHealthtech\b", 3, "Healthtech"),
+    (r"\bEdtech\b", 3, "Edtech"),
+    (r"\bInsurtech\b", 3, "Insurtech"),
+    (r"\bProptech\b", 3, "Proptech"),
+    (r"\bDeeptech\b", 3, "Deeptech"),
+    (r"\bCleantech\b", 3, "Cleantech"),
+    (r"\bGreentech\b", 3, "Greentech"),
+    (r"\bClimatech\b", 3, "Climatech"),
+    (r"\bClimate\b", 2, "Climate"),
+    (r"\bBiotech\b", 2, "Biotech"),
+    (r"\bMedtech\b", 2, "Medtech"),
+    (r"\bAgritech\b", 3, "Agritech"),
+    (r"\bFoodtech\b", 3, "Foodtech"),
+    (r"\bEnergytech\b", 3, "Energytech"),
+    (r"\bMobility\b", 2, "Mobility"),
+    (r"\bSolar\b", 2, "Solar"),
+    (r"\bHydrogen\b", 2, "Hydrogen"),
+    (r"\bWasserstoff\b", 2, "Wasserstoff"),
+    (r"\bEnergy\b", 1, "Energy"),
+    (r"\bEnergie\b", 1, "Energie"),
+    (r"\bSustainab", 2, "Sustainable"),
+    (r"\bNachhaltig", 2, "Nachhaltig"),
+    (r"\bCircular\b", 2, "Circular"),
+    (r"\bCarbon\b", 2, "Carbon"),
+    (r"\bBattery\b", 2, "Battery"),
+    (r"\bBatterie\b", 2, "Batterie"),
+    (r"\bCharging\b", 1, "Charging"),
+    (r"\bRecycling\b", 1, "Recycling"),
     # Trendy startup naming patterns
-    (r'ly$', 1, '-ly suffix'),          # e.g., Spotify, Shopify
-    (r'ify$', 2, '-ify suffix'),        # e.g., Shopify, Spotify
-    (r'ia$', 1, '-ia suffix'),          # e.g., Nvidia
-    (r'io$', 1, '-io suffix'),          # e.g., Twilio
-    (r'^[A-Z][a-z]+[A-Z]', 1, 'CamelCase'),  # e.g., GitHub, YouTube
-    (r'^[a-z]+\.[a-z]+$', 2, 'domain style name'),  # e.g., scout24
-
+    (r"ly$", 1, "-ly suffix"),  # e.g., Spotify, Shopify
+    (r"ify$", 2, "-ify suffix"),  # e.g., Shopify, Spotify
+    (r"ia$", 1, "-ia suffix"),  # e.g., Nvidia
+    (r"io$", 1, "-io suffix"),  # e.g., Twilio
+    (r"^[A-Z][a-z]+[A-Z]", 1, "CamelCase"),  # e.g., GitHub, YouTube
+    (r"^[a-z]+\.[a-z]+$", 2, "domain style name"),  # e.g., scout24
     # Modern startup naming (single word, no GmbH suffix in brand)
-    (r'^[A-Z][a-z]{3,8} (?:GmbH|UG)', 1, 'Short modern name'),
-
+    (r"^[A-Z][a-z]{3,8} (?:GmbH|UG)", 1, "Short modern name"),
     # Innovation/Growth terms
-    (r'\bInnovation\b', 1, 'Innovation'),
-    (r'\bNext\b', 1, 'Next'),
-    (r'\bFuture\b', 1, 'Future'),
-    (r'\bSmart\b', 0, 'Smart'),  # 0 because it's also in traditional names
-    (r'\bAgile\b', 1, 'Agile'),
-    (r'\bScale\b', 1, 'Scale'),
-    (r'\bGrowth\b', 1, 'Growth'),
-    (r'\bDisrupt\b', 2, 'Disrupt'),
-    (r'\bAccelerator\b', 2, 'Accelerator'),
-    (r'\bIncubator\b', 2, 'Incubator'),
-
+    (r"\bInnovation\b", 1, "Innovation"),
+    (r"\bNext\b", 1, "Next"),
+    (r"\bFuture\b", 1, "Future"),
+    (r"\bSmart\b", 0, "Smart"),  # 0 because it's also in traditional names
+    (r"\bAgile\b", 1, "Agile"),
+    (r"\bScale\b", 1, "Scale"),
+    (r"\bGrowth\b", 1, "Growth"),
+    (r"\bDisrupt\b", 2, "Disrupt"),
+    (r"\bAccelerator\b", 2, "Accelerator"),
+    (r"\bIncubator\b", 2, "Incubator"),
     # University spinoff / research-based patterns
-    (r'\bAusgründung\b', 3, 'Ausgründung (spinoff)'),
-    (r'\bSpin-?off\b', 2, 'Spinoff'),
-    (r'\bTransfer\b', 1, 'Transfer'),
-    (r'\bForschung\b', 1, 'Forschung (research)'),
-    (r'\bResearch\b', 1, 'Research'),
-    (r'\bScience\b', 1, 'Science'),
-    (r'\bBio\b', 1, 'Bio'),
-    (r'\bNano\b', 2, 'Nano'),
-    (r'\bQuantum\b', 3, 'Quantum'),
-    (r'\bQuanten\b', 3, 'Quanten'),
-    (r'\bPhoton\b', 2, 'Photon'),
-    (r'\bGenomics?\b', 2, 'Genomics'),
+    (r"\bAusgründung\b", 3, "Ausgründung (spinoff)"),
+    (r"\bSpin-?off\b", 2, "Spinoff"),
+    (r"\bTransfer\b", 1, "Transfer"),
+    (r"\bForschung\b", 1, "Forschung (research)"),
+    (r"\bResearch\b", 1, "Research"),
+    (r"\bScience\b", 1, "Science"),
+    (r"\bBio\b", 1, "Bio"),
+    (r"\bNano\b", 2, "Nano"),
+    (r"\bQuantum\b", 3, "Quantum"),
+    (r"\bQuanten\b", 3, "Quanten"),
+    (r"\bPhoton\b", 2, "Photon"),
+    (r"\bGenomics?\b", 2, "Genomics"),
 ]
 
 # Traditional SME name patterns (negative signals)
 SME_NAME_PATTERNS = [
-    (r'\bVerwaltung\b', -2, 'Verwaltung (management/administration)'),
-    (r'\bVerwaltungs\b', -2, 'Verwaltungs'),
-    (r'\bBeteiligungs\b', -1, 'Beteiligungs (holding)'),
-    (r'\bHolding\b', -1, 'Holding'),
-    (r'\bImmobilien\b', -2, 'Immobilien (real estate)'),
-    (r'\bHandels\b', -1, 'Handels (trading)'),
-    (r'\bGrundstück\b', -2, 'Grundstück (real estate)'),
-    (r'\bVermögens\b', -2, 'Vermögens (asset management)'),
-    (r'\bTreuhand\b', -2, 'Treuhand (trust)'),
-    (r'\bSteuerberater\b', -1, 'Steuerberater (tax advisor)'),
-    (r'\bRechtsanwält\b', -1, 'Rechtsanwälte (lawyers)'),
-    (r'\bWirtschaftsprüf\b', -1, 'Wirtschaftsprüfer (auditor)'),
-    (r'\bBau\b', -1, 'Bau (construction)'),
-    (r'\bSanierung\b', -1, 'Sanierung (renovation)'),
-    (r'\bHaus\b', -1, 'Haus (house/building)'),
-    (r'\bWohnungsbau\b', -2, 'Wohnungsbau (residential construction)'),
-    (r'\bLebensmittel\b', -2, 'Lebensmittel (food)'),
-    (r'\bSchiffsinvest\b', -2, 'Schiffsinvest (ship investment)'),
-    (r'\bSchiffs\b', -1, 'Schiffs (shipping)'),
-    (r'\bInkasso\b', -2, 'Inkasso (debt collection)'),
-    (r'\bAutohaus\b', -2, 'Autohaus (car dealership)'),
+    (r"\bVerwaltung\b", -2, "Verwaltung (management/administration)"),
+    (r"\bVerwaltungs\b", -2, "Verwaltungs"),
+    (r"\bBeteiligungs\b", -1, "Beteiligungs (holding)"),
+    (r"\bHolding\b", -1, "Holding"),
+    (r"\bImmobilien\b", -2, "Immobilien (real estate)"),
+    (r"\bHandels\b", -1, "Handels (trading)"),
+    (r"\bGrundstück\b", -2, "Grundstück (real estate)"),
+    (r"\bVermögens\b", -2, "Vermögens (asset management)"),
+    (r"\bTreuhand\b", -2, "Treuhand (trust)"),
+    (r"\bSteuerberater\b", -1, "Steuerberater (tax advisor)"),
+    (r"\bRechtsanwält\b", -1, "Rechtsanwälte (lawyers)"),
+    (r"\bWirtschaftsprüf\b", -1, "Wirtschaftsprüfer (auditor)"),
+    (r"\bBau\b", -1, "Bau (construction)"),
+    (r"\bSanierung\b", -1, "Sanierung (renovation)"),
+    (r"\bHaus\b", -1, "Haus (house/building)"),
+    (r"\bWohnungsbau\b", -2, "Wohnungsbau (residential construction)"),
+    (r"\bLebensmittel\b", -2, "Lebensmittel (food)"),
+    (r"\bSchiffsinvest\b", -2, "Schiffsinvest (ship investment)"),
+    (r"\bSchiffs\b", -1, "Schiffs (shipping)"),
+    (r"\bInkasso\b", -2, "Inkasso (debt collection)"),
+    (r"\bAutohaus\b", -2, "Autohaus (car dealership)"),
 ]
 
 
 @dataclass
 class StartupScore:
     """Result of startup likelihood scoring."""
+
     total_score: int
     is_likely_startup: bool
     legal_form_score: int
@@ -220,13 +215,9 @@ class StartupScorer:
     def __init__(self):
         # Pre-compile patterns
         self._startup_patterns = [
-            (re.compile(p, re.IGNORECASE), score, desc)
-            for p, score, desc in STARTUP_NAME_PATTERNS
+            (re.compile(p, re.IGNORECASE), score, desc) for p, score, desc in STARTUP_NAME_PATTERNS
         ]
-        self._sme_patterns = [
-            (re.compile(p, re.IGNORECASE), score, desc)
-            for p, score, desc in SME_NAME_PATTERNS
-        ]
+        self._sme_patterns = [(re.compile(p, re.IGNORECASE), score, desc) for p, score, desc in SME_NAME_PATTERNS]
 
     def score_company(
         self,
@@ -338,11 +329,11 @@ class StartupScorer:
         # Require at least some AI relevance for startup classification
         # This prevents non-AI UGs from being classified as AI startups
         if score.total_score >= 5 and ai_relevance_score >= 1:
-            return 'startup'
+            return "startup"
         elif score.total_score >= 2:
-            return 'tech_company'
+            return "tech_company"
         else:
-            return 'traditional'
+            return "traditional"
 
 
 def score_companies_batch(
@@ -364,11 +355,11 @@ def score_companies_batch(
 
     results = []
     for company in companies:
-        ai_score = company.get('ai_robotics_score', 0)
+        ai_score = company.get("ai_robotics_score", 0)
         score = scorer.score_company(
-            name=company.get('name', ''),
-            legal_form=company.get('legal_form'),
-            city=company.get('city'),
+            name=company.get("name", ""),
+            legal_form=company.get("legal_form"),
+            city=company.get("city"),
             ai_relevance_score=ai_score,
         )
         classification = scorer.classify(score, ai_relevance_score=ai_score)
@@ -378,7 +369,7 @@ def score_companies_batch(
 
 
 # Quick test function
-if __name__ == '__main__':
+if __name__ == "__main__":
     scorer = StartupScorer()
 
     test_cases = [
@@ -387,11 +378,9 @@ if __name__ == '__main__':
         ("DeepTech AI GmbH", "GmbH", "München", 5),
         ("Robo Solutions UG", "UG", "Hamburg", 3),
         ("DataAnalytics.io GmbH", "GmbH", "Berlin", 2),
-
         # Borderline cases
         ("Smart Factory Tech GmbH", "GmbH", "Stuttgart", 2),
         ("AI Software GmbH", "GmbH", "Köln", 3),
-
         # Likely traditional SMEs
         ("Müller Verwaltungs GmbH", "GmbH", "Passau", 0),
         ("Erste Immobilien Beteiligungs AG", "AG", "Frankfurt", 0),
@@ -408,8 +397,10 @@ if __name__ == '__main__':
         print(f"\n{name}")
         print(f"  Legal form: {legal_form}, City: {city}, AI Score: {ai_score}")
         print(f"  Total Score: {score.total_score} -> {classification.upper()}")
-        print(f"  Breakdown: legal={score.legal_form_score}, location={score.location_score}, "
-              f"name={score.name_pattern_score}, ai_bonus={score.ai_relevance_bonus}")
+        print(
+            f"  Breakdown: legal={score.legal_form_score}, location={score.location_score}, "
+            f"name={score.name_pattern_score}, ai_bonus={score.ai_relevance_bonus}"
+        )
         if score.signals:
             print(f"  + Signals: {', '.join(score.signals)}")
         if score.negative_signals:

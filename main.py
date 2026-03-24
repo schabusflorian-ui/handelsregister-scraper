@@ -13,40 +13,34 @@ Usage:
     python main.py stats          # Show database statistics
 """
 
-import sys
-from pathlib import Path
-
 import click
 from rich.console import Console
-from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn
+from rich.progress import BarColumn, Progress, SpinnerColumn, TextColumn
 from rich.table import Table
 
-# Add project root to path
-sys.path.insert(0, str(Path(__file__).parent))
-
-from persistence.database import Database
-from sources.offeneregister import OffeneRegisterSource
-from sources.bundesapi import BundesAPISource, create_daily_scan_job
-from processing.filters import AIRoboticsFilter, DEFAULT_AI_KEYWORDS
-from processing.startup_scorer import StartupScorer
 from export.exporters import CSVExporter, JSONExporter, ReportGenerator
+from persistence.database import Database
+from processing.filters import AIRoboticsFilter
+from processing.startup_scorer import StartupScorer
+from sources.bundesapi import BundesAPISource, create_daily_scan_job
+from sources.offeneregister import OffeneRegisterSource
 
 console = Console()
 
 
 @click.group()
-@click.option('--db', default='handelsregister.db', help='Database file path')
+@click.option("--db", default="handelsregister.db", help="Database file path")
 @click.pass_context
 def cli(ctx, db):
     """Handelsregister Scraper - Find AI/Robotics startups in Germany."""
     ctx.ensure_object(dict)
-    ctx.obj['db_path'] = db
+    ctx.obj["db_path"] = db
 
 
 @cli.command()
-@click.option('--limit', default=None, type=int, help='Limit records to process (for testing)')
-@click.option('--min-score', default=1, help='Minimum AI relevance score')
-@click.option('--force-download', is_flag=True, help='Force re-download of bulk data')
+@click.option("--limit", default=None, type=int, help="Limit records to process (for testing)")
+@click.option("--min-score", default=1, help="Minimum AI relevance score")
+@click.option("--force-download", is_flag=True, help="Force re-download of bulk data")
 @click.pass_context
 def bulk_load(ctx, limit, min_score, force_download):
     """
@@ -55,7 +49,7 @@ def bulk_load(ctx, limit, min_score, force_download):
     This downloads ~260MB of data and filters for AI/robotics companies.
     Run this once to populate the database with historical data.
     """
-    db_path = ctx.obj['db_path']
+    db_path = ctx.obj["db_path"]
 
     console.print("\n[bold blue]Handelsregister Bulk Loader[/bold blue]")
     console.print("=" * 50)
@@ -66,9 +60,11 @@ def bulk_load(ctx, limit, min_score, force_download):
     filter_ = AIRoboticsFilter()
 
     # Check for existing data
-    existing_count = db.count_companies(source='offeneregister')
+    existing_count = db.count_companies(source="offeneregister")
     if existing_count > 0 and not force_download:
-        console.print(f"\n[yellow]Warning:[/yellow] Database already has {existing_count:,} companies from OffeneRegister.")
+        console.print(
+            f"\n[yellow]Warning:[/yellow] Database already has {existing_count:,} companies from OffeneRegister."
+        )
         if not click.confirm("Continue and add new companies?"):
             return
 
@@ -76,7 +72,7 @@ def bulk_load(ctx, limit, min_score, force_download):
     console.print("\n[bold]Step 1: Downloading bulk data...[/bold]")
     file_info = source.get_file_info()
 
-    if file_info['exists'] and not force_download:
+    if file_info["exists"] and not force_download:
         console.print(f"Using cached file: {file_info['path']}")
         console.print(f"Size: {file_info['size_mb']:.1f} MB")
     else:
@@ -113,7 +109,7 @@ def bulk_load(ctx, limit, min_score, force_download):
     console.print("\n[bold]Step 3: Calculating AI relevance scores...[/bold]")
 
     # Get companies without scores
-    companies = db.search_companies(source='offeneregister', limit=100000)
+    companies = db.search_companies(source="offeneregister", limit=100000)
     updated_ai = 0
 
     with Progress(console=console) as progress:
@@ -121,13 +117,13 @@ def bulk_load(ctx, limit, min_score, force_download):
 
         for company in companies:
             result = filter_.filter_company(
-                name=company['name'],
-                purpose=company.get('purpose'),
+                name=company["name"],
+                purpose=company.get("purpose"),
             )
 
-            if result.relevance_score != company.get('ai_robotics_score', 0):
+            if result.relevance_score != company.get("ai_robotics_score", 0):
                 db.update_company(
-                    company['id'],
+                    company["id"],
                     ai_robotics_score=result.relevance_score,
                     matched_keywords=result.matched_keywords,
                     tech_categories=result.tech_categories,
@@ -140,26 +136,27 @@ def bulk_load(ctx, limit, min_score, force_download):
     console.print("\n[bold]Step 4: Calculating startup likelihood scores...[/bold]")
 
     startup_scorer = StartupScorer()
-    companies = db.search_companies(source='offeneregister', limit=100000)
+    companies = db.search_companies(source="offeneregister", limit=100000)
     updated_startup = 0
 
     with Progress(console=console) as progress:
         task = progress.add_task("Scoring startups...", total=len(companies))
 
         for company in companies:
-            ai_score = company.get('ai_robotics_score', 0)
+            ai_score = company.get("ai_robotics_score", 0)
             startup_result = startup_scorer.score_company(
-                name=company['name'],
-                legal_form=company.get('legal_form'),
-                city=company.get('city'),
+                name=company["name"],
+                legal_form=company.get("legal_form"),
+                city=company.get("city"),
                 ai_relevance_score=ai_score,
             )
             classification = startup_scorer.classify(startup_result, ai_relevance_score=ai_score)
 
-            if (startup_result.total_score != company.get('startup_score', 0) or
-                classification != company.get('startup_classification')):
+            if startup_result.total_score != company.get("startup_score", 0) or classification != company.get(
+                "startup_classification"
+            ):
                 db.update_company(
-                    company['id'],
+                    company["id"],
                     startup_score=startup_result.total_score,
                     startup_classification=classification,
                 )
@@ -190,8 +187,8 @@ def bulk_load(ctx, limit, min_score, force_download):
 
 
 @cli.command()
-@click.option('--keywords', '-k', multiple=True, help='Keywords to search for')
-@click.option('--max-requests', default=50, help='Maximum requests to use (max 60/hr)')
+@click.option("--keywords", "-k", multiple=True, help="Keywords to search for")
+@click.option("--max-requests", default=50, help="Maximum requests to use (max 60/hr)")
 @click.pass_context
 def scan(ctx, keywords, max_requests):
     """
@@ -200,7 +197,7 @@ def scan(ctx, keywords, max_requests):
     This queries the official Handelsregister portal with strict
     rate limiting (60 requests/hour legal limit).
     """
-    db_path = ctx.obj['db_path']
+    db_path = ctx.obj["db_path"]
 
     if not keywords:
         keywords = [
@@ -254,7 +251,7 @@ def scan(ctx, keywords, max_requests):
 @click.pass_context
 def report(ctx):
     """Generate summary report."""
-    db_path = ctx.obj['db_path']
+    db_path = ctx.obj["db_path"]
 
     db = Database(db_path)
     generator = ReportGenerator(db)
@@ -266,14 +263,14 @@ def report(ctx):
 
 
 @cli.command()
-@click.option('--format', '-f', type=click.Choice(['csv', 'json']), default='csv')
-@click.option('--output', '-o', help='Output file path')
-@click.option('--min-score', default=1, help='Minimum AI relevance score')
-@click.option('--limit', default=10000, help='Maximum companies to export')
+@click.option("--format", "-f", type=click.Choice(["csv", "json"]), default="csv")
+@click.option("--output", "-o", help="Output file path")
+@click.option("--min-score", default=1, help="Minimum AI relevance score")
+@click.option("--limit", default=10000, help="Maximum companies to export")
 @click.pass_context
 def export(ctx, format, output, min_score, limit):
     """Export companies to CSV or JSON."""
-    db_path = ctx.obj['db_path']
+    db_path = ctx.obj["db_path"]
 
     db = Database(db_path)
 
@@ -286,7 +283,7 @@ def export(ctx, format, output, min_score, limit):
         db.close()
         return
 
-    if format == 'csv':
+    if format == "csv":
         exporter = CSVExporter()
         filepath = exporter.export_companies(companies, filename=output)
     else:
@@ -302,7 +299,7 @@ def export(ctx, format, output, min_score, limit):
 @click.pass_context
 def stats(ctx):
     """Show database statistics."""
-    db_path = ctx.obj['db_path']
+    db_path = ctx.obj["db_path"]
 
     db = Database(db_path)
     stats = db.get_statistics()
@@ -324,35 +321,35 @@ def stats(ctx):
 
     # By source
     console.print("\n[bold]By Source:[/bold]")
-    for source, count in stats.get('companies_by_source', {}).items():
+    for source, count in stats.get("companies_by_source", {}).items():
         console.print(f"  {source}: {count:,}")
 
     # By enrichment status
     console.print("\n[bold]By Enrichment Status:[/bold]")
-    for status, count in stats.get('companies_by_enrichment', {}).items():
+    for status, count in stats.get("companies_by_enrichment", {}).items():
         console.print(f"  {status}: {count:,}")
 
     # Top cities
     console.print("\n[bold]Top Cities:[/bold]")
-    for city, count in stats.get('top_cities', [])[:10]:
+    for city, count in stats.get("top_cities", [])[:10]:
         console.print(f"  {city}: {count:,}")
 
     # AI score distribution
     console.print("\n[bold]AI Score Distribution:[/bold]")
-    for score, count in stats.get('ai_score_distribution', []):
+    for score, count in stats.get("ai_score_distribution", []):
         bar = "█" * min(count // 100, 30)
         console.print(f"  Score {score}: {count:>6,} {bar}")
 
     # Startup classification
-    startup_class = stats.get('startup_classification', {})
+    startup_class = stats.get("startup_classification", {})
     if startup_class:
         console.print("\n[bold]Startup Classification:[/bold]")
         for classification, count in startup_class.items():
-            emoji = "🚀" if classification == 'startup' else "💼" if classification == 'tech_company' else "🏢"
+            emoji = "🚀" if classification == "startup" else "💼" if classification == "tech_company" else "🏢"
             console.print(f"  {emoji} {classification}: {count:,}")
 
     # Startup score distribution
-    startup_scores = stats.get('startup_score_distribution', {})
+    startup_scores = stats.get("startup_score_distribution", {})
     if startup_scores:
         console.print("\n[bold]Startup Score Distribution:[/bold]")
         for score_range, count in startup_scores.items():
@@ -365,7 +362,7 @@ def stats(ctx):
 @click.pass_context
 def init(ctx):
     """Initialize database (create tables)."""
-    db_path = ctx.obj['db_path']
+    db_path = ctx.obj["db_path"]
 
     console.print(f"Initializing database: {db_path}")
     db = Database(db_path)
@@ -373,8 +370,8 @@ def init(ctx):
     db.close()
 
 
-@cli.command('enrich-officers')
-@click.option('--limit', default=None, type=int, help='Limit records to process (for testing)')
+@cli.command("enrich-officers")
+@click.option("--limit", default=None, type=int, help="Limit records to process (for testing)")
 @click.pass_context
 def enrich_officers(ctx, limit):
     """
@@ -383,7 +380,7 @@ def enrich_officers(ctx, limit):
     Re-processes the bulk data to add officers for companies that already
     exist in the database. This enables VC partner matching.
     """
-    db_path = ctx.obj['db_path']
+    db_path = ctx.obj["db_path"]
 
     console.print("\n[bold blue]Officer Data Enrichment[/bold blue]")
     console.print("=" * 50)
@@ -405,7 +402,7 @@ def enrich_officers(ctx, limit):
 
     # Check if bulk file exists
     file_info = source.get_file_info()
-    if not file_info['exists']:
+    if not file_info["exists"]:
         console.print("\n[yellow]Bulk data file not found. Downloading...[/yellow]")
         source.download()
     else:
@@ -457,11 +454,11 @@ def enrich_officers(ctx, limit):
 
 
 @cli.command()
-@click.option('--days', default=7, help='Number of days to look back')
+@click.option("--days", default=7, help="Number of days to look back")
 @click.pass_context
 def new_companies(ctx, days):
     """Show recently discovered companies."""
-    db_path = ctx.obj['db_path']
+    db_path = ctx.obj["db_path"]
 
     db = Database(db_path)
     generator = ReportGenerator(db)
@@ -492,7 +489,7 @@ def test_connection(ctx):
             matches += 1
             console.print(f"  [green]Match:[/green] {record.name}")
 
-    console.print(f"\n[bold]Results:[/bold]")
+    console.print("\n[bold]Results:[/bold]")
     console.print(f"  Records processed: {count}")
     console.print(f"  AI/Robotics matches: {matches}")
     console.print("\n[green]Connection test successful![/green]")
@@ -502,21 +499,22 @@ def test_connection(ctx):
 # SCHEDULER COMMANDS
 # ============================================================================
 
+
 @cli.group()
 def scheduler():
     """Scheduler commands for continuous monitoring."""
     pass
 
 
-@scheduler.command('run')
-@click.option('--discovery-interval', default=2, help='Hours between discovery runs')
-@click.option('--run-now', is_flag=True, help='Run jobs immediately when starting')
+@scheduler.command("run")
+@click.option("--discovery-interval", default=2, help="Hours between discovery runs")
+@click.option("--run-now", is_flag=True, help="Run jobs immediately when starting")
 @click.pass_context
 def scheduler_run(ctx, discovery_interval, run_now):
     """Start the scheduler for continuous monitoring."""
     from scheduler.scheduler import run_scheduler
 
-    db_path = ctx.obj['db_path']
+    db_path = ctx.obj["db_path"]
 
     console.print("\n[bold blue]Starting Handelsregister Scheduler[/bold blue]")
     console.print("=" * 50)
@@ -532,13 +530,13 @@ def scheduler_run(ctx, discovery_interval, run_now):
     )
 
 
-@scheduler.command('status')
+@scheduler.command("status")
 @click.pass_context
 def scheduler_status(ctx):
     """Show scheduler and rate limiter status."""
     from scheduler.rate_limiter import PersistentRateLimiter
 
-    db_path = ctx.obj['db_path']
+    db_path = ctx.obj["db_path"]
     db = Database(db_path)
 
     console.print("\n[bold blue]Scheduler Status[/bold blue]")
@@ -558,12 +556,8 @@ def scheduler_status(ctx):
     # Backfill progress
     try:
         total = db.conn.execute("SELECT COUNT(*) FROM backfill_state").fetchone()[0]
-        completed = db.conn.execute(
-            "SELECT COUNT(*) FROM backfill_state WHERE status = 'completed'"
-        ).fetchone()[0]
-        failed = db.conn.execute(
-            "SELECT COUNT(*) FROM backfill_state WHERE status = 'failed'"
-        ).fetchone()[0]
+        completed = db.conn.execute("SELECT COUNT(*) FROM backfill_state WHERE status = 'completed'").fetchone()[0]
+        failed = db.conn.execute("SELECT COUNT(*) FROM backfill_state WHERE status = 'failed'").fetchone()[0]
 
         console.print("\n[bold]Backfill Progress:[/bold]")
         if total > 0:
@@ -587,7 +581,7 @@ def scheduler_status(ctx):
         if recent_jobs:
             console.print("\n[bold]Recent Jobs:[/bold]")
             for job in recent_jobs:
-                status_color = 'green' if job['status'] == 'completed' else 'yellow'
+                status_color = "green" if job["status"] == "completed" else "yellow"
                 console.print(
                     f"  {job['started_at'][:16]} - {job['job_type']}: "
                     f"{job['companies_new']} new, [{status_color}]{job['status']}[/{status_color}]"
@@ -598,15 +592,15 @@ def scheduler_status(ctx):
     db.close()
 
 
-@scheduler.command('discovery')
-@click.option('--max-requests', default=20, help='Maximum requests to use')
-@click.option('--dry-run', is_flag=True, help='Run without saving to database')
+@scheduler.command("discovery")
+@click.option("--max-requests", default=20, help="Maximum requests to use")
+@click.option("--dry-run", is_flag=True, help="Run without saving to database")
 @click.pass_context
 def scheduler_discovery(ctx, max_requests, dry_run):
     """Run a single discovery job."""
     from scheduler.jobs.discovery_job import run_discovery_job
 
-    db_path = ctx.obj['db_path']
+    db_path = ctx.obj["db_path"]
 
     console.print("\n[bold blue]Running Discovery Job[/bold blue]")
     console.print("=" * 50)
@@ -627,20 +621,20 @@ def scheduler_discovery(ctx, max_requests, dry_run):
     table.add_row("New companies", f"{stats['companies_new']:,}")
     table.add_row("Requests used", f"{stats['requests_used']:,}")
     table.add_row("Keywords completed", f"{stats['keywords_completed']}/{stats['keywords_total']}")
-    table.add_row("Status", stats['status'])
+    table.add_row("Status", stats["status"])
 
     console.print(table)
 
 
-@scheduler.command('backfill')
-@click.option('--max-requests', default=30, help='Maximum requests to use')
-@click.option('--dry-run', is_flag=True, help='Run without saving to database')
+@scheduler.command("backfill")
+@click.option("--max-requests", default=30, help="Maximum requests to use")
+@click.option("--dry-run", is_flag=True, help="Run without saving to database")
 @click.pass_context
 def scheduler_backfill(ctx, max_requests, dry_run):
     """Run a single backfill job."""
     from scheduler.jobs.backfill_job import run_backfill_job
 
-    db_path = ctx.obj['db_path']
+    db_path = ctx.obj["db_path"]
 
     console.print("\n[bold blue]Running Backfill Job[/bold blue]")
     console.print("=" * 50)
@@ -666,15 +660,15 @@ def scheduler_backfill(ctx, max_requests, dry_run):
     console.print(table)
 
 
-@scheduler.command('enrichment')
-@click.option('--batch-size', default=50, help='Number of companies to process')
-@click.option('--dry-run', is_flag=True, help='Run without saving to database')
+@scheduler.command("enrichment")
+@click.option("--batch-size", default=50, help="Number of companies to process")
+@click.option("--dry-run", is_flag=True, help="Run without saving to database")
 @click.pass_context
 def scheduler_enrichment(ctx, batch_size, dry_run):
     """Run a single enrichment job (capital detection)."""
     from scheduler.jobs.enrichment_job import run_enrichment_job
 
-    db_path = ctx.obj['db_path']
+    db_path = ctx.obj["db_path"]
 
     console.print("\n[bold blue]Running Enrichment Job[/bold blue]")
     console.print("=" * 50)
@@ -699,10 +693,10 @@ def scheduler_enrichment(ctx, batch_size, dry_run):
     console.print(table)
 
 
-@scheduler.command('announcements')
-@click.option('--lookback-days', default=7, help='Number of days to look back')
-@click.option('--max-results', default=500, help='Maximum announcements to fetch')
-@click.option('--dry-run', is_flag=True, help='Run without saving to database')
+@scheduler.command("announcements")
+@click.option("--lookback-days", default=7, help="Number of days to look back")
+@click.option("--max-results", default=500, help="Maximum announcements to fetch")
+@click.option("--dry-run", is_flag=True, help="Run without saving to database")
 @click.pass_context
 def scheduler_announcements(ctx, lookback_days, max_results, dry_run):
     """
@@ -713,7 +707,7 @@ def scheduler_announcements(ctx, lookback_days, max_results, dry_run):
     """
     from scheduler.jobs.announcement_job import run_announcement_job
 
-    db_path = ctx.obj['db_path']
+    db_path = ctx.obj["db_path"]
 
     console.print("\n[bold blue]Running Announcement Monitoring Job[/bold blue]")
     console.print("=" * 50)
@@ -745,16 +739,16 @@ def scheduler_announcements(ctx, lookback_days, max_results, dry_run):
 
     console.print(table)
 
-    if stats['new_companies'] > 0:
+    if stats["new_companies"] > 0:
         console.print(f"\n[bold green]🚀 Discovered {stats['new_companies']} new AI/robotics companies![/bold green]")
 
-    if stats['capital_events'] > 0:
+    if stats["capital_events"] > 0:
         console.print(f"\n[bold cyan]💰 Detected {stats['capital_events']} capital events![/bold cyan]")
 
 
-@scheduler.command('investor-detect')
-@click.option('--min-confidence', default=0.8, help='Minimum match confidence (0.0-1.0)')
-@click.option('--batch-size', default=100, help='Number of records to process per batch')
+@scheduler.command("investor-detect")
+@click.option("--min-confidence", default=0.8, help="Minimum match confidence (0.0-1.0)")
+@click.option("--batch-size", default=100, help="Number of records to process per batch")
 @click.pass_context
 def scheduler_investor_detect(ctx, min_confidence, batch_size):
     """
@@ -767,7 +761,7 @@ def scheduler_investor_detect(ctx, min_confidence, batch_size):
     """
     from scheduler.jobs.investor_detection_job import InvestorDetectionJob
 
-    db_path = ctx.obj['db_path']
+    db_path = ctx.obj["db_path"]
     db = Database(db_path)
 
     console.print("\n[bold blue]Running Investor Detection Job[/bold blue]")
@@ -799,8 +793,10 @@ def scheduler_investor_detect(ctx, min_confidence, batch_size):
 
         console.print(table)
 
-        if stats['investments_new'] > 0:
-            console.print(f"\n[bold green]Found {stats['investments_new']} new investor-company connections![/bold green]")
+        if stats["investments_new"] > 0:
+            console.print(
+                f"\n[bold green]Found {stats['investments_new']} new investor-company connections![/bold green]"
+            )
 
     finally:
         db.close()
@@ -810,13 +806,14 @@ def scheduler_investor_detect(ctx, min_confidence, batch_size):
 # CAPITAL EVENTS COMMANDS
 # ============================================================================
 
-@cli.command('capital-events')
-@click.option('--days', default=30, help='Show events from last N days')
-@click.option('--company-id', type=int, help='Show events for specific company')
+
+@cli.command("capital-events")
+@click.option("--days", default=30, help="Show events from last N days")
+@click.option("--company-id", type=int, help="Show events for specific company")
 @click.pass_context
 def capital_events(ctx, days, company_id):
     """Show capital change events (raises, decreases)."""
-    db_path = ctx.obj['db_path']
+    db_path = ctx.obj["db_path"]
     db = Database(db_path)
 
     console.print("\n[bold blue]Capital Events[/bold blue]")
@@ -845,22 +842,22 @@ def capital_events(ctx, days, company_id):
     table.add_column("Confidence", style="dim")
 
     for event in events[:50]:  # Limit to 50 rows
-        event_type = event.get('event_type', 'unknown')
-        type_emoji = "📈" if event_type == 'increase' else "📉" if event_type == 'decrease' else "🔹"
+        event_type = event.get("event_type", "unknown")
+        type_emoji = "📈" if event_type == "increase" else "📉" if event_type == "decrease" else "🔹"
 
-        change = event.get('change_amount')
+        change = event.get("change_amount")
         change_str = f"€{change:,.0f}" if change else "-"
 
-        new_amount = event.get('new_amount')
+        new_amount = event.get("new_amount")
         new_str = f"€{new_amount:,.0f}" if new_amount else "-"
 
-        confidence = event.get('confidence_score', 0)
+        confidence = event.get("confidence_score", 0)
         conf_str = f"{confidence:.0%}"
 
-        company_name = event.get('company_name', event.get('name', f"ID:{event.get('company_id')}"))
+        company_name = event.get("company_name", event.get("name", f"ID:{event.get('company_id')}"))
 
         table.add_row(
-            event.get('event_date', '')[:10] if event.get('event_date') else '-',
+            event.get("event_date", "")[:10] if event.get("event_date") else "-",
             company_name[:40],
             f"{type_emoji} {event_type}",
             change_str,
@@ -876,22 +873,24 @@ def capital_events(ctx, days, company_id):
 # INVESTOR COMMANDS
 # ============================================================================
 
+
 @cli.group()
 def investors():
     """View investor/VC tracking data."""
     pass
 
 
-@investors.command('list')
-@click.option('--limit', default=20, help='Number of investors to show')
+@investors.command("list")
+@click.option("--limit", default=20, help="Number of investors to show")
 @click.pass_context
 def investors_list(ctx, limit):
     """List known investors/VCs in the database."""
-    db_path = ctx.obj['db_path']
+    db_path = ctx.obj["db_path"]
     db = Database(db_path)
 
     try:
-        rows = db.conn.execute("""
+        rows = db.conn.execute(
+            """
             SELECT i.id, i.canonical_name, i.type, i.headquarters_city,
                    COUNT(inv.id) as investment_count
             FROM investors i
@@ -899,7 +898,9 @@ def investors_list(ctx, limit):
             GROUP BY i.id
             ORDER BY investment_count DESC, i.canonical_name
             LIMIT ?
-        """, (limit,)).fetchall()
+        """,
+            (limit,),
+        ).fetchall()
 
         if not rows:
             console.print("[yellow]No investors found. Run 'scheduler investor-detect' to seed and scan.[/yellow]")
@@ -913,10 +914,10 @@ def investors_list(ctx, limit):
 
         for row in rows:
             table.add_row(
-                row['canonical_name'][:40],
-                row['type'] or '-',
-                row['headquarters_city'] or '-',
-                str(row['investment_count'])
+                row["canonical_name"][:40],
+                row["type"] or "-",
+                row["headquarters_city"] or "-",
+                str(row["investment_count"]),
             )
 
         console.print(table)
@@ -925,22 +926,25 @@ def investors_list(ctx, limit):
         db.close()
 
 
-@investors.command('portfolio')
-@click.argument('investor_name')
+@investors.command("portfolio")
+@click.argument("investor_name")
 @click.pass_context
 def investors_portfolio(ctx, investor_name):
     """Show companies in an investor's portfolio."""
-    db_path = ctx.obj['db_path']
+    db_path = ctx.obj["db_path"]
     db = Database(db_path)
 
     try:
         # Find investor by partial name match
-        investor = db.conn.execute("""
+        investor = db.conn.execute(
+            """
             SELECT id, canonical_name, type, headquarters_city
             FROM investors
             WHERE canonical_name LIKE ? COLLATE NOCASE
             LIMIT 1
-        """, (f"%{investor_name}%",)).fetchone()
+        """,
+            (f"%{investor_name}%",),
+        ).fetchone()
 
         if not investor:
             console.print(f"[red]Investor '{investor_name}' not found[/red]")
@@ -951,7 +955,8 @@ def investors_portfolio(ctx, investor_name):
         console.print("=" * 50)
 
         # Get portfolio companies
-        companies = db.conn.execute("""
+        companies = db.conn.execute(
+            """
             SELECT c.name, c.city, c.ai_robotics_score, c.startup_classification,
                    inv.round_type, inv.amount, inv.confidence, inv.detection_source,
                    inv.investment_date
@@ -959,7 +964,9 @@ def investors_portfolio(ctx, investor_name):
             JOIN companies c ON inv.company_id = c.id
             WHERE inv.investor_id = ?
             ORDER BY inv.confidence DESC, c.ai_robotics_score DESC
-        """, (investor['id'],)).fetchall()
+        """,
+            (investor["id"],),
+        ).fetchall()
 
         if not companies:
             console.print("[yellow]No portfolio companies detected yet.[/yellow]")
@@ -975,12 +982,12 @@ def investors_portfolio(ctx, investor_name):
 
         for company in companies:
             table.add_row(
-                company['name'][:35],
-                company['city'] or '-',
-                str(company['ai_robotics_score'] or 0),
-                company['round_type'] or '-',
+                company["name"][:35],
+                company["city"] or "-",
+                str(company["ai_robotics_score"] or 0),
+                company["round_type"] or "-",
                 f"{company['confidence']:.0%}",
-                company['detection_source'] or '-'
+                company["detection_source"] or "-",
             )
 
         console.print(table)
@@ -989,17 +996,18 @@ def investors_portfolio(ctx, investor_name):
         db.close()
 
 
-@investors.command('investments')
-@click.option('--min-confidence', default=0.8, help='Minimum confidence threshold')
-@click.option('--limit', default=50, help='Maximum investments to show')
+@investors.command("investments")
+@click.option("--min-confidence", default=0.8, help="Minimum confidence threshold")
+@click.option("--limit", default=50, help="Maximum investments to show")
 @click.pass_context
 def investors_investments(ctx, min_confidence, limit):
     """Show all detected investments."""
-    db_path = ctx.obj['db_path']
+    db_path = ctx.obj["db_path"]
     db = Database(db_path)
 
     try:
-        investments = db.conn.execute("""
+        investments = db.conn.execute(
+            """
             SELECT c.name as company_name, c.city, c.ai_robotics_score,
                    i.canonical_name as investor_name, i.type as investor_type,
                    inv.round_type, inv.amount, inv.confidence,
@@ -1010,7 +1018,9 @@ def investors_investments(ctx, min_confidence, limit):
             WHERE inv.confidence >= ?
             ORDER BY inv.confidence DESC, inv.detected_at DESC
             LIMIT ?
-        """, (min_confidence, limit)).fetchall()
+        """,
+            (min_confidence, limit),
+        ).fetchall()
 
         if not investments:
             console.print("[yellow]No investments found. Run 'scheduler investor-detect' first.[/yellow]")
@@ -1025,11 +1035,11 @@ def investors_investments(ctx, min_confidence, limit):
 
         for inv in investments:
             table.add_row(
-                inv['company_name'][:30],
-                inv['investor_name'][:25],
-                inv['investor_type'] or '-',
-                inv['round_type'] or '-',
-                f"{inv['confidence']:.0%}"
+                inv["company_name"][:30],
+                inv["investor_name"][:25],
+                inv["investor_type"] or "-",
+                inv["round_type"] or "-",
+                f"{inv['confidence']:.0%}",
             )
 
         console.print(table)
@@ -1041,11 +1051,11 @@ def investors_investments(ctx, min_confidence, limit):
         db.close()
 
 
-@investors.command('stats')
+@investors.command("stats")
 @click.pass_context
 def investors_stats(ctx):
     """Show investor detection statistics."""
-    db_path = ctx.obj['db_path']
+    db_path = ctx.obj["db_path"]
     db = Database(db_path)
 
     try:
@@ -1081,9 +1091,12 @@ def investors_stats(ctx):
         """).fetchall()
 
         # Average confidence
-        avg_conf = db.conn.execute("""
+        avg_conf = (
+            db.conn.execute("""
             SELECT AVG(confidence) FROM investments
-        """).fetchone()[0] or 0
+        """).fetchone()[0]
+            or 0
+        )
 
         console.print("\n[bold blue]Investor Detection Statistics[/bold blue]")
         console.print("=" * 50)
@@ -1114,9 +1127,9 @@ def investors_stats(ctx):
         db.close()
 
 
-@investors.command('search')
-@click.argument('investor_name')
-@click.option('--max-results', default=50, help='Maximum results to fetch')
+@investors.command("search")
+@click.argument("investor_name")
+@click.option("--max-results", default=50, help="Maximum results to fetch")
 @click.pass_context
 def investors_search(ctx, investor_name, max_results):
     """
@@ -1133,14 +1146,16 @@ def investors_search(ctx, investor_name, max_results):
 
     console.print(f"\n[bold blue]Searching Handelsregister for: {investor_name}[/bold blue]")
     console.print("=" * 50)
-    console.print(f"[dim]Searching by shareholder name (Name des Beteiligten)[/dim]\n")
+    console.print("[dim]Searching by shareholder name (Name des Beteiligten)[/dim]\n")
 
     source = BundesAPISource()
-    results = list(source.search(
-        keywords=[],  # No company name keywords
-        shareholder_name=investor_name,
-        max_results=max_results,
-    ))
+    results = list(
+        source.search(
+            keywords=[],  # No company name keywords
+            shareholder_name=investor_name,
+            max_results=max_results,
+        )
+    )
 
     if not results:
         console.print(f"[yellow]No companies found with '{investor_name}' as shareholder[/yellow]")
@@ -1156,7 +1171,7 @@ def investors_search(ctx, investor_name, max_results):
     table.add_column("Court", style="dim")
     table.add_column("Status", style="green")
 
-    db_path = ctx.obj['db_path']
+    db_path = ctx.obj["db_path"]
     db = Database(db_path)
 
     try:
@@ -1183,21 +1198,22 @@ def investors_search(ctx, investor_name, max_results):
 # GROUNDTRUTH COMMANDS
 # ============================================================================
 
+
 @cli.group()
 def groundtruth():
     """Groundtruth management for filter accuracy tracking."""
     pass
 
 
-@groundtruth.command('verify')
-@click.argument('company_id', type=int)
-@click.option('--confirmed', is_flag=True, help='Mark as confirmed AI/robotics company')
-@click.option('--false-positive', is_flag=True, help='Mark as false positive')
-@click.option('--reason', help='Reason for false positive classification')
+@groundtruth.command("verify")
+@click.argument("company_id", type=int)
+@click.option("--confirmed", is_flag=True, help="Mark as confirmed AI/robotics company")
+@click.option("--false-positive", is_flag=True, help="Mark as false positive")
+@click.option("--reason", help="Reason for false positive classification")
 @click.pass_context
 def groundtruth_verify(ctx, company_id, confirmed, false_positive, reason):
     """Verify a company as AI/robotics or false positive."""
-    db_path = ctx.obj['db_path']
+    db_path = ctx.obj["db_path"]
     db = Database(db_path)
 
     # Ensure groundtruth table exists
@@ -1228,13 +1244,17 @@ def groundtruth_verify(ctx, company_id, confirmed, false_positive, reason):
 
     is_ai = confirmed and not false_positive
     from datetime import datetime
+
     now = datetime.utcnow().isoformat()
 
-    db.conn.execute("""
+    db.conn.execute(
+        """
         INSERT OR REPLACE INTO groundtruth_companies
         (company_id, is_ai_robotics, confidence, verification_source, verified_at, false_positive_reason)
         VALUES (?, ?, 'verified', 'manual', ?, ?)
-    """, (company_id, 1 if is_ai else 0, now, reason))
+    """,
+        (company_id, 1 if is_ai else 0, now, reason),
+    )
     db.conn.commit()
 
     status = "[green]AI/robotics company[/green]" if is_ai else "[red]False positive[/red]"
@@ -1245,10 +1265,10 @@ def groundtruth_verify(ctx, company_id, confirmed, false_positive, reason):
     db.close()
 
 
-@groundtruth.command('import')
-@click.option('--file', 'filepath', required=True, help='CSV file with company names')
-@click.option('--column', default='name', help='Column name containing company names')
-@click.option('--confirmed', is_flag=True, help='Mark all as confirmed AI/robotics')
+@groundtruth.command("import")
+@click.option("--file", "filepath", required=True, help="CSV file with company names")
+@click.option("--column", default="name", help="Column name containing company names")
+@click.option("--confirmed", is_flag=True, help="Mark all as confirmed AI/robotics")
 @click.pass_context
 def groundtruth_import(ctx, filepath, column, confirmed):
     """Import groundtruth from CSV file.
@@ -1264,7 +1284,7 @@ def groundtruth_import(ctx, filepath, column, confirmed):
     import csv
     from datetime import datetime
 
-    db_path = ctx.obj['db_path']
+    db_path = ctx.obj["db_path"]
     db = Database(db_path)
 
     # Ensure groundtruth table exists
@@ -1286,7 +1306,7 @@ def groundtruth_import(ctx, filepath, column, confirmed):
 
     # Read CSV
     try:
-        with open(filepath, 'r', encoding='utf-8') as f:
+        with open(filepath, encoding="utf-8") as f:
             reader = csv.DictReader(f)
             rows = list(reader)
     except Exception as e:
@@ -1309,24 +1329,23 @@ def groundtruth_import(ctx, filepath, column, confirmed):
             continue
 
         # Try exact match first
-        company = db.conn.execute(
-            "SELECT id, name FROM companies WHERE name = ? COLLATE NOCASE",
-            (name,)
-        ).fetchone()
+        company = db.conn.execute("SELECT id, name FROM companies WHERE name = ? COLLATE NOCASE", (name,)).fetchone()
 
         # Try partial match if exact fails
         if not company:
             company = db.conn.execute(
-                "SELECT id, name FROM companies WHERE name LIKE ? COLLATE NOCASE LIMIT 1",
-                (f"%{name}%",)
+                "SELECT id, name FROM companies WHERE name LIKE ? COLLATE NOCASE LIMIT 1", (f"%{name}%",)
             ).fetchone()
 
         if company:
-            db.conn.execute("""
+            db.conn.execute(
+                """
                 INSERT OR REPLACE INTO groundtruth_companies
                 (company_id, is_ai_robotics, confidence, verification_source, verified_at)
                 VALUES (?, ?, 'verified', 'import', ?)
-            """, (company['id'], 1 if confirmed else 1, now))
+            """,
+                (company["id"], 1 if confirmed else 1, now),
+            )
             matched += 1
             console.print(f"  [green]✓[/green] {name} → {company['name']}")
         else:
@@ -1334,7 +1353,7 @@ def groundtruth_import(ctx, filepath, column, confirmed):
 
     db.conn.commit()
 
-    console.print(f"\n[bold]Results:[/bold]")
+    console.print("\n[bold]Results:[/bold]")
     console.print(f"  Matched: {matched}")
     console.print(f"  Not found: {len(not_found)}")
 
@@ -1346,11 +1365,11 @@ def groundtruth_import(ctx, filepath, column, confirmed):
     db.close()
 
 
-@groundtruth.command('report')
+@groundtruth.command("report")
 @click.pass_context
 def groundtruth_report(ctx):
     """Show groundtruth accuracy report."""
-    db_path = ctx.obj['db_path']
+    db_path = ctx.obj["db_path"]
     db = Database(db_path)
 
     console.print("\n[bold blue]Groundtruth Accuracy Report[/bold blue]")
@@ -1366,12 +1385,10 @@ def groundtruth_report(ctx):
 
     # Get stats
     total = db.conn.execute("SELECT COUNT(*) FROM groundtruth_companies").fetchone()[0]
-    confirmed = db.conn.execute(
-        "SELECT COUNT(*) FROM groundtruth_companies WHERE is_ai_robotics = 1"
-    ).fetchone()[0]
-    false_positives = db.conn.execute(
-        "SELECT COUNT(*) FROM groundtruth_companies WHERE is_ai_robotics = 0"
-    ).fetchone()[0]
+    confirmed = db.conn.execute("SELECT COUNT(*) FROM groundtruth_companies WHERE is_ai_robotics = 1").fetchone()[0]
+    false_positives = db.conn.execute("SELECT COUNT(*) FROM groundtruth_companies WHERE is_ai_robotics = 0").fetchone()[
+        0
+    ]
 
     if total == 0:
         console.print("[yellow]No groundtruth entries yet.[/yellow]")
@@ -1404,7 +1421,7 @@ def groundtruth_report(ctx):
     if fps:
         console.print("\n[bold]Recent False Positives:[/bold]")
         for fp in fps:
-            reason = fp['false_positive_reason'] or 'No reason given'
+            reason = fp["false_positive_reason"] or "No reason given"
             console.print(f"  • {fp['name']} (score: {fp['ai_robotics_score']}) - {reason}")
 
     db.close()
@@ -1414,18 +1431,19 @@ def groundtruth_report(ctx):
 # Announcements Commands
 # =========================================================================
 
+
 @cli.group()
 def announcements():
     """Manage Registerbekanntmachungen (register announcements)."""
     pass
 
 
-@announcements.command('fetch')
-@click.option('--date-from', required=True, help='Start date (DD.MM.YYYY)')
-@click.option('--date-to', required=True, help='End date (DD.MM.YYYY)')
-@click.option('--state', default=None, help='State code (e.g., by, be, nw)')
-@click.option('--category', default=None, help='Category: 1=deletion, 2=transformation, 3=new docs, 4=other')
-@click.option('--max-results', default=500, help='Maximum results')
+@announcements.command("fetch")
+@click.option("--date-from", required=True, help="Start date (DD.MM.YYYY)")
+@click.option("--date-to", required=True, help="End date (DD.MM.YYYY)")
+@click.option("--state", default=None, help="State code (e.g., by, be, nw)")
+@click.option("--category", default=None, help="Category: 1=deletion, 2=transformation, 3=new docs, 4=other")
+@click.option("--max-results", default=500, help="Maximum results")
 @click.pass_context
 def announcements_fetch(ctx, date_from, date_to, state, category, max_results):
     """
@@ -1434,7 +1452,7 @@ def announcements_fetch(ctx, date_from, date_to, state, category, max_results):
     Example:
         python main.py announcements fetch --date-from 01.01.2026 --date-to 31.01.2026
     """
-    db_path = ctx.obj['db_path']
+    db_path = ctx.obj["db_path"]
     db = Database(db_path)
 
     console.print("\n[bold blue]Fetching Registerbekanntmachungen[/bold blue]")
@@ -1442,13 +1460,13 @@ def announcements_fetch(ctx, date_from, date_to, state, category, max_results):
     if state:
         console.print(f"State: {state}")
     if category:
-        categories = {'1': 'Deletion', '2': 'Transformation', '3': 'New docs', '4': 'Other'}
+        categories = {"1": "Deletion", "2": "Transformation", "3": "New docs", "4": "Other"}
         console.print(f"Category: {categories.get(category, category)}")
 
     source = BundesAPISource()
 
     # Fetch announcements
-    stats = {'total': 0, 'by_type': {}}
+    stats = {"total": 0, "by_type": {}}
 
     with Progress(
         SpinnerColumn(),
@@ -1464,8 +1482,8 @@ def announcements_fetch(ctx, date_from, date_to, state, category, max_results):
             category=category,
             max_results=max_results,
         ):
-            stats['total'] += 1
-            stats['by_type'][ann.announcement_type] = stats['by_type'].get(ann.announcement_type, 0) + 1
+            stats["total"] += 1
+            stats["by_type"][ann.announcement_type] = stats["by_type"].get(ann.announcement_type, 0) + 1
 
             # Store in database
             db.insert_announcement(
@@ -1483,12 +1501,12 @@ def announcements_fetch(ctx, date_from, date_to, state, category, max_results):
     # Show summary
     console.print(f"\n[bold green]Fetched {stats['total']} announcements[/bold green]")
 
-    if stats['by_type']:
+    if stats["by_type"]:
         table = Table(title="By Type")
         table.add_column("Type", style="cyan")
         table.add_column("Count", style="green")
 
-        for t, c in sorted(stats['by_type'].items(), key=lambda x: -x[1]):
+        for t, c in sorted(stats["by_type"].items(), key=lambda x: -x[1]):
             table.add_row(t, str(c))
 
         console.print(table)
@@ -1496,13 +1514,15 @@ def announcements_fetch(ctx, date_from, date_to, state, category, max_results):
     db.close()
 
 
-@announcements.command('list')
-@click.option('--type', 'ann_type', default=None, help='Filter by type (neueintragung, kapitalerhoehung, loeschung, etc.)')
-@click.option('--limit', default=20, help='Number of results')
+@announcements.command("list")
+@click.option(
+    "--type", "ann_type", default=None, help="Filter by type (neueintragung, kapitalerhoehung, loeschung, etc.)"
+)
+@click.option("--limit", default=20, help="Number of results")
 @click.pass_context
 def announcements_list(ctx, ann_type, limit):
     """List stored announcements."""
-    db_path = ctx.obj['db_path']
+    db_path = ctx.obj["db_path"]
     db = Database(db_path)
 
     announcements = db.get_announcements(
@@ -1523,21 +1543,21 @@ def announcements_list(ctx, ann_type, limit):
 
     for ann in announcements:
         table.add_row(
-            ann.get('announcement_date', 'N/A'),
-            ann.get('announcement_type', 'N/A'),
-            ann.get('company_name', 'N/A')[:40],
-            ann.get('native_company_number', 'N/A'),
+            ann.get("announcement_date", "N/A"),
+            ann.get("announcement_type", "N/A"),
+            ann.get("company_name", "N/A")[:40],
+            ann.get("native_company_number", "N/A"),
         )
 
     console.print(table)
     db.close()
 
 
-@announcements.command('stats')
+@announcements.command("stats")
 @click.pass_context
 def announcements_stats(ctx):
     """Show announcement statistics."""
-    db_path = ctx.obj['db_path']
+    db_path = ctx.obj["db_path"]
     db = Database(db_path)
 
     total = db.count_announcements()
@@ -1553,7 +1573,7 @@ def announcements_stats(ctx):
 
         for t, c in sorted(by_type.items(), key=lambda x: -x[1]):
             pct = (c / total * 100) if total > 0 else 0
-            table.add_row(t or 'unknown', f"{c:,}", f"{pct:.1f}%")
+            table.add_row(t or "unknown", f"{c:,}", f"{pct:.1f}%")
 
         console.print(table)
 
@@ -1564,15 +1584,16 @@ def announcements_stats(ctx):
 # NEWS MONITORING COMMANDS
 # ============================================================================
 
+
 @cli.group()
 def news():
     """News monitoring for startup funding announcements."""
     pass
 
 
-@news.command('scan')
-@click.option('--funding-only', is_flag=True, help='Only show funding-related articles')
-@click.option('--ai-only', is_flag=True, help='Only show AI/robotics-related articles')
+@news.command("scan")
+@click.option("--funding-only", is_flag=True, help="Only show funding-related articles")
+@click.option("--ai-only", is_flag=True, help="Only show AI/robotics-related articles")
 @click.pass_context
 def news_scan(ctx, funding_only, ai_only):
     """Scan RSS feeds for startup news."""
@@ -1622,7 +1643,7 @@ def news_scan(ctx, funding_only, ai_only):
     console.print(table)
 
 
-@news.command('funding')
+@news.command("funding")
 @click.pass_context
 def news_funding(ctx):
     """Extract funding announcements from news."""
@@ -1669,7 +1690,7 @@ def news_funding(ctx):
         if len(mention.investors) > 3:
             investors_str += f" +{len(mention.investors) - 3}"
 
-        conf_str = f"{mention.confidence:.0%}" if hasattr(mention, 'confidence') else "-"
+        conf_str = f"{mention.confidence:.0%}" if hasattr(mention, "confidence") else "-"
 
         table.add_row(
             mention.company_name[:20] if mention.company_name else "-",
@@ -1689,7 +1710,7 @@ def news_funding(ctx):
         console.print(f"    {mention.article_url}")
 
 
-@news.command('early-stage')
+@news.command("early-stage")
 @click.pass_context
 def news_early_stage(ctx):
     """Scan for early-stage signals: grants, stipends, spinoffs, accelerators."""
@@ -1730,5 +1751,5 @@ def news_early_stage(ctx):
     console.print(table)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     cli(obj={})

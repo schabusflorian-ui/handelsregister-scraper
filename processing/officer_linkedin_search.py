@@ -9,12 +9,11 @@ search result titles and snippets to avoid hitting linkedin.com directly
 (which aggressively blocks cloud IPs).
 """
 
-import re
-import json
 import logging
-from typing import Optional, List
+import re
 from dataclasses import dataclass, field
 from difflib import SequenceMatcher
+from typing import List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -22,28 +21,75 @@ logger = logging.getLogger(__name__)
 # High-value companies to detect in snippets (lowercase for matching)
 HIGH_VALUE_COMPANIES = [
     # FAANG / Big Tech
-    'google', 'meta', 'facebook', 'amazon', 'apple', 'microsoft',
-    'netflix', 'spotify', 'uber', 'airbnb', 'stripe', 'palantir',
-    'salesforce', 'oracle', 'sap', 'adobe', 'intel', 'nvidia',
-    'tesla', 'spacex', 'openai', 'anthropic', 'deepmind',
+    "google",
+    "meta",
+    "facebook",
+    "amazon",
+    "apple",
+    "microsoft",
+    "netflix",
+    "spotify",
+    "uber",
+    "airbnb",
+    "stripe",
+    "palantir",
+    "salesforce",
+    "oracle",
+    "sap",
+    "adobe",
+    "intel",
+    "nvidia",
+    "tesla",
+    "spacex",
+    "openai",
+    "anthropic",
+    "deepmind",
     # European Tech
-    'klarna', 'n26', 'revolut', 'wise', 'adyen',
-    'delivery hero', 'zalando', 'celonis', 'personio', 'flixbus',
-    'trade republic', 'wefox', 'gorillas', 'contentful', 'mambu',
-    'messagebird', 'mollie', 'bitpanda', 'scalable capital',
+    "klarna",
+    "n26",
+    "revolut",
+    "wise",
+    "adyen",
+    "delivery hero",
+    "zalando",
+    "celonis",
+    "personio",
+    "flixbus",
+    "trade republic",
+    "wefox",
+    "gorillas",
+    "contentful",
+    "mambu",
+    "messagebird",
+    "mollie",
+    "bitpanda",
+    "scalable capital",
     # Consulting
-    'mckinsey', 'bcg', 'bain', 'roland berger', 'deloitte',
-    'accenture', 'pwc', 'kpmg', 'ernst & young',
+    "mckinsey",
+    "bcg",
+    "bain",
+    "roland berger",
+    "deloitte",
+    "accenture",
+    "pwc",
+    "kpmg",
+    "ernst & young",
     # VC / PE
-    'sequoia', 'a16z', 'andreessen horowitz', 'index ventures',
-    'earlybird', 'project a', 'hv capital', 'lakestar',
-    'rocket internet',
+    "sequoia",
+    "a16z",
+    "andreessen horowitz",
+    "index ventures",
+    "earlybird",
+    "project a",
+    "hv capital",
+    "lakestar",
+    "rocket internet",
 ]
 
 # Legal form suffixes to strip from company names
 _LEGAL_FORMS_RE = re.compile(
-    r'\s*(?:gGmbH|gmbh\s*&\s*co\.?\s*(?:kg|ohg)?|ug\s*(?:\(haftungsbeschränkt\))?'
-    r'|gmbh|ag|se|kg|ohg|gbr|e\.?\s*k\.?|mbh|e\.?\s*v\.?|partg|kgaa)\s*$',
+    r"\s*(?:gGmbH|gmbh\s*&\s*co\.?\s*(?:kg|ohg)?|ug\s*(?:\(haftungsbeschränkt\))?"
+    r"|gmbh|ag|se|kg|ohg|gbr|e\.?\s*k\.?|mbh|e\.?\s*v\.?|partg|kgaa)\s*$",
     re.IGNORECASE,
 )
 
@@ -51,19 +97,20 @@ _LEGAL_FORMS_RE = re.compile(
 @dataclass
 class OfficerLinkedInMatch:
     """Result of matching an officer to a LinkedIn profile."""
+
     linkedin_url: str
     name_from_search: str
     headline: Optional[str] = None
     location: Optional[str] = None
-    snippet: str = ''
+    snippet: str = ""
     previous_companies: List[str] = field(default_factory=list)
     match_confidence: float = 0.0
-    source: str = 'search_snippet'
+    source: str = "search_snippet"
 
 
 def _clean_company_name(company_name: str) -> str:
     """Strip legal form suffixes from company name for better search matching."""
-    return _LEGAL_FORMS_RE.sub('', company_name).strip()
+    return _LEGAL_FORMS_RE.sub("", company_name).strip()
 
 
 def build_search_query(officer_name: str, company_name: str) -> str:
@@ -81,7 +128,7 @@ def build_fallback_query(officer_name: str, company_city: str = None) -> str:
     parts = [f'linkedin.com/in "{officer_name}"']
     if company_city:
         parts.append(f'"{company_city}"')
-    return ' '.join(parts)
+    return " ".join(parts)
 
 
 def _extract_name_and_headline(title: str):
@@ -94,10 +141,10 @@ def _extract_name_and_headline(title: str):
     - "Max Mustermann | LinkedIn"
     """
     # Remove LinkedIn suffix
-    clean = title.replace(' | LinkedIn', '').replace(' - LinkedIn', '').strip()
+    clean = title.replace(" | LinkedIn", "").replace(" - LinkedIn", "").strip()
 
-    if ' - ' in clean:
-        parts = clean.split(' - ', 1)
+    if " - " in clean:
+        parts = clean.split(" - ", 1)
         return parts[0].strip(), parts[1].strip()
 
     return clean, None
@@ -110,7 +157,7 @@ def _extract_companies_from_text(text: str) -> List[str]:
     for company in HIGH_VALUE_COMPANIES:
         # Use word boundary for short names to avoid false positives
         if len(company) <= 4:
-            if re.search(r'\b' + re.escape(company) + r'\b', text_lower):
+            if re.search(r"\b" + re.escape(company) + r"\b", text_lower):
                 found.append(company.title())
         else:
             if company in text_lower:
@@ -129,8 +176,8 @@ def _extract_location(text: str) -> Optional[str]:
     """Extract location from snippet text."""
     # Common LinkedIn snippet location patterns
     location_patterns = [
-        r'(?:located?\s+in|based\s+in|from)\s+([^.·|,]{3,40})',
-        r'(?:^|\.\s+)([A-Z][a-zäöü]+(?:,\s*(?:Germany|Deutschland|Austria|Switzerland|Österreich|Schweiz)))',
+        r"(?:located?\s+in|based\s+in|from)\s+([^.·|,]{3,40})",
+        r"(?:^|\.\s+)([A-Z][a-zäöü]+(?:,\s*(?:Germany|Deutschland|Austria|Switzerland|Österreich|Schweiz)))",
     ]
     for pattern in location_patterns:
         match = re.search(pattern, text, re.IGNORECASE)
@@ -139,9 +186,24 @@ def _extract_location(text: str) -> Optional[str]:
 
     # Try known DACH cities
     text_lower = text.lower()
-    for city in ['berlin', 'munich', 'münchen', 'hamburg', 'frankfurt',
-                 'cologne', 'köln', 'düsseldorf', 'stuttgart', 'vienna',
-                 'wien', 'zurich', 'zürich', 'graz', 'basel', 'bern']:
+    for city in [
+        "berlin",
+        "munich",
+        "münchen",
+        "hamburg",
+        "frankfurt",
+        "cologne",
+        "köln",
+        "düsseldorf",
+        "stuttgart",
+        "vienna",
+        "wien",
+        "zurich",
+        "zürich",
+        "graz",
+        "basel",
+        "bern",
+    ]:
         if city in text_lower:
             return city.title()
 
@@ -201,7 +263,7 @@ def _calculate_match_confidence(
             score += 0.20
         elif location.lower() in company_city.lower():
             score += 0.20
-        elif any(loc in location.lower() for loc in ['germany', 'deutschland', 'austria', 'schweiz', 'switzerland']):
+        elif any(loc in location.lower() for loc in ["germany", "deutschland", "austria", "schweiz", "switzerland"]):
             score += 0.10
     elif company_city:
         # Check if city appears anywhere in text
@@ -231,7 +293,7 @@ def parse_search_result(
 
     confidence = _calculate_match_confidence(
         officer_name=officer_name,
-        name_from_search=name_from_search or '',
+        name_from_search=name_from_search or "",
         company_name=company_name,
         snippet=snippet,
         title=title,
@@ -241,13 +303,13 @@ def parse_search_result(
 
     return OfficerLinkedInMatch(
         linkedin_url=url,
-        name_from_search=name_from_search or '',
+        name_from_search=name_from_search or "",
         headline=headline,
         location=location,
         snippet=snippet[:500],
         previous_companies=previous_companies,
         match_confidence=confidence,
-        source='search_snippet',
+        source="search_snippet",
     )
 
 
@@ -269,7 +331,7 @@ def _search_via_ddgs_library(query: str) -> list:
 
     try:
         with DDGS() as ddgs:
-            raw_results = list(ddgs.text(query, region='de-de', max_results=10))
+            raw_results = list(ddgs.text(query, region="de-de", max_results=10))
 
         # Convert to SearchResult-like objects (with .url, .title, .snippet)
         from dataclasses import dataclass as _dc
@@ -281,8 +343,7 @@ def _search_via_ddgs_library(query: str) -> list:
             snippet: str
 
         return [
-            _Result(url=r.get('href', ''), title=r.get('title', ''), snippet=r.get('body', ''))
-            for r in raw_results
+            _Result(url=r.get("href", ""), title=r.get("title", ""), snippet=r.get("body", "")) for r in raw_results
         ]
     except Exception as e:
         logger.warning(f"ddgs library search failed: {e}")
@@ -291,6 +352,7 @@ def _search_via_ddgs_library(query: str) -> list:
 
 class RateLimitedError(Exception):
     """Raised when all search engines are rate-limited."""
+
     pass
 
 
@@ -308,18 +370,19 @@ def _search_ddg_no_retry(query: str) -> list:
         return []
 
     from urllib.parse import quote_plus
+
     from bs4 import BeautifulSoup
 
     try:
         response = curl_requests.get(
             f"https://html.duckduckgo.com/html/?q={quote_plus(query)}",
             headers={
-                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-                'Accept-Language': 'en-US,en;q=0.9,de;q=0.8',
-                'Referer': 'https://duckduckgo.com/',
-                'DNT': '1',
+                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                "Accept-Language": "en-US,en;q=0.9,de;q=0.8",
+                "Referer": "https://duckduckgo.com/",
+                "DNT": "1",
             },
-            impersonate='chrome',
+            impersonate="chrome",
             timeout=15,
         )
 
@@ -332,7 +395,7 @@ def _search_ddg_no_retry(query: str) -> list:
             return []
 
         # Parse results
-        soup = BeautifulSoup(response.text, 'html.parser')
+        soup = BeautifulSoup(response.text, "html.parser")
         results = []
 
         from dataclasses import dataclass as _dc
@@ -343,13 +406,13 @@ def _search_ddg_no_retry(query: str) -> list:
             title: str
             snippet: str
 
-        for div in soup.find_all('div', class_='result'):
-            link = div.find('a', class_='result__a')
-            snippet_el = div.find('a', class_='result__snippet')
+        for div in soup.find_all("div", class_="result"):
+            link = div.find("a", class_="result__a")
+            snippet_el = div.find("a", class_="result__snippet")
             if link:
-                href = link.get('href', '')
+                href = link.get("href", "")
                 title = link.get_text(strip=True)
-                snippet = snippet_el.get_text(strip=True) if snippet_el else ''
+                snippet = snippet_el.get_text(strip=True) if snippet_el else ""
                 results.append(_Result(url=href, title=title, snippet=snippet))
 
         logger.info(f"DDG (no-retry) returned {len(results)} results")
@@ -408,7 +471,7 @@ def search_officer_linkedin(
         results = _search_via_ddgs_library(query)
 
     # Filter to LinkedIn profile URLs only
-    linkedin_results = [r for r in results if 'linkedin.com/in/' in r.url]
+    linkedin_results = [r for r in results if "linkedin.com/in/" in r.url]
 
     # If no LinkedIn results, try fallback query (broader)
     if not linkedin_results:
@@ -424,13 +487,11 @@ def search_officer_linkedin(
         if not results2:
             results2 = _search_via_ddgs_library(fallback_query)
 
-        linkedin_results = [r for r in results2 if 'linkedin.com/in/' in r.url]
+        linkedin_results = [r for r in results2 if "linkedin.com/in/" in r.url]
 
     # If still nothing from any source and we got rate limited, signal it
     if not results and not linkedin_results and rate_limited:
-        raise RateLimitedError(
-            f"All search engines rate-limited for '{officer_name}'"
-        )
+        raise RateLimitedError(f"All search engines rate-limited for '{officer_name}'")
 
     if not linkedin_results:
         logger.debug(f"No LinkedIn results for {officer_name}")
@@ -455,13 +516,11 @@ def search_officer_linkedin(
     best = matches[0]
     if best.match_confidence >= min_confidence:
         logger.debug(
-            f"Match found: {best.name_from_search} ({best.match_confidence:.2f}) "
-            f"- {best.headline or 'no headline'}"
+            f"Match found: {best.name_from_search} ({best.match_confidence:.2f}) - {best.headline or 'no headline'}"
         )
         return best
 
     logger.debug(
-        f"Best match below threshold: {best.name_from_search} "
-        f"({best.match_confidence:.2f} < {min_confidence})"
+        f"Best match below threshold: {best.name_from_search} ({best.match_confidence:.2f} < {min_confidence})"
     )
     return None

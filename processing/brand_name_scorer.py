@@ -17,41 +17,40 @@ v2 improvements:
 """
 
 import re
-from typing import List, Optional, Tuple
 from dataclasses import dataclass, field
+from typing import List, Optional, Tuple
 
 from processing.filters import extract_legal_form
 from processing.startup_scorer import (
-    STARTUP_NAME_PATTERNS,
     SME_NAME_PATTERNS,
     STARTUP_HUB_CITIES,
+    STARTUP_NAME_PATTERNS,
 )
-
 
 # ============================================================================
 # Legal form scoring
 # ============================================================================
 
 LEGAL_FORM_SCORES = {
-    'UG (haftungsbeschränkt)': 4,
-    'UG': 4,
-    'GmbH': 0,
+    "UG (haftungsbeschränkt)": 4,
+    "UG": 4,
+    "GmbH": 0,
     # Everything below is skipped (not startup material)
-    'gGmbH': None,              # Non-profit
-    'AG': None,
-    'SE': None,
-    'KGaA': None,
-    'e.V.': None,
-    'eV': None,
-    'KG': None,
-    'OHG': None,
-    'GbR': None,
-    'PartG': None,
-    'PartGmbB': None,
-    'GmbH & Co. KG': None,
-    'GmbH & Co. KGaA': None,
-    'AG & Co. KG': None,
-    'UG (haftungsbeschränkt) & Co. KG': None,
+    "gGmbH": None,  # Non-profit
+    "AG": None,
+    "SE": None,
+    "KGaA": None,
+    "e.V.": None,
+    "eV": None,
+    "KG": None,
+    "OHG": None,
+    "GbR": None,
+    "PartG": None,
+    "PartGmbB": None,
+    "GmbH & Co. KG": None,
+    "GmbH & Co. KGaA": None,
+    "AG & Co. KG": None,
+    "UG (haftungsbeschränkt) & Co. KG": None,
 }
 
 # ============================================================================
@@ -61,85 +60,249 @@ LEGAL_FORM_SCORES = {
 # Common German business words found in traditional company names
 GERMAN_SME_WORDS = [
     # From SME_NAME_PATTERNS
-    'verwaltung', 'beteiligungs', 'holding', 'immobilien',
-    'grundstück', 'vermögens', 'treuhand', 'steuerberater',
-    'steuerberatung', 'rechtsanwalt', 'rechtsanwält',
-    'wirtschaftsprüf', 'sanierung', 'wohnungsbau',
-    'lebensmittel', 'schiffsinvest', 'inkasso', 'autohaus',
+    "verwaltung",
+    "beteiligungs",
+    "holding",
+    "immobilien",
+    "grundstück",
+    "vermögens",
+    "treuhand",
+    "steuerberater",
+    "steuerberatung",
+    "rechtsanwalt",
+    "rechtsanwält",
+    "wirtschaftsprüf",
+    "sanierung",
+    "wohnungsbau",
+    "lebensmittel",
+    "schiffsinvest",
+    "inkasso",
+    "autohaus",
     # Trade & commerce
-    'handel', 'handels', 'handlung', 'vertrieb', 'import', 'export',
+    "handel",
+    "handels",
+    "handlung",
+    "vertrieb",
+    "import",
+    "export",
     # Services
-    'dienst', 'dienstleistung', 'beratung', 'service',
-    'pflege', 'reinigung', 'wartung', 'reparatur',
+    "dienst",
+    "dienstleistung",
+    "beratung",
+    "service",
+    "pflege",
+    "reinigung",
+    "wartung",
+    "reparatur",
     # Transport & logistics
-    'transport', 'logistik', 'spedition', 'fracht', 'kurier',
+    "transport",
+    "logistik",
+    "spedition",
+    "fracht",
+    "kurier",
     # Finance & insurance
-    'versicherung', 'makler', 'finanz', 'kredit', 'fonds',
+    "versicherung",
+    "makler",
+    "finanz",
+    "kredit",
+    "fonds",
     # Hospitality
-    'gastro', 'gastronomie', 'hotel', 'pension', 'reise', 'touristik',
+    "gastro",
+    "gastronomie",
+    "hotel",
+    "pension",
+    "reise",
+    "touristik",
     # Construction
-    'baugesellschaft', 'bauträger', 'bauunternehm', 'tiefbau', 'hochbau',
-    'dachdecker', 'maler', 'gerüst', 'estrich', 'montage',
+    "baugesellschaft",
+    "bauträger",
+    "bauunternehm",
+    "tiefbau",
+    "hochbau",
+    "dachdecker",
+    "maler",
+    "gerüst",
+    "estrich",
+    "montage",
     # Trades & crafts
-    'elektro', 'sanitär', 'heizung', 'klempner', 'tischler',
-    'schreiner', 'zimmerer', 'metallbau', 'schlosserei',
+    "elektro",
+    "sanitär",
+    "heizung",
+    "klempner",
+    "tischler",
+    "schreiner",
+    "zimmerer",
+    "metallbau",
+    "schlosserei",
     # Agriculture & nature
-    'garten', 'landschaft', 'forst', 'agrar', 'landwirtschaft',
+    "garten",
+    "landschaft",
+    "forst",
+    "agrar",
+    "landwirtschaft",
     # Food trades
-    'metzger', 'fleisch', 'bäcker', 'konditor',
+    "metzger",
+    "fleisch",
+    "bäcker",
+    "konditor",
     # Personal care
-    'friseur', 'kosmetik', 'fußpflege',
+    "friseur",
+    "kosmetik",
+    "fußpflege",
     # Health
-    'apotheke', 'praxis', 'klinik', 'labor', 'physiotherapie',
+    "apotheke",
+    "praxis",
+    "klinik",
+    "labor",
+    "physiotherapie",
     # Professional services
-    'kanzlei', 'notar', 'gutachter', 'sachverständig',
+    "kanzlei",
+    "notar",
+    "gutachter",
+    "sachverständig",
     # Media & print
-    'verlag', 'druckerei', 'buchhandlung', 'medien',
+    "verlag",
+    "druckerei",
+    "buchhandlung",
+    "medien",
     # Marketing & advertising
-    'agentur', 'werbung',
+    "agentur",
+    "werbung",
     # HR & education
-    'personal', 'zeitarbeit', 'bildung', 'schule', 'akademie',
+    "personal",
+    "zeitarbeit",
+    "bildung",
+    "schule",
+    "akademie",
     # Engineering & architecture
-    'planung', 'architektur', 'ingenieur', 'statik',
+    "planung",
+    "architektur",
+    "ingenieur",
+    "statik",
     # Automotive
-    'fahrzeug', 'kfz', 'zweirad', 'werkstatt',
+    "fahrzeug",
+    "kfz",
+    "zweirad",
+    "werkstatt",
     # Textiles & fashion
-    'textil', 'mode', 'bekleidung', 'schmuck',
+    "textil",
+    "mode",
+    "bekleidung",
+    "schmuck",
     # Home & furniture
-    'möbel', 'küchen', 'fenster', 'türen', 'bodenbelag',
+    "möbel",
+    "küchen",
+    "fenster",
+    "türen",
+    "bodenbelag",
     # Waste & environment
-    'entsorgung', 'abfall', 'umwelt',
+    "entsorgung",
+    "abfall",
+    "umwelt",
     # Social & community
-    'stiftung', 'gemeinnütz', 'sozial', 'verein',
+    "stiftung",
+    "gemeinnütz",
+    "sozial",
+    "verein",
     # Real estate
-    'grundbesitz', 'hausverwaltung', 'wohnbau', 'liegenschaft',
+    "grundbesitz",
+    "hausverwaltung",
+    "wohnbau",
+    "liegenschaft",
     # Investment & holding
-    'invest', 'kapital', 'anlage', 'beteiligung',
+    "invest",
+    "kapital",
+    "anlage",
+    "beteiligung",
     # General business suffixes
-    'gesellschaft', 'unternehmen', 'gruppe', 'zentrum',
+    "gesellschaft",
+    "unternehmen",
+    "gruppe",
+    "zentrum",
 ]
 
 # Top German surnames (used as first word in traditional company names)
 GERMAN_SURNAMES = [
-    'müller', 'schmidt', 'schneider', 'fischer', 'weber',
-    'wagner', 'becker', 'schulz', 'hoffmann', 'schäfer',
-    'koch', 'richter', 'wolf', 'klein', 'schröder',
-    'neumann', 'schwarz', 'braun', 'zimmermann', 'krüger',
-    'hartmann', 'lange', 'werner', 'krause', 'lehmann',
-    'köhler', 'herrmann', 'könig', 'mayer', 'walter',
-    'huber', 'kaiser', 'fuchs', 'scholz', 'schulze',
-    'weiß', 'jung', 'hahn', 'vogel', 'friedrich',
-    'keller', 'günther', 'berger', 'frank', 'brandt',
-    'peters', 'sauer', 'winter', 'sommer', 'haas',
-    'beck', 'baumann', 'franke', 'albrecht', 'pfeifer',
-    'simon', 'horn', 'ludwig', 'böhm', 'kuhn',
-    'meier', 'maier', 'meyer',
+    "müller",
+    "schmidt",
+    "schneider",
+    "fischer",
+    "weber",
+    "wagner",
+    "becker",
+    "schulz",
+    "hoffmann",
+    "schäfer",
+    "koch",
+    "richter",
+    "wolf",
+    "klein",
+    "schröder",
+    "neumann",
+    "schwarz",
+    "braun",
+    "zimmermann",
+    "krüger",
+    "hartmann",
+    "lange",
+    "werner",
+    "krause",
+    "lehmann",
+    "köhler",
+    "herrmann",
+    "könig",
+    "mayer",
+    "walter",
+    "huber",
+    "kaiser",
+    "fuchs",
+    "scholz",
+    "schulze",
+    "weiß",
+    "jung",
+    "hahn",
+    "vogel",
+    "friedrich",
+    "keller",
+    "günther",
+    "berger",
+    "frank",
+    "brandt",
+    "peters",
+    "sauer",
+    "winter",
+    "sommer",
+    "haas",
+    "beck",
+    "baumann",
+    "franke",
+    "albrecht",
+    "pfeifer",
+    "simon",
+    "horn",
+    "ludwig",
+    "böhm",
+    "kuhn",
+    "meier",
+    "maier",
+    "meyer",
 ]
 
 # German surname endings that indicate a person name
 GERMAN_SURNAME_ENDINGS = [
-    'mann', 'berg', 'burg', 'stein', 'bach', 'feld',
-    'dorf', 'haus', 'bauer', 'meier', 'maier', 'mayer', 'meyer',
+    "mann",
+    "berg",
+    "burg",
+    "stein",
+    "bach",
+    "feld",
+    "dorf",
+    "haus",
+    "bauer",
+    "meier",
+    "maier",
+    "mayer",
+    "meyer",
 ]
 
 
@@ -152,44 +315,41 @@ GERMAN_SURNAME_ENDINGS = [
 #           "M&L 427", "firma.de Vorratsgesellschaft 1234"
 SHELL_COMPANY_PATTERNS = [
     # "aptus NNNN." or "word NNNN." — mass-created shelf companies
-    (re.compile(r'^\w+\s+\d{2,5}\.?\s*$', re.IGNORECASE),
-     'numbered shell (word + number)'),
+    (re.compile(r"^\w+\s+\d{2,5}\.?\s*$", re.IGNORECASE), "numbered shell (word + number)"),
     # "word NNNN. V V" — numbered shell with placeholder initials
-    (re.compile(r'\d{3,5}\.\s*[A-Z]\s+[A-Z]\b'),
-     'numbered shell with initials'),
+    (re.compile(r"\d{3,5}\.\s*[A-Z]\s+[A-Z]\b"), "numbered shell with initials"),
     # "SCUR-Alpha NNNN" — coded shelf company patterns
-    (re.compile(r'^[A-Z]{2,5}[\-\s]?(Alpha|Beta|Gamma|Delta)\s+\d+', re.IGNORECASE),
-     'coded shelf company'),
+    (re.compile(r"^[A-Z]{2,5}[\-\s]?(Alpha|Beta|Gamma|Delta)\s+\d+", re.IGNORECASE), "coded shelf company"),
     # Explicit Vorratsgesellschaft / shelf company
-    (re.compile(r'vorrats', re.IGNORECASE),
-     'Vorratsgesellschaft'),
-    (re.compile(r'shelf\s*compan', re.IGNORECASE),
-     'shelf company'),
+    (re.compile(r"vorrats", re.IGNORECASE), "Vorratsgesellschaft"),
+    (re.compile(r"shelf\s*compan", re.IGNORECASE), "shelf company"),
     # "firma.de Vorratsgesellschaft" pattern
-    (re.compile(r'firma\.de', re.IGNORECASE),
-     'firma.de shelf company'),
+    (re.compile(r"firma\.de", re.IGNORECASE), "firma.de shelf company"),
 ]
 
 # Pattern: 2-4 uppercase letters + space + number (e.g., "DFI 24", "BRG 19", "VR 500")
 # These are typically abbreviated holding/investment vehicles, not startups
-ABBREVIATION_NUMBER_PATTERN = re.compile(
-    r'^[A-Z&]{1,4}[\s\-]+\d{1,4}\b'
-)
+ABBREVIATION_NUMBER_PATTERN = re.compile(r"^[A-Z&]{1,4}[\s\-]+\d{1,4}\b")
 
 # Words that indicate financial/administrative vehicles (not tech startups)
 # These get a stronger penalty than SME_NAME_PATTERNS
 VEHICLE_WORDS = [
-    'verwaltung', 'verwaltungs',
-    'holding',
-    'investment', 'investments',
-    'capital',
-    'beteiligungs', 'beteiligung',
-    'immobilien',
-    'vermögens', 'vermögensverwaltung',
-    'treuhand',
-    'vorratsgesellschaft',
-    'windpark', 'solarpark',
-    'grundbesitz',
+    "verwaltung",
+    "verwaltungs",
+    "holding",
+    "investment",
+    "investments",
+    "capital",
+    "beteiligungs",
+    "beteiligung",
+    "immobilien",
+    "vermögens",
+    "vermögensverwaltung",
+    "treuhand",
+    "vorratsgesellschaft",
+    "windpark",
+    "solarpark",
+    "grundbesitz",
 ]
 
 
@@ -201,37 +361,98 @@ VEHICLE_WORDS = [
 # Only words that are clearly English and unlikely in traditional German names
 ENGLISH_STARTUP_WORDS = {
     # Technology
-    'cloud', 'smart', 'cyber', 'deep', 'next', 'fast', 'flash',
-    'swift', 'flow', 'hub', 'hive', 'nest', 'core', 'forge',
-    'wave', 'spark', 'pulse', 'edge', 'grid', 'node',
-    'link', 'sync', 'loop', 'mesh', 'stack', 'scope',
+    "cloud",
+    "smart",
+    "cyber",
+    "deep",
+    "next",
+    "fast",
+    "flash",
+    "swift",
+    "flow",
+    "hub",
+    "hive",
+    "nest",
+    "core",
+    "forge",
+    "wave",
+    "spark",
+    "pulse",
+    "edge",
+    "grid",
+    "node",
+    "link",
+    "sync",
+    "loop",
+    "mesh",
+    "stack",
+    "scope",
     # Business/Product
-    'scout', 'fleet', 'freight', 'trade', 'snap', 'shift',
-    'boost', 'craft', 'match', 'spot', 'sprint',
-    'dock', 'drop', 'pitch', 'dash', 'rush',
+    "scout",
+    "fleet",
+    "freight",
+    "trade",
+    "snap",
+    "shift",
+    "boost",
+    "craft",
+    "match",
+    "spot",
+    "sprint",
+    "dock",
+    "drop",
+    "pitch",
+    "dash",
+    "rush",
     # Modern branding
-    'urban', 'fresh', 'bright', 'bold', 'pure', 'prime',
-    'vivid', 'rapid', 'agile', 'lean', 'flex',
-    'club', 'crew', 'tribe', 'space', 'world',
-    'group', 'systems', 'works', 'point',
+    "urban",
+    "fresh",
+    "bright",
+    "bold",
+    "pure",
+    "prime",
+    "vivid",
+    "rapid",
+    "agile",
+    "lean",
+    "flex",
+    "club",
+    "crew",
+    "tribe",
+    "space",
+    "world",
+    "group",
+    "systems",
+    "works",
+    "point",
     # Compound starters
-    'insta', 'ever', 'super', 'hyper', 'ultra', 'meta',
-    'auto', 'open', 'true', 'real', 'clear',
+    "insta",
+    "ever",
+    "super",
+    "hyper",
+    "ultra",
+    "meta",
+    "auto",
+    "open",
+    "true",
+    "real",
+    "clear",
 }
 
 # Startup-typical name endings (neologism suffixes)
 # These catch invented brand names like Spotify, Shopify, Brainly, etc.
 NEOLOGISM_SUFFIXES = [
-    'ify', 'fy',    # Spotify, Shopify, Testify
-    'ly',           # Brainly, Grammarly, Bitly
-    'oo',           # Bamboo, Shazoo
-    'io',           # Rubio, Twilio
-    'ia',           # Personia, Insignia
-    'ix',           # Nutanix, Citrix
-    'yx',           # Onyx-style
-    'eo',           # Cameo, Stereo
-    'ry',           # Foundry, Pantry
-    'er',           # (only for short coined words, handled separately)
+    "ify",
+    "fy",  # Spotify, Shopify, Testify
+    "ly",  # Brainly, Grammarly, Bitly
+    "oo",  # Bamboo, Shazoo
+    "io",  # Rubio, Twilio
+    "ia",  # Personia, Insignia
+    "ix",  # Nutanix, Citrix
+    "yx",  # Onyx-style
+    "eo",  # Cameo, Stereo
+    "ry",  # Foundry, Pantry
+    "er",  # (only for short coined words, handled separately)
 ]
 
 
@@ -239,9 +460,11 @@ NEOLOGISM_SUFFIXES = [
 # Result dataclass
 # ============================================================================
 
+
 @dataclass
 class BrandNameScore:
     """Result of brand-name startup heuristic scoring."""
+
     total_score: int
     is_likely_tech_startup: bool
     legal_form_signal: int
@@ -253,7 +476,7 @@ class BrandNameScore:
     english_signal: int = 0
     signals: List[str] = field(default_factory=list)
     negative_signals: List[str] = field(default_factory=list)
-    brand_part: str = ''
+    brand_part: str = ""
 
 
 # ============================================================================
@@ -274,13 +497,9 @@ class BrandNameScorer:
 
     def __init__(self):
         self._startup_patterns = [
-            (re.compile(p, re.IGNORECASE), score, desc)
-            for p, score, desc in STARTUP_NAME_PATTERNS
+            (re.compile(p, re.IGNORECASE), score, desc) for p, score, desc in STARTUP_NAME_PATTERNS
         ]
-        self._sme_patterns = [
-            (re.compile(p, re.IGNORECASE), score, desc)
-            for p, score, desc in SME_NAME_PATTERNS
-        ]
+        self._sme_patterns = [(re.compile(p, re.IGNORECASE), score, desc) for p, score, desc in SME_NAME_PATTERNS]
 
     def score(self, name: str, city: Optional[str] = None) -> BrandNameScore:
         """
@@ -295,10 +514,14 @@ class BrandNameScorer:
         """
         if not name:
             return BrandNameScore(
-                total_score=0, is_likely_tech_startup=False,
-                legal_form_signal=0, location_signal=0,
-                name_pattern_signal=0, non_german_signal=0,
-                short_brand_signal=0, brand_part='',
+                total_score=0,
+                is_likely_tech_startup=False,
+                legal_form_signal=0,
+                location_signal=0,
+                name_pattern_signal=0,
+                non_german_signal=0,
+                short_brand_signal=0,
+                brand_part="",
             )
 
         signals = []
@@ -313,21 +536,25 @@ class BrandNameScorer:
         if legal_form_signal is None:
             # Skip — not a valid startup legal form
             if legal_form:
-                negative_signals.append(f'Skip legal form: {legal_form}')
+                negative_signals.append(f"Skip legal form: {legal_form}")
             return BrandNameScore(
-                total_score=-99, is_likely_tech_startup=False,
-                legal_form_signal=-99, location_signal=0,
-                name_pattern_signal=0, non_german_signal=0,
-                short_brand_signal=0, brand_part=brand_part,
+                total_score=-99,
+                is_likely_tech_startup=False,
+                legal_form_signal=-99,
+                location_signal=0,
+                name_pattern_signal=0,
+                non_german_signal=0,
+                short_brand_signal=0,
+                brand_part=brand_part,
                 negative_signals=negative_signals,
             )
         if legal_form_signal > 0:
-            signals.append(f'Legal form: {legal_form} (+{legal_form_signal})')
+            signals.append(f"Legal form: {legal_form} (+{legal_form_signal})")
 
         # Step 3: Shell company / vehicle detection (EARLY, strong negative)
         shell_penalty = self._detect_shell_company(brand_part)
         if shell_penalty < 0:
-            negative_signals.append(f'Shell/vehicle pattern ({shell_penalty})')
+            negative_signals.append(f"Shell/vehicle pattern ({shell_penalty})")
 
         # Step 4: Location signal
         location_signal = 0
@@ -335,7 +562,7 @@ class BrandNameScorer:
             for hub_city, score in STARTUP_HUB_CITIES.items():
                 if hub_city.lower() in city.lower():
                     location_signal = score
-                    signals.append(f'Startup hub: {hub_city} (+{score})')
+                    signals.append(f"Startup hub: {hub_city} (+{score})")
                     break
 
         # Step 5: Name pattern signal (reuse from StartupScorer)
@@ -344,19 +571,19 @@ class BrandNameScorer:
             if pattern.search(name):
                 name_pattern_signal += score
                 if score > 0:
-                    signals.append(f'Startup pattern: {desc} (+{score})')
+                    signals.append(f"Startup pattern: {desc} (+{score})")
 
         for pattern, score, desc in self._sme_patterns:
             if pattern.search(name):
                 name_pattern_signal += score
-                negative_signals.append(f'SME pattern: {desc} ({score})')
+                negative_signals.append(f"SME pattern: {desc} ({score})")
 
         # Step 6: Non-German brand name detection
         non_german_signal = 0
         is_non_german, reasons = self._is_non_german_brand(brand_part)
         if is_non_german:
             non_german_signal = 3
-            signals.append(f'Non-German brand (+3): {", ".join(reasons)}')
+            signals.append(f"Non-German brand (+3): {', '.join(reasons)}")
 
         # Step 7: Short single-word brand signal
         short_brand_signal = 0
@@ -368,12 +595,18 @@ class BrandNameScorer:
         # Step 8: English word / neologism detection (positive, false negative reduction)
         english_signal = self._detect_english_brand(brand_part)
         if english_signal > 0:
-            signals.append(f'English/neologism brand (+{english_signal})')
+            signals.append(f"English/neologism brand (+{english_signal})")
 
         # Calculate total
-        total = (legal_form_signal + location_signal + name_pattern_signal
-                 + non_german_signal + short_brand_signal
-                 + shell_penalty + english_signal)
+        total = (
+            legal_form_signal
+            + location_signal
+            + name_pattern_signal
+            + non_german_signal
+            + short_brand_signal
+            + shell_penalty
+            + english_signal
+        )
 
         return BrandNameScore(
             total_score=total,
@@ -395,10 +628,10 @@ class BrandNameScorer:
         if not legal_form:
             return name.strip()
         # Remove legal form and clean up trailing separators
-        brand = name.replace(legal_form, '').strip()
-        brand = brand.rstrip('&-,').strip()
+        brand = name.replace(legal_form, "").strip()
+        brand = brand.rstrip("&-,").strip()
         # Remove "(haftungsbeschränkt)" if leftover
-        brand = re.sub(r'\(haftungsbeschränkt\)', '', brand).strip()
+        brand = re.sub(r"\(haftungsbeschränkt\)", "", brand).strip()
         return brand
 
     def _score_legal_form(self, legal_form: Optional[str]) -> Optional[int]:
@@ -450,14 +683,12 @@ class BrandNameScorer:
             # Stronger penalty if brand = abbreviation + vehicle word
             # (e.g., "DMN Investment", "JRI Holding", "ALE Verwaltungs")
             brand_words = brand_part.split()
-            if (len(brand_words) == 2
-                    and len(brand_words[0]) <= 4
-                    and brand_words[0].upper() == brand_words[0]):
+            if len(brand_words) == 2 and len(brand_words[0]) <= 4 and brand_words[0].upper() == brand_words[0]:
                 return -5  # Abbreviation + vehicle word = very likely a vehicle
             return -3  # Single vehicle word = moderate penalty
 
         # Check for names that are purely numbers/codes: "1234", "42"
-        stripped = re.sub(r'[\s\.\-&]', '', brand_part)
+        stripped = re.sub(r"[\s\.\-&]", "", brand_part)
         if stripped.isdigit():
             return -8
 
@@ -535,16 +766,16 @@ class BrandNameScorer:
                         break
 
         if has_german_word:
-            return False, ['contains German business word']
+            return False, ["contains German business word"]
         if has_german_surname:
-            return False, ['starts with German surname']
+            return False, ["starts with German surname"]
 
-        reasons.append('no German words or surnames')
+        reasons.append("no German words or surnames")
 
         # Bonus checks for extra confidence
-        if brand_part and re.search(r'[a-z][A-Z]', brand_part):
-            reasons.append('CamelCase')
-        if re.search(r'[bcdfghjklmnpqrstvwxyz]{4,}', brand_lower):
-            reasons.append('consonant cluster')
+        if brand_part and re.search(r"[a-z][A-Z]", brand_part):
+            reasons.append("CamelCase")
+        if re.search(r"[bcdfghjklmnpqrstvwxyz]{4,}", brand_lower):
+            reasons.append("consonant cluster")
 
         return True, reasons

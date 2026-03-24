@@ -16,38 +16,35 @@ The job maintains persistent state to:
 - Avoid re-searching completed combinations
 """
 
-import json
 import logging
+from dataclasses import dataclass
 from datetime import datetime
-from typing import List, Dict, Optional, Any, Tuple
-from dataclasses import dataclass, field
+from typing import Any, Dict, List, Optional
 
 from persistence.database import Database
-from sources.bundesapi import BundesAPISource, SearchResult
 from processing.filters import AIRoboticsFilter
 from processing.startup_scorer import StartupScorer
 from scheduler.rate_limiter import PersistentRateLimiter
+from sources.bundesapi import BundesAPISource, SearchResult
 
 logger = logging.getLogger(__name__)
 
 
 # German state codes
-GERMAN_STATES = [
-    'bw', 'by', 'be', 'bb', 'hb', 'hh', 'he', 'mv',
-    'ni', 'nw', 'rp', 'sl', 'sn', 'st', 'sh', 'th'
-]
+GERMAN_STATES = ["bw", "by", "be", "bb", "hb", "hh", "he", "mv", "ni", "nw", "rp", "sl", "sn", "st", "sh", "th"]
 
 # Major startup hub states (for medium-priority searches)
-STARTUP_HUB_STATES = ['be', 'by', 'hh', 'nw', 'he', 'bw']
+STARTUP_HUB_STATES = ["be", "by", "hh", "nw", "he", "bw"]
 
 
 @dataclass
 class BackfillCombination:
     """A single keyword × state combination to search."""
+
     keyword: str
     state_code: Optional[str]  # None = nationwide search
-    registry_type: str = 'HRB'  # Focus on GmbH/UG (commercial register)
-    status: str = 'pending'  # pending, completed, failed
+    registry_type: str = "HRB"  # Focus on GmbH/UG (commercial register)
+    status: str = "pending"  # pending, completed, failed
     results_count: int = 0
     last_attempted_at: Optional[str] = None
 
@@ -62,64 +59,64 @@ class BackfillJob:
 
     # High-signal AI/robotics keywords (search nationwide + all states)
     HIGH_SIGNAL_KEYWORDS = [
-        'künstliche intelligenz',
-        'artificial intelligence',
-        'machine learning',
-        'deep learning',
-        'robotik',
-        'robotics',
-        'neural network',
-        'computer vision',
-        'NLP',
-        'autonomous',
-        'AI platform',
-        'KI plattform',
-        'chatbot',
-        'generative',
+        "künstliche intelligenz",
+        "artificial intelligence",
+        "machine learning",
+        "deep learning",
+        "robotik",
+        "robotics",
+        "neural network",
+        "computer vision",
+        "NLP",
+        "autonomous",
+        "AI platform",
+        "KI plattform",
+        "chatbot",
+        "generative",
     ]
 
     # Medium-signal keywords (search nationwide only)
     MEDIUM_SIGNAL_KEYWORDS = [
-        'data science',
-        'big data',
-        'analytics',
-        'predictive',
-        'automation',
-        'IoT',
-        'industrie 4.0',
-        'smart factory',
-        'sensor tech',
-        'embedded systems',
+        "data science",
+        "big data",
+        "analytics",
+        "predictive",
+        "automation",
+        "IoT",
+        "industrie 4.0",
+        "smart factory",
+        "sensor tech",
+        "embedded systems",
     ]
 
     # Climate tech keywords
     CLIMATE_TECH_KEYWORDS = [
-        'erneuerbare energie',
-        'renewable energy',
-        'solarenergie',
-        'solar energy',
-        'windenergie',
-        'wind energy',
-        'photovoltaik',
-        'energiespeicher',
-        'battery technology',
-        'smart grid',
-        'wasserstoff',
-        'hydrogen',
-        'klimaneutral',
-        'carbon neutral',
-        'dekarbonisierung',
-        'cleantech',
-        'gruene technologie',
-        'green technology',
-        'umwelttechnologie',
-        'elektromobilitaet',
-        'e-mobility',
-        'ladeinfrastruktur',
-        'brennstoffzelle',
-        'kreislaufwirtschaft',
-        'circular economy',
-        'recycling technologie',
+        "erneuerbare energie",
+        "renewable energy",
+        "solarenergie",
+        "solar energy",
+        "windenergie",
+        "wind energy",
+        "photovoltaik",
+        "energiespeicher",
+        "battery technology",
+        "smart grid",
+        "wasserstoff",
+        "hydrogen",
+        "klimaneutral",
+        "carbon neutral",
+        "dekarbonisierung",
+        "cleantech",
+        "gruene technologie",
+        "green technology",
+        "umwelttechnologie",
+        "elektromobilitaet",
+        "e-mobility",
+        "ladeinfrastruktur",
+        "brennstoffzelle",
+        "kreislaufwirtschaft",
+        "circular economy",
+        "recycling technologie",
     ]
 
     def __init__(
@@ -170,9 +167,7 @@ class BackfillJob:
     def _initialize_combinations(self):
         """Populate backfill_state table with all combinations to search."""
         # Check if already initialized
-        count = self.db.conn.execute(
-            "SELECT COUNT(*) FROM backfill_state"
-        ).fetchone()[0]
+        count = self.db.conn.execute("SELECT COUNT(*) FROM backfill_state").fetchone()[0]
 
         if count > 0:
             logger.info("Backfill state already initialized with %d combinations", count)
@@ -182,52 +177,58 @@ class BackfillJob:
 
         # Phase 1: High-signal keywords nationwide
         for keyword in self.HIGH_SIGNAL_KEYWORDS:
-            combinations.append((keyword, None, 'HRB'))
+            combinations.append((keyword, None, "HRB"))
 
         # Phase 2: High-signal keywords × all states
         for keyword in self.HIGH_SIGNAL_KEYWORDS:
             for state in GERMAN_STATES:
-                combinations.append((keyword, state, 'HRB'))
+                combinations.append((keyword, state, "HRB"))
 
         # Phase 3: Medium-signal keywords nationwide
         for keyword in self.MEDIUM_SIGNAL_KEYWORDS:
-            combinations.append((keyword, None, 'HRB'))
+            combinations.append((keyword, None, "HRB"))
 
         # Phase 4: Climate tech keywords nationwide
         for keyword in self.CLIMATE_TECH_KEYWORDS:
-            combinations.append((keyword, None, 'HRB'))
+            combinations.append((keyword, None, "HRB"))
 
         # Phase 5: Climate tech × startup hub states
         for keyword in self.CLIMATE_TECH_KEYWORDS:
             for state in STARTUP_HUB_STATES:
-                combinations.append((keyword, state, 'HRB'))
+                combinations.append((keyword, state, "HRB"))
 
         # Insert all combinations
-        self.db.conn.executemany("""
+        self.db.conn.executemany(
+            """
             INSERT OR IGNORE INTO backfill_state (keyword, state_code, registry_type)
             VALUES (?, ?, ?)
-        """, combinations)
+        """,
+            combinations,
+        )
         self.db.conn.commit()
 
         logger.info("Initialized %d backfill combinations", len(combinations))
 
     def _get_next_pending(self, limit: int = 1) -> List[BackfillCombination]:
         """Get next pending combinations to process."""
-        rows = self.db.conn.execute("""
+        rows = self.db.conn.execute(
+            """
             SELECT keyword, state_code, registry_type, status, results_count
             FROM backfill_state
             WHERE status = 'pending'
             ORDER BY id
             LIMIT ?
-        """, (limit,)).fetchall()
+        """,
+            (limit,),
+        ).fetchall()
 
         return [
             BackfillCombination(
-                keyword=row['keyword'],
-                state_code=row['state_code'],
-                registry_type=row['registry_type'],
-                status=row['status'],
-                results_count=row['results_count'],
+                keyword=row["keyword"],
+                state_code=row["state_code"],
+                registry_type=row["registry_type"],
+                status=row["status"],
+                results_count=row["results_count"],
             )
             for row in rows
         ]
@@ -241,7 +242,8 @@ class BackfillJob:
         results_count: int = 0,
     ):
         """Update status of a combination."""
-        self.db.conn.execute("""
+        self.db.conn.execute(
+            """
             UPDATE backfill_state
             SET status = ?,
                 results_count = ?,
@@ -249,10 +251,9 @@ class BackfillJob:
             WHERE keyword = ?
               AND (state_code = ? OR (state_code IS NULL AND ? IS NULL))
               AND registry_type = ?
-        """, (
-            status, results_count, datetime.utcnow().isoformat(),
-            keyword, state_code, state_code, registry_type
-        ))
+        """,
+            (status, results_count, datetime.utcnow().isoformat(), keyword, state_code, state_code, registry_type),
+        )
         self.db.conn.commit()
 
     def _process_result(self, result: SearchResult) -> bool:
@@ -277,20 +278,18 @@ class BackfillJob:
             city=result.state,
             ai_relevance_score=filter_result.relevance_score,
         )
-        classification = self.startup_scorer.classify(
-            startup_result,
-            ai_relevance_score=filter_result.relevance_score
-        )
+        classification = self.startup_scorer.classify(startup_result, ai_relevance_score=filter_result.relevance_score)
 
         # Extract legal form from company name
         from processing.filters import extract_legal_form
+
         legal_form = extract_legal_form(result.name)
 
         # Insert new company
         company_id = self.db.insert_company(
             company_number=f"bundesapi_{hash(result.native_company_number) & 0xFFFFFFFF:08x}",
             name=result.name,
-            source='bundesapi',
+            source="bundesapi",
             native_company_number=result.native_company_number,
             current_status=result.status,
             registry_court=result.registry_court,
@@ -307,38 +306,32 @@ class BackfillJob:
         )
 
         # Add to enrichment queue
-        self.db.add_to_enrichment_queue(company_id, priority=2, reason='backfill')
+        self.db.add_to_enrichment_queue(company_id, priority=2, reason="backfill")
 
         logger.info(
             "New company (backfill): %s (AI: %d, startup: %s)",
-            result.name, filter_result.relevance_score, classification
+            result.name,
+            filter_result.relevance_score,
+            classification,
         )
         return True
 
     def get_progress(self) -> Dict[str, Any]:
         """Get current backfill progress."""
-        total = self.db.conn.execute(
-            "SELECT COUNT(*) FROM backfill_state"
-        ).fetchone()[0]
+        total = self.db.conn.execute("SELECT COUNT(*) FROM backfill_state").fetchone()[0]
 
-        completed = self.db.conn.execute(
-            "SELECT COUNT(*) FROM backfill_state WHERE status = 'completed'"
-        ).fetchone()[0]
+        completed = self.db.conn.execute("SELECT COUNT(*) FROM backfill_state WHERE status = 'completed'").fetchone()[0]
 
-        failed = self.db.conn.execute(
-            "SELECT COUNT(*) FROM backfill_state WHERE status = 'failed'"
-        ).fetchone()[0]
+        failed = self.db.conn.execute("SELECT COUNT(*) FROM backfill_state WHERE status = 'failed'").fetchone()[0]
 
-        pending = self.db.conn.execute(
-            "SELECT COUNT(*) FROM backfill_state WHERE status = 'pending'"
-        ).fetchone()[0]
+        pending = self.db.conn.execute("SELECT COUNT(*) FROM backfill_state WHERE status = 'pending'").fetchone()[0]
 
         return {
-            'total_combinations': total,
-            'completed': completed,
-            'failed': failed,
-            'pending': pending,
-            'progress_percent': (completed / total * 100) if total > 0 else 0,
+            "total_combinations": total,
+            "completed": completed,
+            "failed": failed,
+            "pending": pending,
+            "progress_percent": (completed / total * 100) if total > 0 else 0,
         }
 
     def run(self, dry_run: bool = False) -> Dict[str, Any]:
@@ -355,17 +348,17 @@ class BackfillJob:
         self._initialize_combinations()
 
         stats = {
-            'combinations_processed': 0,
-            'companies_found': 0,
-            'companies_new': 0,
-            'requests_used': 0,
-            'errors': 0,
+            "combinations_processed": 0,
+            "companies_found": 0,
+            "companies_new": 0,
+            "requests_used": 0,
+            "errors": 0,
         }
 
         # Initialize source
         self.source = BundesAPISource()
 
-        while stats['requests_used'] < self.max_requests:
+        while stats["requests_used"] < self.max_requests:
             # Check rate limit
             rate_state = self.rate_limiter.get_state()
             if rate_state.tokens_available < 2:
@@ -379,11 +372,8 @@ class BackfillJob:
                 break
 
             combo = pending[0]
-            state_label = combo.state_code or 'nationwide'
-            logger.info(
-                "Backfill: '%s' in %s",
-                combo.keyword, state_label
-            )
+            state_label = combo.state_code or "nationwide"
+            logger.info("Backfill: '%s' in %s", combo.keyword, state_label)
 
             try:
                 # Acquire rate limit tokens
@@ -391,7 +381,7 @@ class BackfillJob:
                     logger.warning("Could not acquire rate limit tokens")
                     break
 
-                stats['requests_used'] += 2
+                stats["requests_used"] += 2
 
                 # Perform search
                 states = [combo.state_code] if combo.state_code else None
@@ -400,41 +390,37 @@ class BackfillJob:
 
                 for result in self.source.search(
                     keywords=[combo.keyword],
-                    keyword_mode='all',
+                    keyword_mode="all",
                     states=states,
                     registry_types=[combo.registry_type] if combo.registry_type else None,
                     max_results=100,
                 ):
                     results_count += 1
-                    stats['companies_found'] += 1
+                    stats["companies_found"] += 1
 
                     if not dry_run:
                         if self._process_result(result):
                             new_count += 1
-                            stats['companies_new'] += 1
+                            stats["companies_new"] += 1
 
                 # Mark combination as completed
                 self._update_combination_status(
-                    combo.keyword, combo.state_code, combo.registry_type,
-                    status='completed', results_count=results_count
+                    combo.keyword,
+                    combo.state_code,
+                    combo.registry_type,
+                    status="completed",
+                    results_count=results_count,
                 )
 
-                stats['combinations_processed'] += 1
-                logger.info(
-                    "Completed: %d results, %d new",
-                    results_count, new_count
-                )
+                stats["combinations_processed"] += 1
+                logger.info("Completed: %d results, %d new", results_count, new_count)
 
             except Exception as e:
-                logger.error("Error processing '%s' in %s: %s",
-                           combo.keyword, state_label, e)
-                stats['errors'] += 1
+                logger.error("Error processing '%s' in %s: %s", combo.keyword, state_label, e)
+                stats["errors"] += 1
 
                 # Mark as failed after error
-                self._update_combination_status(
-                    combo.keyword, combo.state_code, combo.registry_type,
-                    status='failed'
-                )
+                self._update_combination_status(combo.keyword, combo.state_code, combo.registry_type, status="failed")
 
         # Add progress to stats
         stats.update(self.get_progress())

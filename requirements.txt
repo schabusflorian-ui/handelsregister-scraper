@@ -1,43 +1,31 @@
-# Handelsregister Scraper - Dependencies
+# Handelsregister Scraper - Production Dependencies
+# Mirrors [project.dependencies] in pyproject.toml — kept for Docker layer caching.
 
-# HTTP requests
+# HTTP & scraping
 requests>=2.28.0
-
-# HTML parsing for bundesAPI
 beautifulsoup4>=4.12.0
 lxml>=4.9.0
-
-# Date handling
-python-dateutil>=2.8.0
-
-# CLI framework
-click>=8.0.0
-
-# Pretty terminal output
-rich>=13.0.0
-
-# Configuration parsing
-pyyaml>=6.0.0
-
-# Scheduling for automated monitoring
-apscheduler>=3.10.0
-sqlalchemy>=2.0.0  # Required by APScheduler for job persistence
-
-# Fuzzy matching for investor detection
-rapidfuzz>=3.0.0
-
-# DuckDuckGo/Bing search for website discovery
-ddgs>=9.0.0
-
-# Optional: handelsregister.ai API for enrichment (paid)
-# handelsregister>=0.1.0
-
-# Web UI
-fastapi>=0.109.0
-uvicorn>=0.27.0
-jinja2>=3.1.0
-
-# LinkedIn/web scraping
 cloudscraper>=1.2.71
 curl_cffi>=0.7.0
 brotli>=1.1.0
+ddgs>=9.0.0
+
+# Data processing
+python-dateutil>=2.8.0
+rapidfuzz>=3.0.0
+pyyaml>=6.0.0
+
+# Web UI
+fastapi>=0.109.0
+uvicorn[standard]>=0.27.0
+jinja2>=3.1.0
+python-multipart>=0.0.6
+aiofiles>=23.0.0
+
+# Scheduling
+apscheduler>=3.10.0
+sqlalchemy>=2.0.0
+
+# CLI
+click>=8.0.0
+rich>=13.0.0

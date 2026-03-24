@@ -5,21 +5,23 @@ Provides a flexible way to manage keywords for the Handelsregister scraper
 without hardcoding them in the source files.
 """
 
-import yaml
-from pathlib import Path
-from typing import List, Dict, Optional, Set
-from dataclasses import dataclass
 import logging
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Dict, List, Optional, Set
+
+import yaml
 
 logger = logging.getLogger(__name__)
 
 # Default config path relative to project root
-DEFAULT_CONFIG_PATH = Path(__file__).parent.parent / 'config' / 'keywords.yaml'
+DEFAULT_CONFIG_PATH = Path(__file__).parent.parent / "config" / "keywords.yaml"
 
 
 @dataclass
 class KeywordCategory:
     """A category of keywords with metadata."""
+
     name: str
     description: str
     priority: int
@@ -29,6 +31,7 @@ class KeywordCategory:
 @dataclass
 class KeywordConfig:
     """Complete keyword configuration."""
+
     categories: Dict[str, KeywordCategory]
     exclusions: Dict[str, List[str]]
     search_config: Dict
@@ -64,8 +67,12 @@ class KeywordConfig:
         """Get keywords from climate tech categories."""
         keywords = []
         climate_categories = [
-            'climate_energy', 'climate_grid', 'climate_hydrogen',
-            'climate_carbon', 'climate_cleantech', 'climate_mobility'
+            "climate_energy",
+            "climate_grid",
+            "climate_hydrogen",
+            "climate_carbon",
+            "climate_cleantech",
+            "climate_mobility",
         ]
         for cat_name in climate_categories:
             if cat_name in self.categories:
@@ -75,7 +82,7 @@ class KeywordConfig:
     def get_ai_keywords(self) -> List[str]:
         """Get keywords from AI/ML categories."""
         keywords = []
-        ai_categories = ['ai_core', 'ai_applications', 'ai_business']
+        ai_categories = ["ai_core", "ai_applications", "ai_business"]
         for cat_name in ai_categories:
             if cat_name in self.categories:
                 keywords.extend(self.categories[cat_name].keywords)
@@ -84,7 +91,7 @@ class KeywordConfig:
     def get_robotics_keywords(self) -> List[str]:
         """Get keywords from robotics categories."""
         keywords = []
-        robotics_categories = ['robotics_core', 'robotics_industrial', 'robotics_specific']
+        robotics_categories = ["robotics_core", "robotics_industrial", "robotics_specific"]
         for cat_name in robotics_categories:
             if cat_name in self.categories:
                 keywords.extend(self.categories[cat_name].keywords)
@@ -109,22 +116,22 @@ def load_keywords(config_path: Optional[Path] = None) -> KeywordConfig:
         return _get_default_config()
 
     try:
-        with open(config_path, 'r', encoding='utf-8') as f:
+        with open(config_path, encoding="utf-8") as f:
             data = yaml.safe_load(f)
 
         categories = {}
-        for cat_name, cat_data in data.get('categories', {}).items():
+        for cat_name, cat_data in data.get("categories", {}).items():
             categories[cat_name] = KeywordCategory(
                 name=cat_name,
-                description=cat_data.get('description', ''),
-                priority=cat_data.get('priority', 2),
-                keywords=cat_data.get('keywords', []),
+                description=cat_data.get("description", ""),
+                priority=cat_data.get("priority", 2),
+                keywords=cat_data.get("keywords", []),
             )
 
         return KeywordConfig(
             categories=categories,
-            exclusions=data.get('exclusions', {}),
-            search_config=data.get('search_config', {}),
+            exclusions=data.get("exclusions", {}),
+            search_config=data.get("search_config", {}),
         )
 
     except Exception as e:
@@ -136,27 +143,27 @@ def _get_default_config() -> KeywordConfig:
     """Return default keyword configuration (fallback)."""
     return KeywordConfig(
         categories={
-            'ai_core': KeywordCategory(
-                name='ai_core',
-                description='Core AI terms',
+            "ai_core": KeywordCategory(
+                name="ai_core",
+                description="Core AI terms",
                 priority=1,
                 keywords=[
-                    'künstliche intelligenz',
-                    'artificial intelligence',
-                    'machine learning',
-                    'deep learning',
-                    'robotik',
-                    'robotics',
-                ]
+                    "künstliche intelligenz",
+                    "artificial intelligence",
+                    "machine learning",
+                    "deep learning",
+                    "robotik",
+                    "robotics",
+                ],
             ),
         },
         exclusions={
-            'false_positives': ['hap-ki-do', 'reiki'],
-            'traditional_business': ['verwaltung', 'immobilien'],
+            "false_positives": ["hap-ki-do", "reiki"],
+            "traditional_business": ["verwaltung", "immobilien"],
         },
         search_config={
-            'max_results_per_query': 100,
-            'search_all_states': True,
+            "max_results_per_query": 100,
+            "search_all_states": True,
         },
     )
 
@@ -191,7 +198,7 @@ def print_keyword_summary():
     for cat_name, category in sorted(config.categories.items()):
         count = len(category.keywords)
         total_keywords += count
-        priority_label = ['', 'HIGH', 'MEDIUM', 'LOW'][category.priority]
+        priority_label = ["", "HIGH", "MEDIUM", "LOW"][category.priority]
         print(f"  {cat_name}: {count} keywords [{priority_label}]")
 
     print(f"\nTotal unique keywords: {len(config.get_all_keywords())}")
@@ -201,5 +208,5 @@ def print_keyword_summary():
     print(f"Robotics: {len(config.get_robotics_keywords())}")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     print_keyword_summary()

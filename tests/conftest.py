@@ -8,25 +8,16 @@ Provides:
 - Sample data helpers
 """
 
-import os
-import sys
 import pytest
-import tempfile
-import sqlite3
-from pathlib import Path
-
-# Add project root to path for imports
-project_root = Path(__file__).parent.parent
-sys.path.insert(0, str(project_root))
 
 from persistence.database import Database
 from processing.filters import AIRoboticsFilter, FilterConfig
 from scheduler.rate_limiter import PersistentRateLimiter
 
-
 # ============================================================================
 # Database Fixtures
 # ============================================================================
+
 
 @pytest.fixture
 def temp_db_path(tmp_path):
@@ -65,6 +56,7 @@ def memory_db():
 # Filter Fixtures
 # ============================================================================
 
+
 @pytest.fixture
 def filter_instance():
     """Default AIRoboticsFilter instance."""
@@ -88,6 +80,7 @@ def lenient_filter():
 # ============================================================================
 # Rate Limiter Fixtures
 # ============================================================================
+
 
 @pytest.fixture
 def rate_limiter(temp_db_path):
@@ -119,6 +112,7 @@ def depleted_rate_limiter(temp_db_path):
 # ============================================================================
 # Helper Fixtures
 # ============================================================================
+
 
 @pytest.fixture
 def sample_company():

@@ -11,16 +11,17 @@ License: CC-BY-4.0 (requires attribution to OpenCorporates)
 import bz2
 import json
 import urllib.request
-import hashlib
+from collections.abc import Callable, Iterator
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Iterator, Optional, List, Dict, Callable, Any
-from dataclasses import dataclass
+from typing import Any, Dict, List, Optional
 
 
 @dataclass
 class CompanyRecord:
     """Standardized company record from OffeneRegister."""
+
     company_number: str
     native_company_number: Optional[str]
     name: str
@@ -40,6 +41,7 @@ class CompanyRecord:
 @dataclass
 class LoadStats:
     """Statistics from a bulk load operation."""
+
     total_records: int
     filtered_records: int
     inserted_records: int
@@ -85,7 +87,7 @@ class OffeneRegisterSource:
 
         # Get file size
         with urllib.request.urlopen(self.DOWNLOAD_URL) as response:
-            total_size = int(response.headers.get('Content-Length', 0))
+            total_size = int(response.headers.get("Content-Length", 0))
 
         # Download with progress
         def reporthook(block_num, block_size, total_size):
@@ -94,7 +96,7 @@ class OffeneRegisterSource:
                 progress_callback(downloaded, total_size)
             elif total_size > 0:
                 percent = min(100, (downloaded / total_size) * 100)
-                print(f"\rDownloading: {percent:.1f}% ({downloaded / 1024 / 1024:.1f} MB)", end='', flush=True)
+                print(f"\rDownloading: {percent:.1f}% ({downloaded / 1024 / 1024:.1f} MB)", end="", flush=True)
 
         urllib.request.urlretrieve(self.DOWNLOAD_URL, self._local_file, reporthook)
         print("\nDownload complete!")
@@ -116,7 +118,7 @@ class OffeneRegisterSource:
         filepath = self.download()
 
         count = 0
-        with bz2.open(filepath, 'rt', encoding='utf-8') as f:
+        with bz2.open(filepath, "rt", encoding="utf-8") as f:
             for line in f:
                 if limit and count >= limit:
                     break
@@ -141,46 +143,48 @@ class OffeneRegisterSource:
         """Parse raw JSON record into CompanyRecord."""
         # Parse officers - they are stored directly in the array (not wrapped)
         officers = []
-        for officer in data.get('officers', []):
+        for officer in data.get("officers", []):
             # Officer data is directly in the array item
-            officers.append({
-                'name': officer.get('name', ''),
-                'role': officer.get('position'),
-                'start_date': officer.get('start_date'),
-                'end_date': officer.get('end_date'),
-                'is_current': officer.get('end_date') is None,
-                'city': officer.get('other_attributes', {}).get('city'),
-            })
+            officers.append(
+                {
+                    "name": officer.get("name", ""),
+                    "role": officer.get("position"),
+                    "start_date": officer.get("start_date"),
+                    "end_date": officer.get("end_date"),
+                    "is_current": officer.get("end_date") is None,
+                    "city": officer.get("other_attributes", {}).get("city"),
+                }
+            )
 
         # Parse address
-        addr_str = data.get('registered_address', '')
+        addr_str = data.get("registered_address", "")
         addr_parts = self._parse_address(addr_str)
 
         # Infer registration date from earliest officer
         registration_date = self._infer_registration_date(officers)
 
         # Parse native company number for court and type
-        native_number = data.get('native_company_number', '')
+        native_number = data.get("native_company_number", "")
         registry_court, registry_type = self._parse_native_number(native_number)
 
         # Extract legal form from name
-        legal_form = self._extract_legal_form(data.get('name', ''))
+        legal_form = self._extract_legal_form(data.get("name", ""))
 
         return CompanyRecord(
-            company_number=data.get('company_number', ''),
+            company_number=data.get("company_number", ""),
             native_company_number=native_number,
-            name=data.get('name', ''),
+            name=data.get("name", ""),
             legal_form=legal_form,
-            current_status=data.get('current_status'),
+            current_status=data.get("current_status"),
             registry_court=registry_court,
             registry_type=registry_type,
             registration_date=registration_date,
-            street=addr_parts.get('street'),
-            postal_code=addr_parts.get('postal_code'),
-            city=addr_parts.get('city'),
-            state=data.get('all_attributes', {}).get('federal_state'),
+            street=addr_parts.get("street"),
+            postal_code=addr_parts.get("postal_code"),
+            city=addr_parts.get("city"),
+            state=data.get("all_attributes", {}).get("federal_state"),
             officers=officers,
-            retrieved_at=data.get('retrieved_at', datetime.now().isoformat()),
+            retrieved_at=data.get("retrieved_at", datetime.now().isoformat()),
         )
 
     def _parse_address(self, addr_str: str) -> Dict[str, Optional[str]]:
@@ -191,14 +195,14 @@ class OffeneRegisterSource:
         "Street Number, Postal City" or similar
         """
         if not addr_str:
-            return {'street': None, 'postal_code': None, 'city': None}
+            return {"street": None, "postal_code": None, "city": None}
 
-        parts = addr_str.split(',')
+        parts = addr_str.split(",")
 
         result = {
-            'street': parts[0].strip() if len(parts) > 0 else None,
-            'postal_code': None,
-            'city': None,
+            "street": parts[0].strip() if len(parts) > 0 else None,
+            "postal_code": None,
+            "city": None,
         }
 
         if len(parts) > 1:
@@ -206,12 +210,13 @@ class OffeneRegisterSource:
             location = parts[-1].strip()
             # German postal codes are 5 digits
             import re
-            match = re.match(r'^(\d{5})\s+(.+)$', location)
+
+            match = re.match(r"^(\d{5})\s+(.+)$", location)
             if match:
-                result['postal_code'] = match.group(1)
-                result['city'] = match.group(2)
+                result["postal_code"] = match.group(1)
+                result["city"] = match.group(2)
             else:
-                result['city'] = location
+                result["city"] = location
 
         return result
 
@@ -219,10 +224,10 @@ class OffeneRegisterSource:
         """Infer registration date from earliest officer start date."""
         dates = []
         for officer in officers:
-            start_date = officer.get('start_date')
+            start_date = officer.get("start_date")
             if start_date:
                 try:
-                    dates.append(datetime.fromisoformat(start_date.replace('Z', '+00:00')))
+                    dates.append(datetime.fromisoformat(start_date.replace("Z", "+00:00")))
                 except (ValueError, TypeError):
                     pass
 
@@ -245,7 +250,7 @@ class OffeneRegisterSource:
         registry_type = None
 
         # Extract registry type
-        for reg_type in ['HRB', 'HRA', 'GnR', 'PR', 'VR']:
+        for reg_type in ["HRB", "HRA", "GnR", "PR", "VR"]:
             if reg_type in native_number.upper():
                 registry_type = reg_type
                 break
@@ -253,7 +258,7 @@ class OffeneRegisterSource:
         # Extract court name
         parts = native_number.split()
         if len(parts) >= 2:
-            if parts[0].lower() == 'amtsgericht':
+            if parts[0].lower() == "amtsgericht":
                 registry_court = f"Amtsgericht {parts[1]}"
             else:
                 # First part might be the city
@@ -268,20 +273,20 @@ class OffeneRegisterSource:
 
         # Common German legal forms (check longer forms first)
         legal_forms = [
-            'GmbH & Co. KG',
-            'GmbH & Co. KGaA',
-            'UG (haftungsbeschränkt) & Co. KG',
-            'UG (haftungsbeschränkt)',
-            'GmbH',
-            'AG',
-            'KGaA',
-            'KG',
-            'OHG',
-            'UG',
-            'e.V.',
-            'eV',
-            'GbR',
-            'SE',
+            "GmbH & Co. KG",
+            "GmbH & Co. KGaA",
+            "UG (haftungsbeschränkt) & Co. KG",
+            "UG (haftungsbeschränkt)",
+            "GmbH",
+            "AG",
+            "KGaA",
+            "KG",
+            "OHG",
+            "UG",
+            "e.V.",
+            "eV",
+            "GbR",
+            "SE",
         ]
 
         name_upper = name.upper()
@@ -293,7 +298,7 @@ class OffeneRegisterSource:
 
     def load_to_database(
         self,
-        db: 'Database',
+        db: "Database",
         filter_func: Optional[Callable[[CompanyRecord], bool]] = None,
         batch_size: int = 1000,
         limit: Optional[int] = None,
@@ -313,59 +318,60 @@ class OffeneRegisterSource:
             LoadStats with operation statistics
         """
         from datetime import datetime
+
         start_time = datetime.now()
 
         stats = {
-            'total_records': 0,
-            'filtered_records': 0,
-            'inserted_records': 0,
-            'skipped_duplicates': 0,
-            'errors': 0,
+            "total_records": 0,
+            "filtered_records": 0,
+            "inserted_records": 0,
+            "skipped_duplicates": 0,
+            "errors": 0,
         }
 
         batch = []
 
         for record in self.stream_records(limit=limit):
-            stats['total_records'] += 1
+            stats["total_records"] += 1
 
             # Apply filter
             if filter_func and not filter_func(record):
                 continue
 
-            stats['filtered_records'] += 1
+            stats["filtered_records"] += 1
             batch.append(record)
 
             # Insert batch
             if len(batch) >= batch_size:
                 inserted, skipped, errors = self._insert_batch(db, batch)
-                stats['inserted_records'] += inserted
-                stats['skipped_duplicates'] += skipped
-                stats['errors'] += errors
+                stats["inserted_records"] += inserted
+                stats["skipped_duplicates"] += skipped
+                stats["errors"] += errors
                 batch = []
 
                 if progress_callback:
-                    progress_callback(stats['total_records'])
+                    progress_callback(stats["total_records"])
 
         # Insert remaining records
         if batch:
             inserted, skipped, errors = self._insert_batch(db, batch)
-            stats['inserted_records'] += inserted
-            stats['skipped_duplicates'] += skipped
-            stats['errors'] += errors
+            stats["inserted_records"] += inserted
+            stats["skipped_duplicates"] += skipped
+            stats["errors"] += errors
 
         end_time = datetime.now()
         duration = (end_time - start_time).total_seconds()
 
         return LoadStats(
-            total_records=stats['total_records'],
-            filtered_records=stats['filtered_records'],
-            inserted_records=stats['inserted_records'],
-            skipped_duplicates=stats['skipped_duplicates'],
-            errors=stats['errors'],
+            total_records=stats["total_records"],
+            filtered_records=stats["filtered_records"],
+            inserted_records=stats["inserted_records"],
+            skipped_duplicates=stats["skipped_duplicates"],
+            errors=stats["errors"],
             duration_seconds=duration,
         )
 
-    def _insert_batch(self, db: 'Database', batch: List[CompanyRecord]) -> tuple:
+    def _insert_batch(self, db: "Database", batch: List[CompanyRecord]) -> tuple:
         """Insert a batch of records into database."""
         inserted = 0
         skipped = 0
@@ -383,7 +389,7 @@ class OffeneRegisterSource:
                 company_id = db.insert_company(
                     company_number=record.company_number,
                     name=record.name,
-                    source='offeneregister',
+                    source="offeneregister",
                     native_company_number=record.native_company_number,
                     legal_form=record.legal_form,
                     current_status=record.current_status,
@@ -398,14 +404,14 @@ class OffeneRegisterSource:
 
                 # Insert officers
                 for officer in record.officers:
-                    if officer.get('name'):
+                    if officer.get("name"):
                         db.insert_officer(
                             company_id=company_id,
-                            name=officer['name'],
-                            role=officer.get('role'),
-                            start_date=officer.get('start_date'),
-                            end_date=officer.get('end_date'),
-                            is_current=officer.get('is_current', True),
+                            name=officer["name"],
+                            role=officer.get("role"),
+                            start_date=officer.get("start_date"),
+                            end_date=officer.get("end_date"),
+                            is_current=officer.get("is_current", True),
                         )
 
                 inserted += 1
@@ -419,20 +425,20 @@ class OffeneRegisterSource:
     def get_file_info(self) -> Dict[str, Any]:
         """Get information about the cached file."""
         if not self._local_file.exists():
-            return {'exists': False}
+            return {"exists": False}
 
         stat = self._local_file.stat()
         return {
-            'exists': True,
-            'path': str(self._local_file),
-            'size_bytes': stat.st_size,
-            'size_mb': stat.st_size / 1024 / 1024,
-            'modified': datetime.fromtimestamp(stat.st_mtime).isoformat(),
+            "exists": True,
+            "path": str(self._local_file),
+            "size_bytes": stat.st_size,
+            "size_mb": stat.st_size / 1024 / 1024,
+            "modified": datetime.fromtimestamp(stat.st_mtime).isoformat(),
         }
 
     def enrich_officers(
         self,
-        db: 'Database',
+        db: "Database",
         filter_func: Optional[Callable[[CompanyRecord], bool]] = None,
         limit: Optional[int] = None,
         progress_callback: Optional[Callable[[int, int], None]] = None,
@@ -453,25 +459,25 @@ class OffeneRegisterSource:
             Dict with enrichment statistics
         """
         stats = {
-            'total_processed': 0,
-            'companies_matched': 0,
-            'officers_added': 0,
-            'companies_already_enriched': 0,
-            'no_officers_in_source': 0,
+            "total_processed": 0,
+            "companies_matched": 0,
+            "officers_added": 0,
+            "companies_already_enriched": 0,
+            "no_officers_in_source": 0,
         }
 
         # Build lookup of existing companies by company_number
-        cursor = db.conn.execute('SELECT id, company_number FROM companies')
+        cursor = db.conn.execute("SELECT id, company_number FROM companies")
         company_lookup = {row[1]: row[0] for row in cursor}
         print(f"Built lookup for {len(company_lookup)} companies")
 
         # Track which companies already have officers
-        cursor = db.conn.execute('SELECT DISTINCT company_id FROM officers')
+        cursor = db.conn.execute("SELECT DISTINCT company_id FROM officers")
         companies_with_officers = {row[0] for row in cursor}
         print(f"Found {len(companies_with_officers)} companies with existing officers")
 
         for record in self.stream_records(limit=limit):
-            stats['total_processed'] += 1
+            stats["total_processed"] += 1
 
             # Apply filter if provided
             if filter_func and not filter_func(record):
@@ -482,38 +488,38 @@ class OffeneRegisterSource:
             if not company_id:
                 continue
 
-            stats['companies_matched'] += 1
+            stats["companies_matched"] += 1
 
             # Skip if already has officers
             if company_id in companies_with_officers:
-                stats['companies_already_enriched'] += 1
+                stats["companies_already_enriched"] += 1
                 continue
 
             # Check if source has officers
             if not record.officers:
-                stats['no_officers_in_source'] += 1
+                stats["no_officers_in_source"] += 1
                 continue
 
             # Insert officers
             for officer in record.officers:
-                if officer.get('name'):
+                if officer.get("name"):
                     try:
                         db.insert_officer(
                             company_id=company_id,
-                            name=officer['name'],
-                            role=officer.get('role'),
-                            start_date=officer.get('start_date'),
-                            end_date=officer.get('end_date'),
-                            is_current=officer.get('is_current', True),
+                            name=officer["name"],
+                            role=officer.get("role"),
+                            start_date=officer.get("start_date"),
+                            end_date=officer.get("end_date"),
+                            is_current=officer.get("is_current", True),
                         )
-                        stats['officers_added'] += 1
+                        stats["officers_added"] += 1
                     except Exception as e:
                         print(f"Error inserting officer for company {company_id}: {e}")
 
             # Mark as enriched
             companies_with_officers.add(company_id)
 
-            if progress_callback and stats['total_processed'] % 100000 == 0:
-                progress_callback(stats['total_processed'], stats['companies_matched'])
+            if progress_callback and stats["total_processed"] % 100000 == 0:
+                progress_callback(stats["total_processed"], stats["companies_matched"])
 
         return stats

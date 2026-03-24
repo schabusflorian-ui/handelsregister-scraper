@@ -11,9 +11,9 @@ Or in background:
 State is saved to data/stealth_scraper_state.json - survives restarts.
 """
 
-import sys
-import logging
 import argparse
+import logging
+import sys
 from pathlib import Path
 
 # Add project root to path
@@ -23,53 +23,46 @@ sys.path.insert(0, str(project_root))
 
 def main():
     parser = argparse.ArgumentParser(description="Stealth founder discovery")
+    parser.add_argument("--iterations", "-n", type=int, default=None, help="Max iterations (default: unlimited)")
+    parser.add_argument("--delay", "-d", type=int, default=180, help="Seconds between searches (default: 180)")
+    parser.add_argument("--reset-state", action="store_true", help="Clear state and start fresh")
     parser.add_argument(
-        "--iterations", "-n", type=int, default=None,
-        help="Max iterations (default: unlimited)"
-    )
-    parser.add_argument(
-        "--delay", "-d", type=int, default=180,
-        help="Seconds between searches (default: 180)"
-    )
-    parser.add_argument(
-        "--reset-state", action="store_true",
-        help="Clear state and start fresh"
-    )
-    parser.add_argument(
-        "--engine", "-e", type=str, default="ddgs",
+        "--engine",
+        "-e",
+        type=str,
+        default="ddgs",
         choices=["ddgs", "serper", "curl", "brave", "ddg", "rotate"],
-        help="Search engine: ddgs (default, Bing-backed), serper (Google API), curl, brave, ddg, or rotate"
+        help="Search engine: ddgs (default, Bing-backed), serper (Google API), curl, brave, ddg, or rotate",
+    )
+    parser.add_argument("--report", action="store_true", help="Print query yield report and exit (no scraping)")
+    parser.add_argument(
+        "--fresh",
+        action="store_true",
+        help="Only find recently indexed profiles (past month). Use for incremental runs.",
     )
     parser.add_argument(
-        "--report", action="store_true",
-        help="Print query yield report and exit (no scraping)"
+        "--officers",
+        action="store_true",
+        help="Enable Handelsregister officer cross-reference (off by default, enable once new registrations flow in)",
     )
     parser.add_argument(
-        "--fresh", action="store_true",
-        help="Only find recently indexed profiles (past month). Use for incremental runs."
+        "--sync", action="store_true", help="Sync with Railway before starting (pull companies/officers, push founders)"
     )
     parser.add_argument(
-        "--officers", action="store_true",
-        help="Enable Handelsregister officer cross-reference (off by default, enable once new registrations flow in)"
-    )
-    parser.add_argument(
-        "--sync", action="store_true",
-        help="Sync with Railway before starting (pull companies/officers, push founders)"
-    )
-    parser.add_argument(
-        "--cleanup", action="store_true",
-        help="Clean up existing founders (fix names, recalculate scores, remove junk) and exit"
+        "--cleanup",
+        action="store_true",
+        help="Clean up existing founders (fix names, recalculate scores, remove junk) and exit",
     )
     args = parser.parse_args()
 
     logging.basicConfig(
         level=logging.INFO,
-        format='%(asctime)s %(levelname)s %(message)s',
-        datefmt='%H:%M:%S',
+        format="%(asctime)s %(levelname)s %(message)s",
+        datefmt="%H:%M:%S",
     )
 
     # Silence noisy third-party loggers (rustls, h2, hyper from primp)
-    for noisy_logger in ('rustls', 'h2', 'hyper_util', 'cookie_store', 'primp'):
+    for noisy_logger in ("rustls", "h2", "hyper_util", "cookie_store", "primp"):
         logging.getLogger(noisy_logger).setLevel(logging.WARNING)
 
     db_path = project_root / "handelsregister.db"
@@ -87,6 +80,7 @@ def main():
     if args.sync:
         try:
             from scripts.sync_db import sync
+
             sync(str(db_path), pull=True, push=True, days=30)
         except Exception as e:
             print(f"Sync failed: {e}")
@@ -105,7 +99,7 @@ def main():
     print(f"Railway sync: {'done' if args.sync else 'OFF (use --sync to pull companies from Railway)'}")
     print(f"Iterations: {'unlimited' if args.iterations is None else args.iterations}")
     print()
-    from scheduler.jobs.slow_stealth_scraper import SlowStealthScraper, STEALTH_QUERIES
+    from scheduler.jobs.slow_stealth_scraper import STEALTH_QUERIES, SlowStealthScraper
 
     print("Extracts founders from search snippets.")
     print(f"{len(STEALTH_QUERIES)} search queries, rotates through all of them.")
@@ -153,13 +147,13 @@ def main():
         # Print final stats
         try:
             stats = scraper.get_stats()
-            print("\n" + "="*50)
+            print("\n" + "=" * 50)
             print("SESSION STATS")
-            print("="*50)
+            print("=" * 50)
             print(f"  Queries run: {stats.get('total_searches', 0)}")
             print(f"  Founders found: {stats.get('total_founders_found', 0)}")
             print(f"  Next query: #{stats.get('query_index', 0) + 1}/{len(STEALTH_QUERIES)}")
-            print("="*50)
+            print("=" * 50)
         except:
             pass
         db.close()

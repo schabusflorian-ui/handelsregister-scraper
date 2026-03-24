@@ -9,29 +9,22 @@ Or: uvicorn web.app:app --reload
 """
 
 import os
-import sys
+from datetime import datetime
 from pathlib import Path
-from datetime import datetime, timedelta
 from typing import Optional
 
-from fastapi import FastAPI, Request, Query, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-# Add parent to path for imports
-sys.path.insert(0, str(Path(__file__).parent.parent))
-
 from persistence.database import Database
 
 # Configuration
-DB_PATH = os.environ.get('DB_PATH', 'handelsregister.db')
+DB_PATH = os.environ.get("DB_PATH", "handelsregister.db")
 WEB_DIR = Path(__file__).parent
 
-app = FastAPI(
-    title="Handelsregister Scraper",
-    description="AI/Robotics Startup Discovery Platform"
-)
+app = FastAPI(title="Handelsregister Scraper", description="AI/Robotics Startup Discovery Platform")
 
 # Templates
 templates = Jinja2Templates(directory=WEB_DIR / "templates")
@@ -63,7 +56,7 @@ def format_date(date_str: Optional[str]) -> str:
     if not date_str:
         return "-"
     try:
-        dt = datetime.fromisoformat(date_str.replace('Z', '+00:00'))
+        dt = datetime.fromisoformat(date_str.replace("Z", "+00:00"))
         return dt.strftime("%Y-%m-%d")
     except:
         return date_str[:10] if len(date_str) >= 10 else date_str
@@ -75,6 +68,7 @@ templates.env.filters["date"] = format_date
 templates.env.filters["split"] = lambda s, sep=",": s.split(sep) if s else []
 
 import json as _json
+
 templates.env.filters["from_json"] = lambda s: _json.loads(s) if s else []
 
 
@@ -135,22 +129,23 @@ async def dashboard(request: Request):
 
         # Get contacted count
         try:
-            contacted_count = db.conn.execute(
-                "SELECT COUNT(*) FROM companies WHERE contacted = 1"
-            ).fetchone()[0]
+            contacted_count = db.conn.execute("SELECT COUNT(*) FROM companies WHERE contacted = 1").fetchone()[0]
         except:
             contacted_count = 0
 
-        return templates.TemplateResponse("dashboard.html", {
-            "request": request,
-            "stats": stats,
-            "recent_companies": recent,
-            "capital_events": capital_events,
-            "job_runs": job_runs,
-            "new_companies": new_companies,
-            "new_count": new_count,
-            "contacted_count": contacted_count,
-        })
+        return templates.TemplateResponse(
+            "dashboard.html",
+            {
+                "request": request,
+                "stats": stats,
+                "recent_companies": recent,
+                "capital_events": capital_events,
+                "job_runs": job_runs,
+                "new_companies": new_companies,
+                "new_count": new_count,
+                "contacted_count": contacted_count,
+            },
+        )
     finally:
         db.close()
 
@@ -168,19 +163,19 @@ async def companies_list(
     has_website: Optional[str] = None,  # Accept string, parse manually
     min_climate: Optional[str] = None,  # Accept string, parse manually
     contacted: Optional[str] = None,  # 'yes', 'no', or None for all
-    viewed: Optional[str] = None,     # 'yes', 'no', or None for all
+    viewed: Optional[str] = None,  # 'yes', 'no', or None for all
     relevance: Optional[str] = None,  # 'relevant', 'irrelevant', 'unscreened', or None
-    sort: Optional[str] = None,       # Column to sort by
-    sort_dir: Optional[str] = None,   # 'asc' or 'desc'
+    sort: Optional[str] = None,  # Column to sort by
+    sort_dir: Optional[str] = None,  # 'asc' or 'desc'
     page: int = 1,
     per_page: int = 25,
 ):
     """Company search and listing page."""
     # Parse string params that may be empty
     year_int = int(year) if year and year.isdigit() else None
-    min_score_int = int(min_score) if min_score and min_score.lstrip('-').isdigit() else None
-    min_climate_int = int(min_climate) if min_climate and min_climate.lstrip('-').isdigit() else None
-    has_website_bool = has_website == 'true' if has_website else None
+    min_score_int = int(min_score) if min_score and min_score.lstrip("-").isdigit() else None
+    min_climate_int = int(min_climate) if min_climate and min_climate.lstrip("-").isdigit() else None
+    has_website_bool = has_website == "true" if has_website else None
 
     db = get_db()
     try:
@@ -216,42 +211,42 @@ async def companies_list(
             params.append(classification)
         if has_website_bool:
             conditions.append("website IS NOT NULL")
-        if contacted == 'yes':
+        if contacted == "yes":
             conditions.append("contacted = 1")
-        elif contacted == 'no':
+        elif contacted == "no":
             conditions.append("(contacted = 0 OR contacted IS NULL)")
-        if viewed == 'yes':
+        if viewed == "yes":
             conditions.append("viewed = 1")
-        elif viewed == 'no':
+        elif viewed == "no":
             conditions.append("(viewed = 0 OR viewed IS NULL)")
-        if relevance == 'relevant':
+        if relevance == "relevant":
             conditions.append("relevance = 'relevant'")
-        elif relevance == 'irrelevant':
+        elif relevance == "irrelevant":
             conditions.append("relevance = 'irrelevant'")
-        elif relevance == 'unscreened':
+        elif relevance == "unscreened":
             conditions.append("(relevance IS NULL)")
 
         where_clause = " AND ".join(conditions) if conditions else "1=1"
 
         # Sorting
         allowed_sort_cols = {
-            'name': 'name',
-            'legal_form': 'legal_form',
-            'city': 'city',
-            'state': 'state',
-            'year': 'first_seen_date',
-            'ai_score': 'ai_robotics_score',
-            'climate_score': 'climate_score',
-            'classification': 'startup_classification',
-            'startup_score': 'startup_score',
-            'capital': 'capital_amount',
-            'registry': 'registry_court',
-            'reg_date': 'registration_date',
-            'source': 'source',
-            'relevance': 'relevance',
+            "name": "name",
+            "legal_form": "legal_form",
+            "city": "city",
+            "state": "state",
+            "year": "first_seen_date",
+            "ai_score": "ai_robotics_score",
+            "climate_score": "climate_score",
+            "classification": "startup_classification",
+            "startup_score": "startup_score",
+            "capital": "capital_amount",
+            "registry": "registry_court",
+            "reg_date": "registration_date",
+            "source": "source",
+            "relevance": "relevance",
         }
         sort_column = allowed_sort_cols.get(sort)
-        sort_direction = 'ASC' if sort_dir == 'asc' else 'DESC'
+        sort_direction = "ASC" if sort_dir == "asc" else "DESC"
         if sort_column:
             order_clause = f"{sort_column} {sort_direction} NULLS LAST, name"
         else:
@@ -310,65 +305,82 @@ async def companies_list(
 
         # Load saved filter presets
         try:
-            filter_presets = db.conn.execute(
-                "SELECT * FROM filter_presets ORDER BY name"
-            ).fetchall()
+            filter_presets = db.conn.execute("SELECT * FROM filter_presets ORDER BY name").fetchall()
             filter_presets = [dict(row) for row in filter_presets]
         except:
             filter_presets = []
 
         # Build filter query string for pagination links (exclude empty values)
         filter_params = {}
-        if q: filter_params["q"] = q
-        if year: filter_params["year"] = year
-        if city: filter_params["city"] = city
-        if state: filter_params["state"] = state
-        if legal_form: filter_params["legal_form"] = legal_form
-        if min_score: filter_params["min_score"] = min_score
-        if min_climate: filter_params["min_climate"] = min_climate
-        if classification: filter_params["classification"] = classification
-        if has_website: filter_params["has_website"] = "true"
-        if contacted: filter_params["contacted"] = contacted
-        if viewed: filter_params["viewed"] = viewed
-        if relevance: filter_params["relevance"] = relevance
-        if per_page != 25: filter_params["per_page"] = per_page
+        if q:
+            filter_params["q"] = q
+        if year:
+            filter_params["year"] = year
+        if city:
+            filter_params["city"] = city
+        if state:
+            filter_params["state"] = state
+        if legal_form:
+            filter_params["legal_form"] = legal_form
+        if min_score:
+            filter_params["min_score"] = min_score
+        if min_climate:
+            filter_params["min_climate"] = min_climate
+        if classification:
+            filter_params["classification"] = classification
+        if has_website:
+            filter_params["has_website"] = "true"
+        if contacted:
+            filter_params["contacted"] = contacted
+        if viewed:
+            filter_params["viewed"] = viewed
+        if relevance:
+            filter_params["relevance"] = relevance
+        if per_page != 25:
+            filter_params["per_page"] = per_page
         from urllib.parse import urlencode
+
         # filter_qs excludes sort/page so sort links and pagination can set them
         filter_qs = urlencode(filter_params)
-        if sort: filter_params["sort"] = sort
-        if sort_dir: filter_params["sort_dir"] = sort_dir
+        if sort:
+            filter_params["sort"] = sort
+        if sort_dir:
+            filter_params["sort_dir"] = sort_dir
         # filter_qs_with_sort includes sort for pagination links
         filter_qs_with_sort = urlencode(filter_params)
 
-        return templates.TemplateResponse("companies.html", {
-            "request": request,
-            "companies": companies,
-            "total": total,
-            "page": page,
-            "per_page": per_page,
-            "total_pages": total_pages,
-            "q": q or "",
-            "city": city or "",
-            "state": state or "",
-            "legal_form": legal_form or "",
-            "year": year or "",
-            "min_score": min_score or "",
-            "min_climate": min_climate or "",
-            "classification": classification or "",
-            "has_website": has_website or "",
-            "contacted": contacted or "",
-            "viewed": viewed or "",
-            "relevance": relevance or "",
-            "sort": sort or "",
-            "sort_dir": sort_dir or "",
-            "filter_qs": filter_qs,
-            "filter_qs_with_sort": filter_qs_with_sort,
-            "filter_presets": filter_presets,
-            "cities": cities,
-            "states": states,
-            "legal_forms": legal_forms,
-            "years": years,
-        })
+        return templates.TemplateResponse(
+            "companies.html",
+            {
+                "request": request,
+                "companies": companies,
+                "total": total,
+                "page": page,
+                "per_page": per_page,
+                "total_pages": total_pages,
+                "q": q or "",
+                "city": city or "",
+                "state": state or "",
+                "legal_form": legal_form or "",
+                "year": year or "",
+                "min_score": min_score or "",
+                "min_climate": min_climate or "",
+                "classification": classification or "",
+                "has_website": has_website or "",
+                "contacted": contacted or "",
+                "viewed": viewed or "",
+                "relevance": relevance or "",
+                "sort": sort or "",
+                "sort_dir": sort_dir or "",
+                "filter_qs": filter_qs,
+                "filter_qs_with_sort": filter_qs_with_sort,
+                "filter_presets": filter_presets,
+                "cities": cities,
+                "states": states,
+                "legal_forms": legal_forms,
+                "years": years,
+            },
+        )
     finally:
         db.close()
 
@@ -390,48 +402,60 @@ async def company_detail(request: Request, company_id: int):
 
         # Get investments
         try:
-            investments = db.conn.execute("""
+            investments = db.conn.execute(
+                """
                 SELECT inv.*, i.canonical_name as investor_name, i.type as investor_type
                 FROM investments inv
                 JOIN investors i ON inv.investor_id = i.id
                 WHERE inv.company_id = ?
                 ORDER BY inv.confidence DESC
-            """, (company_id,)).fetchall()
+            """,
+                (company_id,),
+            ).fetchall()
             investments = [dict(row) for row in investments]
         except:
             investments = []
 
         # Get announcements
         try:
-            announcements = db.conn.execute("""
+            announcements = db.conn.execute(
+                """
                 SELECT * FROM announcements
                 WHERE company_id = ?
                 ORDER BY announcement_date DESC
                 LIMIT 10
-            """, (company_id,)).fetchall()
+            """,
+                (company_id,),
+            ).fetchall()
             announcements = [dict(row) for row in announcements]
         except:
             announcements = []
 
         # Mark as viewed
         try:
-            db.conn.execute("""
+            db.conn.execute(
+                """
                 UPDATE companies SET viewed = 1, viewed_at = COALESCE(viewed_at, datetime('now'))
                 WHERE id = ?
-            """, (company_id,))
+            """,
+                (company_id,),
+            )
             db.conn.commit()
-            company['viewed'] = 1
+            company["viewed"] = 1
         except:
             pass
 
-        return templates.TemplateResponse("company_detail.html", {
-            "request": request,
-            "company": company,
-            "officers": officers,
-            "capital_events": capital_events,
-            "investments": investments,
-            "announcements": announcements,
-        })
+        return templates.TemplateResponse(
+            "company_detail.html",
+            {
+                "request": request,
+                "company": company,
+                "officers": officers,
+                "capital_events": capital_events,
+                "investments": investments,
+                "announcements": announcements,
+            },
+        )
     finally:
         db.close()
 
@@ -442,19 +466,20 @@ async def toggle_contacted(company_id: int):
     db = get_db()
     try:
         # Get current status
-        current = db.conn.execute(
-            "SELECT contacted FROM companies WHERE id = ?", (company_id,)
-        ).fetchone()
+        current = db.conn.execute("SELECT contacted FROM companies WHERE id = ?", (company_id,)).fetchone()
         if not current:
             raise HTTPException(status_code=404, detail="Company not found")
 
         new_status = 0 if current[0] else 1
         contacted_at = datetime.now().isoformat() if new_status else None
 
-        db.conn.execute("""
+        db.conn.execute(
+            """
             UPDATE companies SET contacted = ?, contacted_at = ?
             WHERE id = ?
-        """, (new_status, contacted_at, company_id))
+        """,
+            (new_status, contacted_at, company_id),
+        )
         db.conn.commit()
 
         return {"success": True, "contacted": new_status}
@@ -469,13 +494,10 @@ async def set_relevance(company_id: int, request: Request):
     try:
         body = await request.json()
         relevance = body.get("relevance")  # 'relevant', 'irrelevant', or null to clear
-        if relevance not in ('relevant', 'irrelevant', None):
+        if relevance not in ("relevant", "irrelevant", None):
             raise HTTPException(status_code=400, detail="Invalid relevance value")
 
-        db.conn.execute(
-            "UPDATE companies SET relevance = ? WHERE id = ?",
-            (relevance, company_id)
-        )
+        db.conn.execute("UPDATE companies SET relevance = ? WHERE id = ?", (relevance, company_id))
         db.conn.commit()
 
         return {"success": True, "relevance": relevance}
@@ -491,16 +513,13 @@ async def bulk_set_relevance(request: Request):
         body = await request.json()
         company_ids = body.get("company_ids", [])
         relevance = body.get("relevance")
-        if relevance not in ('relevant', 'irrelevant', None):
+        if relevance not in ("relevant", "irrelevant", None):
             raise HTTPException(status_code=400, detail="Invalid relevance value")
         if not company_ids or not isinstance(company_ids, list):
             raise HTTPException(status_code=400, detail="company_ids must be a non-empty list")
 
         placeholders = ",".join("?" for _ in company_ids)
-        db.conn.execute(
-            f"UPDATE companies SET relevance = ? WHERE id IN ({placeholders})",
-            [relevance] + company_ids
-        )
+        db.conn.execute(f"UPDATE companies SET relevance = ? WHERE id IN ({placeholders})", [relevance] + company_ids)
         db.conn.commit()
 
         return {"success": True, "updated": len(company_ids), "relevance": relevance}
@@ -516,10 +535,7 @@ async def update_notes(company_id: int, request: Request):
         body = await request.json()
         notes = body.get("notes", "")
 
-        db.conn.execute(
-            "UPDATE companies SET notes = ? WHERE id = ?",
-            (notes, company_id)
-        )
+        db.conn.execute("UPDATE companies SET notes = ? WHERE id = ?", (notes, company_id))
         db.conn.commit()
 
         return {"success": True}
@@ -532,9 +548,7 @@ async def list_filter_presets():
     """List all saved filter presets."""
     db = get_db()
     try:
-        presets = db.conn.execute(
-            "SELECT * FROM filter_presets ORDER BY name"
-        ).fetchall()
+        presets = db.conn.execute("SELECT * FROM filter_presets ORDER BY name").fetchall()
         return [dict(row) for row in presets]
     finally:
         db.close()
@@ -551,10 +565,7 @@ async def create_filter_preset(request: Request):
         if not name:
             raise HTTPException(status_code=400, detail="Name is required")
 
-        cursor = db.conn.execute(
-            "INSERT INTO filter_presets (name, params) VALUES (?, ?)",
-            (name, params)
-        )
+        cursor = db.conn.execute("INSERT INTO filter_presets (name, params) VALUES (?, ?)", (name, params))
         db.conn.commit()
 
         return {"success": True, "id": cursor.lastrowid, "name": name}
@@ -582,28 +593,34 @@ async def investors_list(request: Request, page: int = 1, per_page: int = 25):
         offset = (page - 1) * per_page
 
         # Get investors with investment counts
-        investors = db.conn.execute("""
+        investors = db.conn.execute(
+            """
             SELECT i.*, COUNT(inv.id) as investment_count
             FROM investors i
             LEFT JOIN investments inv ON i.id = inv.investor_id
             GROUP BY i.id
             ORDER BY investment_count DESC, i.canonical_name
             LIMIT ? OFFSET ?
-        """, (per_page, offset)).fetchall()
+        """,
+            (per_page, offset),
+        ).fetchall()
         investors = [dict(row) for row in investors]
 
         # Get total
         total = db.conn.execute("SELECT COUNT(*) FROM investors").fetchone()[0]
         total_pages = (total + per_page - 1) // per_page
 
-        return templates.TemplateResponse("investors.html", {
-            "request": request,
-            "investors": investors,
-            "total": total,
-            "page": page,
-            "per_page": per_page,
-            "total_pages": total_pages,
-        })
+        return templates.TemplateResponse(
+            "investors.html",
+            {
+                "request": request,
+                "investors": investors,
+                "total": total,
+                "page": page,
+                "per_page": per_page,
+                "total_pages": total_pages,
+            },
+        )
     finally:
         db.close()
 
@@ -613,9 +630,7 @@ async def investor_detail(request: Request, investor_id: int):
     """Investor detail page."""
     db = get_db()
     try:
-        investor = db.conn.execute(
-            "SELECT * FROM investors WHERE id = ?", (investor_id,)
-        ).fetchone()
+        investor = db.conn.execute("SELECT * FROM investors WHERE id = ?", (investor_id,)).fetchone()
 
         if not investor:
             raise HTTPException(status_code=404, detail="Investor not found")
@@ -623,19 +638,20 @@ async def investor_detail(request: Request, investor_id: int):
         investor = dict(investor)
 
         # Get portfolio companies
-        portfolio = db.conn.execute("""
+        portfolio = db.conn.execute(
+            """
             SELECT c.*, inv.confidence, inv.round_type, inv.detection_source
             FROM investments inv
             JOIN companies c ON inv.company_id = c.id
             WHERE inv.investor_id = ?
             ORDER BY inv.confidence DESC, c.ai_robotics_score DESC
-        """, (investor_id,)).fetchall()
+        """,
+            (investor_id,),
+        ).fetchall()
         portfolio = [dict(row) for row in portfolio]
 
         # Get aliases
-        aliases = db.conn.execute(
-            "SELECT * FROM investor_aliases WHERE investor_id = ?", (investor_id,)
-        ).fetchall()
+        aliases = db.conn.execute("SELECT * FROM investor_aliases WHERE investor_id = ?", (investor_id,)).fetchall()
         aliases = [dict(row) for row in aliases]
 
         # Get legal entities
@@ -644,13 +660,16 @@ async def investor_detail(request: Request, investor_id: int):
         ).fetchall()
         entities = [dict(row) for row in entities]
 
-        return templates.TemplateResponse("investor_detail.html", {
-            "request": request,
-            "investor": investor,
-            "portfolio": portfolio,
-            "aliases": aliases,
-            "entities": entities,
-        })
+        return templates.TemplateResponse(
+            "investor_detail.html",
+            {
+                "request": request,
+                "investor": investor,
+                "portfolio": portfolio,
+                "aliases": aliases,
+                "entities": entities,
+            },
+        )
     finally:
         db.close()
 
@@ -662,32 +681,41 @@ async def capital_events(request: Request, days: int = 30, page: int = 1, per_pa
     try:
         offset = (page - 1) * per_page
 
-        events = db.conn.execute("""
+        events = db.conn.execute(
+            """
             SELECT ce.*, c.name as company_name, c.city, c.ai_robotics_score
             FROM capital_events ce
             JOIN companies c ON ce.company_id = c.id
             WHERE ce.detected_at >= datetime('now', '-' || ? || ' days')
             ORDER BY ce.detected_at DESC
             LIMIT ? OFFSET ?
-        """, (days, per_page, offset)).fetchall()
+        """,
+            (days, per_page, offset),
+        ).fetchall()
         events = [dict(row) for row in events]
 
         # Get total
-        total = db.conn.execute("""
+        total = db.conn.execute(
+            """
             SELECT COUNT(*) FROM capital_events
             WHERE detected_at >= datetime('now', '-' || ? || ' days')
-        """, (days,)).fetchone()[0]
+        """,
+            (days,),
+        ).fetchone()[0]
         total_pages = (total + per_page - 1) // per_page
 
-        return templates.TemplateResponse("capital_events.html", {
-            "request": request,
-            "events": events,
-            "days": days,
-            "total": total,
-            "page": page,
-            "per_page": per_page,
-            "total_pages": total_pages,
-        })
+        return templates.TemplateResponse(
+            "capital_events.html",
+            {
+                "request": request,
+                "events": events,
+                "days": days,
+                "total": total,
+                "page": page,
+                "per_page": per_page,
+                "total_pages": total_pages,
+            },
+        )
     finally:
         db.close()
 
@@ -711,6 +739,7 @@ async def jobs_list(request: Request):
         # Get rate limiter status (if available)
         try:
             from scheduler.rate_limiter import PersistentRateLimiter
+
             rate_limiter = PersistentRateLimiter(DB_PATH)
             rate_state = rate_limiter.get_state()
         except:
@@ -719,13 +748,16 @@ async def jobs_list(request: Request):
         # Get enrichment queue size
         queue_size = db.get_enrichment_queue_size()
 
-        return templates.TemplateResponse("jobs.html", {
-            "request": request,
-            "job_runs": job_runs,
-            "scrape_runs": scrape_runs,
-            "rate_state": rate_state,
-            "queue_size": queue_size,
-        })
+        return templates.TemplateResponse(
+            "jobs.html",
+            {
+                "request": request,
+                "job_runs": job_runs,
+                "scrape_runs": scrape_runs,
+                "rate_state": rate_state,
+                "queue_size": queue_size,
+            },
+        )
     finally:
         db.close()
 
@@ -741,10 +773,10 @@ async def founders_list(
     request: Request,
     q: Optional[str] = None,
     location: Optional[str] = None,
-    emerged: Optional[str] = None,       # 'yes', 'no', or None
-    contacted: Optional[str] = None,     # 'yes', 'no', or None
-    viewed: Optional[str] = None,        # 'yes', 'no', or None
-    relevance: Optional[str] = None,     # 'relevant', 'irrelevant', 'unscreened', or None
+    emerged: Optional[str] = None,  # 'yes', 'no', or None
+    contacted: Optional[str] = None,  # 'yes', 'no', or None
+    viewed: Optional[str] = None,  # 'yes', 'no', or None
+    relevance: Optional[str] = None,  # 'relevant', 'irrelevant', 'unscreened', or None
     min_confidence: Optional[str] = None,
     # Tag filters
     data_quality: Optional[str] = None,
@@ -775,23 +807,23 @@ async def founders_list(
         if location:
             conditions.append("sf.location = ?")
             params.append(location)
-        if emerged == 'yes':
+        if emerged == "yes":
             conditions.append("sf.company_id IS NOT NULL")
-        elif emerged == 'no':
+        elif emerged == "no":
             conditions.append("sf.company_id IS NULL")
-        if contacted == 'yes':
+        if contacted == "yes":
             conditions.append("sf.contacted = 1")
-        elif contacted == 'no':
+        elif contacted == "no":
             conditions.append("(sf.contacted = 0 OR sf.contacted IS NULL)")
-        if viewed == 'yes':
+        if viewed == "yes":
             conditions.append("sf.viewed = 1")
-        elif viewed == 'no':
+        elif viewed == "no":
             conditions.append("(sf.viewed = 0 OR sf.viewed IS NULL)")
-        if relevance == 'relevant':
+        if relevance == "relevant":
             conditions.append("sf.relevance = 'relevant'")
-        elif relevance == 'irrelevant':
+        elif relevance == "irrelevant":
             conditions.append("sf.relevance = 'irrelevant'")
-        elif relevance == 'unscreened':
+        elif relevance == "unscreened":
             conditions.append("(sf.relevance IS NULL)")
         if min_confidence_int is not None:
             conditions.append("sf.confidence_score >= ?")
@@ -807,7 +839,7 @@ async def founders_list(
             conditions.append("sf.founder_role = ?")
             params.append(founder_role)
         if ex_company_tier:
-            if ex_company_tier == 'any':
+            if ex_company_tier == "any":
                 conditions.append("sf.ex_company_tier IS NOT NULL")
             else:
                 conditions.append("sf.ex_company_tier = ?")
@@ -823,20 +855,20 @@ async def founders_list(
 
         # Sorting
         allowed_sort_cols = {
-            'name': 'sf.name',
-            'headline': 'sf.headline',
-            'location': 'sf.location',
-            'confidence': 'sf.confidence_score',
-            'emerged': 'sf.company_id',
-            'first_seen': 'sf.first_seen_at',
-            'relevance': 'sf.relevance',
-            'stealth_strength': 'sf.stealth_strength',
-            'data_quality': 'sf.data_quality',
-            'ex_company_tier': 'sf.ex_company_tier',
-            'geo_region': 'sf.geo_region',
+            "name": "sf.name",
+            "headline": "sf.headline",
+            "location": "sf.location",
+            "confidence": "sf.confidence_score",
+            "emerged": "sf.company_id",
+            "first_seen": "sf.first_seen_at",
+            "relevance": "sf.relevance",
+            "stealth_strength": "sf.stealth_strength",
+            "data_quality": "sf.data_quality",
+            "ex_company_tier": "sf.ex_company_tier",
+            "geo_region": "sf.geo_region",
         }
         sort_column = allowed_sort_cols.get(sort)
-        sort_direction = 'ASC' if sort_dir == 'asc' else 'DESC'
+        sort_direction = "ASC" if sort_dir == "asc" else "DESC"
         if sort_column:
             order_clause = f"{sort_column} {sort_direction} NULLS LAST, sf.name"
         else:
@@ -872,52 +904,72 @@ async def founders_list(
 
         # Build filter query string
         from urllib.parse import urlencode
+
         filter_params = {}
-        if q: filter_params["q"] = q
-        if location: filter_params["location"] = location
-        if emerged: filter_params["emerged"] = emerged
-        if contacted: filter_params["contacted"] = contacted
-        if viewed: filter_params["viewed"] = viewed
-        if relevance: filter_params["relevance"] = relevance
-        if min_confidence: filter_params["min_confidence"] = min_confidence
-        if data_quality: filter_params["data_quality"] = data_quality
-        if stealth_strength: filter_params["stealth_strength"] = stealth_strength
-        if founder_role: filter_params["founder_role"] = founder_role
-        if ex_company_tier: filter_params["ex_company_tier"] = ex_company_tier
-        if geo_region: filter_params["geo_region"] = geo_region
-        if sector: filter_params["sector"] = sector
-        if per_page != 25: filter_params["per_page"] = per_page
+        if q:
+            filter_params["q"] = q
+        if location:
+            filter_params["location"] = location
+        if emerged:
+            filter_params["emerged"] = emerged
+        if contacted:
+            filter_params["contacted"] = contacted
+        if viewed:
+            filter_params["viewed"] = viewed
+        if relevance:
+            filter_params["relevance"] = relevance
+        if min_confidence:
+            filter_params["min_confidence"] = min_confidence
+        if data_quality:
+            filter_params["data_quality"] = data_quality
+        if stealth_strength:
+            filter_params["stealth_strength"] = stealth_strength
+        if founder_role:
+            filter_params["founder_role"] = founder_role
+        if ex_company_tier:
+            filter_params["ex_company_tier"] = ex_company_tier
+        if geo_region:
+            filter_params["geo_region"] = geo_region
+        if sector:
+            filter_params["sector"] = sector
+        if per_page != 25:
+            filter_params["per_page"] = per_page
         filter_qs = urlencode(filter_params)
-        if sort: filter_params["sort"] = sort
-        if sort_dir: filter_params["sort_dir"] = sort_dir
+        if sort:
+            filter_params["sort"] = sort
+        if sort_dir:
+            filter_params["sort_dir"] = sort_dir
         filter_qs_with_sort = urlencode(filter_params)
 
-        return templates.TemplateResponse("founders.html", {
-            "request": request,
-            "founders": founders,
-            "total": total,
-            "page": page,
-            "per_page": per_page,
-            "total_pages": total_pages,
-            "q": q or "",
-            "location": location or "",
-            "emerged": emerged or "",
-            "contacted": contacted or "",
-            "viewed": viewed or "",
-            "relevance": relevance or "",
-            "min_confidence": min_confidence or "",
-            "data_quality": data_quality or "",
-            "stealth_strength": stealth_strength or "",
-            "founder_role": founder_role or "",
-            "ex_company_tier": ex_company_tier or "",
-            "geo_region": geo_region or "",
-            "sector": sector or "",
-            "sort": sort or "",
-            "sort_dir": sort_dir or "",
-            "filter_qs": filter_qs,
-            "filter_qs_with_sort": filter_qs_with_sort,
-            "locations": locations,
-        })
+        return templates.TemplateResponse(
+            "founders.html",
+            {
+                "request": request,
+                "founders": founders,
+                "total": total,
+                "page": page,
+                "per_page": per_page,
+                "total_pages": total_pages,
+                "q": q or "",
+                "location": location or "",
+                "emerged": emerged or "",
+                "contacted": contacted or "",
+                "viewed": viewed or "",
+                "relevance": relevance or "",
+                "min_confidence": min_confidence or "",
+                "data_quality": data_quality or "",
+                "stealth_strength": stealth_strength or "",
+                "founder_role": founder_role or "",
+                "ex_company_tier": ex_company_tier or "",
+                "geo_region": geo_region or "",
+                "sector": sector or "",
+                "sort": sort or "",
+                "sort_dir": sort_dir or "",
+                "filter_qs": filter_qs,
+                "filter_qs_with_sort": filter_qs_with_sort,
+                "locations": locations,
+            },
+        )
     finally:
         db.close()
 
@@ -927,19 +979,20 @@ async def toggle_founder_contacted(founder_id: int):
     """Toggle contacted status for a founder."""
     db = get_db()
     try:
-        current = db.conn.execute(
-            "SELECT contacted FROM stealth_founders WHERE id = ?", (founder_id,)
-        ).fetchone()
+        current = db.conn.execute("SELECT contacted FROM stealth_founders WHERE id = ?", (founder_id,)).fetchone()
         if not current:
             raise HTTPException(status_code=404, detail="Founder not found")
 
         new_status = 0 if current[0] else 1
         contacted_at = datetime.now().isoformat() if new_status else None
 
-        db.conn.execute("""
+        db.conn.execute(
+            """
             UPDATE stealth_founders SET contacted = ?, contacted_at = ?
             WHERE id = ?
-        """, (new_status, contacted_at, founder_id))
+        """,
+            (new_status, contacted_at, founder_id),
+        )
         db.conn.commit()
 
         return {"success": True, "contacted": new_status}
@@ -954,13 +1007,10 @@ async def set_founder_relevance(founder_id: int, request: Request):
     try:
         body = await request.json()
         relevance = body.get("relevance")
-        if relevance not in ('relevant', 'irrelevant', None):
+        if relevance not in ("relevant", "irrelevant", None):
             raise HTTPException(status_code=400, detail="Invalid relevance value")
 
-        db.conn.execute(
-            "UPDATE stealth_founders SET relevance = ? WHERE id = ?",
-            (relevance, founder_id)
-        )
+        db.conn.execute("UPDATE stealth_founders SET relevance = ? WHERE id = ?", (relevance, founder_id))
         db.conn.commit()
 
         return {"success": True, "relevance": relevance}
@@ -976,15 +1026,14 @@ async def bulk_set_founder_relevance(request: Request):
         body = await request.json()
         founder_ids = body.get("founder_ids", [])
         relevance = body.get("relevance")
-        if relevance not in ('relevant', 'irrelevant', None):
+        if relevance not in ("relevant", "irrelevant", None):
             raise HTTPException(status_code=400, detail="Invalid relevance value")
         if not founder_ids or not isinstance(founder_ids, list):
             raise HTTPException(status_code=400, detail="founder_ids must be a non-empty list")
 
         placeholders = ",".join(["?"] * len(founder_ids))
         db.conn.execute(
-            f"UPDATE stealth_founders SET relevance = ? WHERE id IN ({placeholders})",
-            [relevance] + founder_ids
+            f"UPDATE stealth_founders SET relevance = ? WHERE id IN ({placeholders})", [relevance] + founder_ids
         )
         db.conn.commit()
 
@@ -1001,10 +1050,7 @@ async def save_founder_notes(founder_id: int, request: Request):
         body = await request.json()
         notes = body.get("notes", "")
 
-        db.conn.execute(
-            "UPDATE stealth_founders SET notes = ? WHERE id = ?",
-            (notes, founder_id)
-        )
+        db.conn.execute("UPDATE stealth_founders SET notes = ? WHERE id = ?", (notes, founder_id))
         db.conn.commit()
 
         return {"success": True}
@@ -1019,9 +1065,10 @@ async def export_csv(
     limit: int = 10000,
 ):
     """Export companies to CSV."""
-    from fastapi.responses import StreamingResponse
     import csv
     import io
+
+    from fastapi.responses import StreamingResponse
 
     db = get_db()
     try:
@@ -1034,12 +1081,15 @@ async def export_csv(
 
         where_clause = " AND ".join(conditions)
 
-        companies = db.conn.execute(f"""
+        companies = db.conn.execute(
+            f"""
             SELECT * FROM companies
             WHERE {where_clause}
             ORDER BY ai_robotics_score DESC
             LIMIT ?
-        """, params + [limit]).fetchall()
+        """,
+            params + [limit],
+        ).fetchall()
 
         # Create CSV
         output = io.StringIO()
@@ -1047,9 +1097,16 @@ async def export_csv(
 
         # Header
         columns = [
-            "id", "name", "city", "registration_date", "capital_amount",
-            "ai_robotics_score", "startup_score", "startup_classification",
-            "website", "purpose"
+            "id",
+            "name",
+            "city",
+            "registration_date",
+            "capital_amount",
+            "ai_robotics_score",
+            "startup_score",
+            "startup_classification",
+            "website",
+            "purpose",
         ]
         writer.writerow(columns)
 
@@ -1063,7 +1120,7 @@ async def export_csv(
         return StreamingResponse(
             iter([output.getvalue()]),
             media_type="text/csv",
-            headers={"Content-Disposition": "attachment; filename=companies.csv"}
+            headers={"Content-Disposition": "attachment; filename=companies.csv"},
         )
     finally:
         db.close()
@@ -1087,6 +1144,7 @@ async def export_db():
 
 # API endpoints for HTMX partial updates
 
+
 @app.get("/api/companies/search", response_class=HTMLResponse)
 async def api_companies_search(
     request: Request,
@@ -1097,19 +1155,25 @@ async def api_companies_search(
     """Quick company search for autocomplete."""
     db = get_db()
     try:
-        companies = db.conn.execute("""
+        companies = db.conn.execute(
+            """
             SELECT id, name, city, ai_robotics_score, startup_classification
             FROM companies
             WHERE name LIKE ? AND ai_robotics_score >= ?
             ORDER BY ai_robotics_score DESC
             LIMIT ?
-        """, (f"%{q}%", min_score, limit)).fetchall()
+        """,
+            (f"%{q}%", min_score, limit),
+        ).fetchall()
         companies = [dict(row) for row in companies]
 
-        return templates.TemplateResponse("partials/company_list.html", {
-            "request": request,
-            "companies": companies,
-        })
+        return templates.TemplateResponse(
+            "partials/company_list.html",
+            {
+                "request": request,
+                "companies": companies,
+            },
+        )
     finally:
         db.close()
 
@@ -1124,38 +1188,47 @@ async def company_quick_view(request: Request, company_id: int):
             raise HTTPException(status_code=404, detail="Company not found")
 
         # Get officers (limit 3)
-        officers = db.get_officers(company_id)[:3] if hasattr(db, 'get_officers') else []
+        officers = db.get_officers(company_id)[:3] if hasattr(db, "get_officers") else []
 
         # Get investments
         try:
-            investments = db.conn.execute("""
+            investments = db.conn.execute(
+                """
                 SELECT inv.*, i.canonical_name as investor_name, i.type as investor_type
                 FROM investments inv
                 JOIN investors i ON inv.investor_id = i.id
                 WHERE inv.company_id = ?
                 ORDER BY inv.confidence DESC
                 LIMIT 5
-            """, (company_id,)).fetchall()
+            """,
+                (company_id,),
+            ).fetchall()
             investments = [dict(row) for row in investments]
         except:
             investments = []
 
         # Mark as viewed
         try:
-            db.conn.execute("""
+            db.conn.execute(
+                """
                 UPDATE companies SET viewed = 1, viewed_at = COALESCE(viewed_at, datetime('now'))
                 WHERE id = ?
-            """, (company_id,))
+            """,
+                (company_id,),
+            )
             db.conn.commit()
         except:
             pass
 
-        return templates.TemplateResponse("partials/company_quick_view.html", {
-            "request": request,
-            "company": company,
-            "officers": officers,
-            "investments": investments,
-        })
+        return templates.TemplateResponse(
+            "partials/company_quick_view.html",
+            {
+                "request": request,
+                "company": company,
+                "officers": officers,
+                "investments": investments,
+            },
+        )
     finally:
         db.close()
 
@@ -1166,10 +1239,13 @@ async def api_stats_refresh(request: Request):
     db = get_db()
     try:
         stats = db.get_statistics()
-        return templates.TemplateResponse("partials/stats_cards.html", {
-            "request": request,
-            "stats": stats,
-        })
+        return templates.TemplateResponse(
+            "partials/stats_cards.html",
+            {
+                "request": request,
+                "stats": stats,
+            },
+        )
     finally:
         db.close()
 
@@ -1181,26 +1257,26 @@ async def admin_restore_db():
     import os
 
     backup_path = "/app/data/db_backup.b64"
-    db_path = os.environ.get('DATABASE_PATH', '/data/handelsregister.db')
+    db_path = os.environ.get("DATABASE_PATH", "/data/handelsregister.db")
 
     if not os.path.exists(backup_path):
         return {"error": "Backup file not found", "path": backup_path}
 
     try:
-        with open(backup_path, 'r') as f:
+        with open(backup_path) as f:
             encoded = f.read().strip()
 
         data = base64.b64decode(encoded)
 
         # Write to database
-        with open(db_path, 'wb') as f:
+        with open(db_path, "wb") as f:
             f.write(data)
 
         return {
             "success": True,
             "bytes_restored": len(data),
             "db_path": db_path,
-            "message": "Database restored! Refresh the dashboard to see changes."
+            "message": "Database restored! Refresh the dashboard to see changes.",
         }
     except Exception as e:
         return {"error": str(e)}
@@ -1210,9 +1286,8 @@ async def admin_restore_db():
 # Background Stealth Founder Job Scheduler
 # =============================================================================
 
-import threading
 import logging
-from contextlib import asynccontextmanager
+import threading
 
 # Job status tracking (in-memory, resets on restart)
 stealth_job_status = {
@@ -1244,8 +1319,8 @@ def run_stealth_job_sync():
     try:
         logger.info("Starting stealth founder discovery job...")
 
-        from scheduler.jobs.stealth_founder_job import StealthFounderJob
         from persistence.database import Database
+        from scheduler.jobs.stealth_founder_job import StealthFounderJob
 
         db = Database(DB_PATH)
         try:
@@ -1289,13 +1364,13 @@ def start_scheduler():
         scheduler = BackgroundScheduler()
 
         # Add stealth job on schedule (default: every 6 hours)
-        if os.environ.get('ENABLE_STEALTH_SCHEDULER', 'false').lower() == 'true':
-            interval_hours = int(os.environ.get('STEALTH_INTERVAL_HOURS', '6'))
+        if os.environ.get("ENABLE_STEALTH_SCHEDULER", "false").lower() == "true":
+            interval_hours = int(os.environ.get("STEALTH_INTERVAL_HOURS", "6"))
             scheduler.add_job(
                 run_stealth_job_sync,
                 trigger=IntervalTrigger(hours=interval_hours),
-                id='stealth_founder_job',
-                name='Stealth Founder Discovery',
+                id="stealth_founder_job",
+                name="Stealth Founder Discovery",
                 replace_existing=True,
             )
             stealth_job_status["scheduled"] = True
@@ -1331,9 +1406,7 @@ async def admin_stealth_job_page(request: Request):
     try:
         # Get stealth founder stats
         try:
-            founder_count = db.conn.execute(
-                "SELECT COUNT(*) FROM stealth_founders"
-            ).fetchone()[0]
+            founder_count = db.conn.execute("SELECT COUNT(*) FROM stealth_founders").fetchone()[0]
             high_conf_count = db.conn.execute(
                 "SELECT COUNT(*) FROM stealth_founders WHERE confidence_score >= 0.6"
             ).fetchone()[0]
@@ -1349,14 +1422,17 @@ async def admin_stealth_job_page(request: Request):
             high_conf_count = 0
             recent_founders = []
 
-        return templates.TemplateResponse("admin_stealth_job.html", {
-            "request": request,
-            "status": stealth_job_status,
-            "founder_count": founder_count,
-            "high_conf_count": high_conf_count,
-            "recent_founders": recent_founders,
-            "env_enabled": os.environ.get('ENABLE_STEALTH_SCHEDULER', 'false'),
-        })
+        return templates.TemplateResponse(
+            "admin_stealth_job.html",
+            {
+                "request": request,
+                "status": stealth_job_status,
+                "founder_count": founder_count,
+                "high_conf_count": high_conf_count,
+                "recent_founders": recent_founders,
+                "env_enabled": os.environ.get("ENABLE_STEALTH_SCHEDULER", "false"),
+            },
+        )
     finally:
         db.close()
 
@@ -1396,7 +1472,7 @@ async def admin_stealth_job_schedule(hours: int = 6):
 
         # Remove existing job if any
         try:
-            scheduler.remove_job('stealth_founder_job')
+            scheduler.remove_job("stealth_founder_job")
         except:
             pass
 
@@ -1404,8 +1480,8 @@ async def admin_stealth_job_schedule(hours: int = 6):
         scheduler.add_job(
             run_stealth_job_sync,
             trigger=IntervalTrigger(hours=hours),
-            id='stealth_founder_job',
-            name='Stealth Founder Discovery',
+            id="stealth_founder_job",
+            name="Stealth Founder Discovery",
             replace_existing=True,
         )
 
@@ -1428,7 +1504,7 @@ async def admin_stealth_job_stop():
 
     if scheduler:
         try:
-            scheduler.remove_job('stealth_founder_job')
+            scheduler.remove_job("stealth_founder_job")
             stealth_job_status["scheduled"] = False
             return {"message": "Scheduled job stopped", "status": stealth_job_status}
         except:
@@ -1441,22 +1517,24 @@ async def admin_stealth_job_stop():
 # Sync Founders from Local
 # =============================================================================
 
+
 @app.get("/admin/sync-founders", response_class=HTMLResponse)
 async def admin_sync_founders_page(request: Request):
     """Page to sync stealth founders from local machine."""
     db = get_db()
     try:
         try:
-            founder_count = db.conn.execute(
-                "SELECT COUNT(*) FROM stealth_founders"
-            ).fetchone()[0]
+            founder_count = db.conn.execute("SELECT COUNT(*) FROM stealth_founders").fetchone()[0]
         except:
             founder_count = 0
 
-        return templates.TemplateResponse("admin_sync_founders.html", {
-            "request": request,
-            "founder_count": founder_count,
-        })
+        return templates.TemplateResponse(
+            "admin_sync_founders.html",
+            {
+                "request": request,
+                "founder_count": founder_count,
+            },
+        )
     finally:
         db.close()
 
@@ -1467,8 +1545,8 @@ async def admin_sync_founders_post(request: Request):
     Receive stealth founders data from local machine.
     Accepts JSON array of founder objects or base64-encoded JSON.
     """
-    import json
     import base64
+    import json
 
     db = get_db()
     try:
@@ -1488,7 +1566,7 @@ async def admin_sync_founders_post(request: Request):
             try:
                 if data_str.startswith("eyJ") or data_str.startswith("W3si"):
                     # Looks like base64
-                    decoded = base64.b64decode(data_str).decode('utf-8')
+                    decoded = base64.b64decode(data_str).decode("utf-8")
                     founders = json.loads(decoded)
                 else:
                     founders = json.loads(data_str)
@@ -1512,13 +1590,13 @@ async def admin_sync_founders_post(request: Request):
 
                 # Check if exists
                 existing = db.conn.execute(
-                    "SELECT id FROM stealth_founders WHERE linkedin_url = ?",
-                    (linkedin_url,)
+                    "SELECT id FROM stealth_founders WHERE linkedin_url = ?", (linkedin_url,)
                 ).fetchone()
 
                 if existing:
                     # Update
-                    db.conn.execute("""
+                    db.conn.execute(
+                        """
                         UPDATE stealth_founders SET
                             name = COALESCE(?, name),
                             headline = COALESCE(?, headline),
@@ -1532,45 +1610,50 @@ async def admin_sync_founders_post(request: Request):
                             confidence_score = COALESCE(?, confidence_score),
                             last_checked_at = COALESCE(?, last_checked_at)
                         WHERE linkedin_url = ?
-                    """, (
-                        founder.get("name"),
-                        founder.get("headline"),
-                        founder.get("location"),
-                        founder.get("summary"),
-                        founder.get("current_company"),
-                        founder.get("previous_companies"),
-                        founder.get("detection_source"),
-                        founder.get("search_query"),
-                        founder.get("stealth_signals"),
-                        founder.get("confidence_score"),
-                        founder.get("last_checked_at"),
-                        linkedin_url,
-                    ))
+                    """,
+                        (
+                            founder.get("name"),
+                            founder.get("headline"),
+                            founder.get("location"),
+                            founder.get("summary"),
+                            founder.get("current_company"),
+                            founder.get("previous_companies"),
+                            founder.get("detection_source"),
+                            founder.get("search_query"),
+                            founder.get("stealth_signals"),
+                            founder.get("confidence_score"),
+                            founder.get("last_checked_at"),
+                            linkedin_url,
+                        ),
+                    )
                     updated += 1
                 else:
                     # Insert
-                    db.conn.execute("""
+                    db.conn.execute(
+                        """
                         INSERT INTO stealth_founders (
                             linkedin_url, name, headline, location, summary,
                             current_company, previous_companies, detection_source,
                             search_query, stealth_signals, confidence_score,
                             first_seen_at, last_checked_at
                         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    """, (
-                        linkedin_url,
-                        founder.get("name"),
-                        founder.get("headline"),
-                        founder.get("location"),
-                        founder.get("summary"),
-                        founder.get("current_company"),
-                        founder.get("previous_companies"),
-                        founder.get("detection_source", "local_sync"),
-                        founder.get("search_query"),
-                        founder.get("stealth_signals"),
-                        founder.get("confidence_score", 0.0),
-                        founder.get("first_seen_at", datetime.now().isoformat()),
-                        founder.get("last_checked_at"),
-                    ))
+                    """,
+                        (
+                            linkedin_url,
+                            founder.get("name"),
+                            founder.get("headline"),
+                            founder.get("location"),
+                            founder.get("summary"),
+                            founder.get("current_company"),
+                            founder.get("previous_companies"),
+                            founder.get("detection_source", "local_sync"),
+                            founder.get("search_query"),
+                            founder.get("stealth_signals"),
+                            founder.get("confidence_score", 0.0),
+                            founder.get("first_seen_at", datetime.now().isoformat()),
+                            founder.get("last_checked_at"),
+                        ),
+                    )
                     inserted += 1
 
             except Exception as e:
@@ -1642,4 +1725,5 @@ async def news_stats():
 
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run(app, host="0.0.0.0", port=8000)

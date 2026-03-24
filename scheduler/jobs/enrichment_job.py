@@ -15,11 +15,10 @@ Future enhancements:
 
 import logging
 from datetime import datetime
-from typing import Dict, Any, List, Optional
+from typing import Any, Dict, Optional
 
 from persistence.database import Database
-from processing.capital_detector import CapitalRaiseDetector, CapitalEvent
-from scheduler.rate_limiter import PersistentRateLimiter
+from processing.capital_detector import CapitalRaiseDetector
 
 logger = logging.getLogger(__name__)
 
@@ -68,24 +67,30 @@ class EnrichmentJob:
             )
         """)
 
-        self.db.conn.execute("""
+        self.db.conn.execute(
+            """
             INSERT INTO capital_history (company_id, capital_amount, recorded_at)
             VALUES (?, ?, ?)
-        """, (company_id, capital_amount, datetime.utcnow().isoformat()))
+        """,
+            (company_id, capital_amount, datetime.utcnow().isoformat()),
+        )
         self.db.conn.commit()
 
     def _get_previous_capital(self, company_id: int) -> Optional[float]:
         """Get the most recent capital amount for comparison."""
         try:
-            row = self.db.conn.execute("""
+            row = self.db.conn.execute(
+                """
                 SELECT capital_amount FROM capital_history
                 WHERE company_id = ?
                 ORDER BY recorded_at DESC
                 LIMIT 1 OFFSET 1
-            """, (company_id,)).fetchone()
+            """,
+                (company_id,),
+            ).fetchone()
 
             if row:
-                return row['capital_amount']
+                return row["capital_amount"]
         except Exception:
             pass
 
@@ -101,15 +106,15 @@ class EnrichmentJob:
         Returns:
             Result dict with events_detected count
         """
-        company_id = company['id']
-        company_name = company['name']
-        current_capital = company.get('capital_amount')
+        company_id = company["id"]
+        company_name = company["name"]
+        current_capital = company.get("capital_amount")
 
         result = {
-            'company_id': company_id,
-            'company_name': company_name,
-            'events_detected': 0,
-            'success': True,
+            "company_id": company_id,
+            "company_name": company_name,
+            "events_detected": 0,
+            "success": True,
         }
 
         try:
@@ -140,18 +145,20 @@ class EnrichmentJob:
                         confidence_score=event.confidence_score,
                     )
 
-                    result['events_detected'] += 1
+                    result["events_detected"] += 1
                     logger.info(
                         "Capital %s detected for %s: %.0f -> %.0f EUR",
-                        event.event_type, company_name,
-                        event.previous_amount or 0, event.new_amount or 0
+                        event.event_type,
+                        company_name,
+                        event.previous_amount or 0,
+                        event.new_amount or 0,
                     )
 
                     # Log the change
                     self.db.log_change(
                         company_id=company_id,
-                        change_type='capital_change',
-                        field_name='capital_amount',
+                        change_type="capital_change",
+                        field_name="capital_amount",
                         old_value=str(previous_capital) if previous_capital else None,
                         new_value=str(current_capital) if current_capital else None,
                     )
@@ -161,13 +168,16 @@ class EnrichmentJob:
 
         except Exception as e:
             logger.error("Error enriching %s: %s", company_name, e)
-            result['success'] = False
+            result["success"] = False
             # Don't mark as failed - allow retry
-            self.db.conn.execute("""
+            self.db.conn.execute(
+                """
                 UPDATE enrichment_queue
                 SET attempts = attempts + 1, last_attempt = ?
                 WHERE company_id = ?
-            """, (datetime.utcnow().isoformat(), company_id))
+            """,
+                (datetime.utcnow().isoformat(), company_id),
+            )
             self.db.conn.commit()
 
         return result
@@ -183,10 +193,10 @@ class EnrichmentJob:
             Statistics dict
         """
         stats = {
-            'companies_processed': 0,
-            'events_detected': 0,
-            'errors': 0,
-            'queue_remaining': 0,
+            "companies_processed": 0,
+            "events_detected": 0,
+            "errors": 0,
+            "queue_remaining": 0,
         }
 
         # Get companies from enrichment queue
@@ -200,33 +210,36 @@ class EnrichmentJob:
 
         for company in companies:
             if dry_run:
-                stats['companies_processed'] += 1
+                stats["companies_processed"] += 1
                 continue
 
             result = self._process_company(company)
 
-            stats['companies_processed'] += 1
-            stats['events_detected'] += result.get('events_detected', 0)
+            stats["companies_processed"] += 1
+            stats["events_detected"] += result.get("events_detected", 0)
 
-            if not result['success']:
-                stats['errors'] += 1
+            if not result["success"]:
+                stats["errors"] += 1
 
-        stats['queue_remaining'] = self.db.get_enrichment_queue_size()
+        stats["queue_remaining"] = self.db.get_enrichment_queue_size()
 
         # Backfill officers from stored announcements
         if not dry_run:
             try:
                 from processing.officer_extractor import backfill_officers_from_announcements
+
                 officer_stats = backfill_officers_from_announcements(self.db)
-                stats['officers_added'] = officer_stats.get('officers_added', 0)
+                stats["officers_added"] = officer_stats.get("officers_added", 0)
             except Exception as e:
                 logger.debug("Officer backfill error: %s", e)
-                stats['officers_added'] = 0
+                stats["officers_added"] = 0
 
         logger.info(
             "Enrichment complete: %d processed, %d events detected, %d officers added, %d remaining",
-            stats['companies_processed'], stats['events_detected'],
-            stats.get('officers_added', 0), stats['queue_remaining'],
+            stats["companies_processed"],
+            stats["events_detected"],
+            stats.get("officers_added", 0),
+            stats["queue_remaining"],
         )
 
         return stats

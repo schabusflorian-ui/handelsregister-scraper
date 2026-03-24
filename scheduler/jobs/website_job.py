@@ -7,7 +7,7 @@ Prioritizes high-value companies (high startup/AI scores).
 
 import logging
 from datetime import datetime, timedelta
-from typing import Dict, Any
+from typing import Any, Dict
 
 from sources.website_finder import WebsiteFinder
 
@@ -56,74 +56,75 @@ class WebsiteFinderJob:
         started_at = datetime.utcnow()
 
         stats = {
-            'companies_checked': 0,
-            'websites_found': 0,
-            'websites_by_guess': 0,
-            'websites_by_search': 0,
-            'websites_impressum_verified': 0,
-            'already_had_website': 0,
-            'errors': 0,
+            "companies_checked": 0,
+            "websites_found": 0,
+            "websites_by_guess": 0,
+            "websites_by_search": 0,
+            "websites_impressum_verified": 0,
+            "already_had_website": 0,
+            "errors": 0,
         }
 
         try:
             companies = self._get_companies_to_check()
-            stats['companies_checked'] = len(companies)
+            stats["companies_checked"] = len(companies)
 
             for company in companies:
                 try:
                     result = self.finder.find(
-                        company['name'],
-                        native_company_number=company.get('native_company_number'),
-                        registry_court=company.get('registry_court'),
+                        company["name"],
+                        native_company_number=company.get("native_company_number"),
+                        registry_court=company.get("registry_court"),
                     )
                     now = datetime.utcnow().isoformat()
 
                     if result:
                         self.db.update_company(
-                            company['id'],
+                            company["id"],
                             website=result.url,
                             website_confidence=result.confidence,
                             website_lookup_at=now,
                         )
-                        stats['websites_found'] += 1
-                        if result.source == 'domain_guess':
-                            stats['websites_by_guess'] += 1
+                        stats["websites_found"] += 1
+                        if result.source == "domain_guess":
+                            stats["websites_by_guess"] += 1
                         else:
-                            stats['websites_by_search'] += 1
+                            stats["websites_by_search"] += 1
                         if result.impressum_verified:
-                            stats['websites_impressum_verified'] += 1
+                            stats["websites_impressum_verified"] += 1
 
                         logger.info(
                             "Website found: %s -> %s (conf=%.2f, src=%s, impressum=%s)",
-                            company['name'], result.url,
-                            result.confidence, result.source,
-                            'verified' if result.impressum_verified else 'no',
+                            company["name"],
+                            result.url,
+                            result.confidence,
+                            result.source,
+                            "verified" if result.impressum_verified else "no",
                         )
                     else:
                         # Mark as checked so we don't retry every run
                         self.db.update_company(
-                            company['id'],
+                            company["id"],
                             website_lookup_at=now,
                         )
 
                 except Exception as e:
-                    logger.error("Website lookup failed for '%s': %s",
-                                 company['name'], e)
-                    stats['errors'] += 1
+                    logger.error("Website lookup failed for '%s': %s", company["name"], e)
+                    stats["errors"] += 1
 
         except Exception as e:
             logger.exception("Website finder job failed: %s", e)
-            stats['errors'] += 1
+            stats["errors"] += 1
 
-        stats['duration_seconds'] = (datetime.utcnow() - started_at).total_seconds()
+        stats["duration_seconds"] = (datetime.utcnow() - started_at).total_seconds()
 
         logger.info(
             "Website finder complete: %d checked, %d found (%d guess, %d search, %d impressum-verified)",
-            stats['companies_checked'],
-            stats['websites_found'],
-            stats['websites_by_guess'],
-            stats['websites_by_search'],
-            stats['websites_impressum_verified'],
+            stats["companies_checked"],
+            stats["websites_found"],
+            stats["websites_by_guess"],
+            stats["websites_by_search"],
+            stats["websites_impressum_verified"],
         )
 
         return stats
@@ -139,7 +140,8 @@ class WebsiteFinderJob:
         """
         cutoff = (datetime.utcnow() - timedelta(days=self.relookup_days)).isoformat()
 
-        rows = self.db.conn.execute('''
+        rows = self.db.conn.execute(
+            """
             SELECT id, name, native_company_number, registry_court,
                    website, website_lookup_at
             FROM companies
@@ -150,7 +152,9 @@ class WebsiteFinderJob:
                 ai_robotics_score DESC,
                 id DESC
             LIMIT ?
-        ''', (cutoff, self.batch_size)).fetchall()
+        """,
+            (cutoff, self.batch_size),
+        ).fetchall()
 
         return [dict(row) for row in rows]
 

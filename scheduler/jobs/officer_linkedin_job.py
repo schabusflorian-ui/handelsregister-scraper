@@ -12,13 +12,13 @@ Rate limiting: ~1 search per 2.5 minutes by default.
 State persists to disk for crash recovery.
 """
 
-import os
 import json
-import time
-import random
 import logging
+import os
+import random
+import time
 from datetime import datetime
-from typing import Dict, Any, Optional
+from typing import Any, Dict, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -33,10 +33,10 @@ class OfficerLinkedInEnrichmentJob:
     def __init__(
         self,
         db,
-        state_file: str = 'data/officer_linkedin_state.json',
-        search_delay: int = 150,       # 2.5 minutes between searches
-        jitter: float = 0.3,           # +/- 30% random variance
-        search_engine: str = 'curl',   # 'curl' or 'brave' or 'rotate'
+        state_file: str = "data/officer_linkedin_state.json",
+        search_delay: int = 150,  # 2.5 minutes between searches
+        jitter: float = 0.3,  # +/- 30% random variance
+        search_engine: str = "curl",  # 'curl' or 'brave' or 'rotate'
         min_confidence: float = 0.40,
     ):
         self.db = db
@@ -51,15 +51,15 @@ class OfficerLinkedInEnrichmentJob:
     def _load_state(self) -> Dict[str, Any]:
         """Load persistent state from file."""
         default = {
-            'total_searches': 0,
-            'total_enriched': 0,
-            'total_no_match': 0,
-            'last_search_at': None,
-            'failed_officer_ids': [],
+            "total_searches": 0,
+            "total_enriched": 0,
+            "total_no_match": 0,
+            "last_search_at": None,
+            "failed_officer_ids": [],
         }
         try:
             if os.path.exists(self.state_file):
-                with open(self.state_file, 'r') as f:
+                with open(self.state_file) as f:
                     state = json.load(f)
                     # Merge with defaults for forward compatibility
                     for k, v in default.items():
@@ -73,8 +73,8 @@ class OfficerLinkedInEnrichmentJob:
     def _save_state(self):
         """Save persistent state to file."""
         try:
-            os.makedirs(os.path.dirname(self.state_file) or '.', exist_ok=True)
-            with open(self.state_file, 'w') as f:
+            os.makedirs(os.path.dirname(self.state_file) or ".", exist_ok=True)
+            with open(self.state_file, "w") as f:
                 json.dump(self.state, f, indent=2)
         except Exception as e:
             logger.warning(f"Could not save state: {e}")
@@ -83,17 +83,20 @@ class OfficerLinkedInEnrichmentJob:
         """Lazily initialize search engine."""
         if self._search_engine is None:
             try:
-                if self.search_engine_type == 'rotate':
+                if self.search_engine_type == "rotate":
                     from sources.google_search import MultiSearchScraper
+
                     self._search_engine = MultiSearchScraper(
                         ddg_delay=(3, 8),
                         brave_delay=(3, 8),
                     )
-                elif self.search_engine_type == 'brave':
+                elif self.search_engine_type == "brave":
                     from sources.google_search import BraveSearchScraper
+
                     self._search_engine = BraveSearchScraper(delay_range=(3, 8))
                 else:
                     from sources.google_search import CurlCffiSearchScraper
+
                     self._search_engine = CurlCffiSearchScraper(delay_range=(2, 5))
             except ImportError as e:
                 logger.error(f"Search engine import failed: {e}")
@@ -112,24 +115,24 @@ class OfficerLinkedInEnrichmentJob:
         Returns:
             Dict with keys: action ('search' | 'idle' | 'rate_limited'), success, details
         """
-        from processing.officer_linkedin_search import search_officer_linkedin, RateLimitedError
+        from processing.officer_linkedin_search import RateLimitedError, search_officer_linkedin
 
-        stats = {'action': None, 'success': False, 'details': {}}
+        stats = {"action": None, "success": False, "details": {}}
 
         # Get next officer to enrich
         officers = self.db.get_officers_for_linkedin_enrichment(limit=20)
 
         # Skip officers that previously failed
-        failed_ids = set(self.state.get('failed_officer_ids', []))
-        officers = [o for o in officers if o['id'] not in failed_ids]
+        failed_ids = set(self.state.get("failed_officer_ids", []))
+        officers = [o for o in officers if o["id"] not in failed_ids]
 
         if not officers:
-            stats['action'] = 'idle'
-            stats['details'] = {'reason': 'no_officers_to_enrich'}
+            stats["action"] = "idle"
+            stats["details"] = {"reason": "no_officers_to_enrich"}
             return stats
 
         officer = officers[0]
-        stats['action'] = 'search'
+        stats["action"] = "search"
 
         logger.info(
             f"Enriching officer: {officer['name']} "
@@ -139,75 +142,73 @@ class OfficerLinkedInEnrichmentJob:
 
         try:
             match = search_officer_linkedin(
-                officer_name=officer['name'],
-                company_name=officer.get('company_name', ''),
-                company_city=officer.get('company_city'),
+                officer_name=officer["name"],
+                company_name=officer.get("company_name", ""),
+                company_city=officer.get("company_city"),
                 min_confidence=self.min_confidence,
             )
 
             if match:
                 # Store enrichment data
                 self.db.update_officer_linkedin(
-                    officer['id'],
+                    officer["id"],
                     linkedin_url=match.linkedin_url,
                     linkedin_headline=match.headline,
                     linkedin_location=match.location,
                     linkedin_previous_companies=(
-                        json.dumps(match.previous_companies)
-                        if match.previous_companies else None
+                        json.dumps(match.previous_companies) if match.previous_companies else None
                     ),
                     linkedin_snippet=match.snippet[:500] if match.snippet else None,
                     linkedin_match_confidence=match.match_confidence,
                     linkedin_enrichment_source=match.source,
                 )
-                self.state['total_enriched'] += 1
-                stats['success'] = True
-                stats['details'] = {
-                    'officer': officer['name'],
-                    'company': officer.get('company_name'),
-                    'linkedin_url': match.linkedin_url,
-                    'headline': match.headline,
-                    'confidence': round(match.match_confidence, 2),
-                    'previous_companies': match.previous_companies,
+                self.state["total_enriched"] += 1
+                stats["success"] = True
+                stats["details"] = {
+                    "officer": officer["name"],
+                    "company": officer.get("company_name"),
+                    "linkedin_url": match.linkedin_url,
+                    "headline": match.headline,
+                    "confidence": round(match.match_confidence, 2),
+                    "previous_companies": match.previous_companies,
                 }
                 logger.info(
-                    f"  -> Matched: {match.headline or 'no headline'} "
-                    f"(confidence={match.match_confidence:.2f})"
+                    f"  -> Matched: {match.headline or 'no headline'} (confidence={match.match_confidence:.2f})"
                 )
             else:
                 # Mark as attempted (no match found)
                 self.db.update_officer_linkedin(
-                    officer['id'],
+                    officer["id"],
                     linkedin_match_confidence=0.0,
-                    linkedin_enrichment_source='no_match',
+                    linkedin_enrichment_source="no_match",
                 )
-                self.state['total_no_match'] += 1
-                stats['details'] = {
-                    'officer': officer['name'],
-                    'company': officer.get('company_name'),
-                    'reason': 'no_confident_match',
+                self.state["total_no_match"] += 1
+                stats["details"] = {
+                    "officer": officer["name"],
+                    "company": officer.get("company_name"),
+                    "reason": "no_confident_match",
                 }
-                logger.info(f"  -> No confident match found")
+                logger.info("  -> No confident match found")
 
-            self.state['total_searches'] += 1
-            self.state['last_search_at'] = datetime.now().isoformat()
+            self.state["total_searches"] += 1
+            self.state["last_search_at"] = datetime.now().isoformat()
             self._save_state()
 
         except RateLimitedError as e:
             logger.warning(f"Rate limited: {e}")
-            stats['action'] = 'rate_limited'
-            stats['details'] = {'officer': officer['name'], 'error': 'rate_limited'}
+            stats["action"] = "rate_limited"
+            stats["details"] = {"officer": officer["name"], "error": "rate_limited"}
             # Don't mark officer as failed — we want to retry when rate limit lifts
             self._save_state()
 
         except Exception as e:
             logger.error(f"Search failed for {officer['name']}: {e}")
-            stats['details'] = {'officer': officer['name'], 'error': str(e)}
+            stats["details"] = {"officer": officer["name"], "error": str(e)}
             # Record failure to skip this officer next time
-            self.state.setdefault('failed_officer_ids', []).append(officer['id'])
+            self.state.setdefault("failed_officer_ids", []).append(officer["id"])
             # Keep bounded
-            if len(self.state['failed_officer_ids']) > 500:
-                self.state['failed_officer_ids'] = self.state['failed_officer_ids'][-250:]
+            if len(self.state["failed_officer_ids"]) > 500:
+                self.state["failed_officer_ids"] = self.state["failed_officer_ids"][-250:]
             self._save_state()
 
         return stats
@@ -220,10 +221,10 @@ class OfficerLinkedInEnrichmentJob:
         takes ~12.5 minutes total.
         """
         batch_stats = {
-            'officers_processed': 0,
-            'officers_enriched': 0,
-            'officers_no_match': 0,
-            'errors': 0,
+            "officers_processed": 0,
+            "officers_enriched": 0,
+            "officers_no_match": 0,
+            "errors": 0,
         }
 
         consecutive_rate_limits = 0
@@ -231,34 +232,33 @@ class OfficerLinkedInEnrichmentJob:
         for i in range(batch_size):
             stats = self.run_once()
 
-            if stats['action'] == 'idle':
+            if stats["action"] == "idle":
                 logger.info("No more officers to enrich")
                 break
 
-            if stats['action'] == 'rate_limited':
+            if stats["action"] == "rate_limited":
                 consecutive_rate_limits += 1
-                batch_stats['errors'] += 1
+                batch_stats["errors"] += 1
                 if consecutive_rate_limits >= 2:
                     logger.warning(
-                        "Rate limited %d times in a row — stopping batch. "
-                        "Search engines are blocking requests.",
+                        "Rate limited %d times in a row — stopping batch. Search engines are blocking requests.",
                         consecutive_rate_limits,
                     )
                     break
                 # Exponential backoff: wait longer before retrying
-                backoff = self.search_delay * (2 ** consecutive_rate_limits)
+                backoff = self.search_delay * (2**consecutive_rate_limits)
                 logger.info(f"  Rate limited, backing off {backoff:.0f}s...")
                 time.sleep(backoff)
                 continue
 
             consecutive_rate_limits = 0  # Reset on successful search
-            batch_stats['officers_processed'] += 1
-            if stats['success']:
-                batch_stats['officers_enriched'] += 1
-            elif 'error' in stats.get('details', {}):
-                batch_stats['errors'] += 1
+            batch_stats["officers_processed"] += 1
+            if stats["success"]:
+                batch_stats["officers_enriched"] += 1
+            elif "error" in stats.get("details", {}):
+                batch_stats["errors"] += 1
             else:
-                batch_stats['officers_no_match'] += 1
+                batch_stats["officers_no_match"] += 1
 
             # Delay between searches (not after the last one)
             if i < batch_size - 1:
@@ -277,7 +277,7 @@ class OfficerLinkedInEnrichmentJob:
         """
         iteration = 0
         logger.info("Starting officer LinkedIn enrichment (continuous mode)...")
-        logger.info(f"  Search delay: {self.search_delay}s (+/- {self.jitter*100:.0f}% jitter)")
+        logger.info(f"  Search delay: {self.search_delay}s (+/- {self.jitter * 100:.0f}% jitter)")
         logger.info(f"  Min confidence: {self.min_confidence}")
 
         consecutive_rate_limits = 0
@@ -288,19 +288,16 @@ class OfficerLinkedInEnrichmentJob:
 
                 stats = self.run_once()
 
-                if stats['action'] == 'idle':
+                if stats["action"] == "idle":
                     logger.info("No more officers to enrich. Waiting 10 minutes...")
                     time.sleep(600)
                     consecutive_rate_limits = 0
                     continue
 
-                if stats['action'] == 'rate_limited':
+                if stats["action"] == "rate_limited":
                     consecutive_rate_limits += 1
-                    backoff = min(self.search_delay * (2 ** consecutive_rate_limits), 3600)
-                    logger.warning(
-                        f"Rate limited ({consecutive_rate_limits}x). "
-                        f"Backing off {backoff:.0f}s..."
-                    )
+                    backoff = min(self.search_delay * (2**consecutive_rate_limits), 3600)
+                    logger.warning(f"Rate limited ({consecutive_rate_limits}x). Backing off {backoff:.0f}s...")
                     time.sleep(backoff)
                     continue
 
@@ -327,23 +324,19 @@ class OfficerLinkedInEnrichmentJob:
         try:
             cursor = self.db.conn.cursor()
 
-            cursor.execute(
-                'SELECT COUNT(*) FROM officers WHERE linkedin_enriched_at IS NOT NULL'
-            )
+            cursor.execute("SELECT COUNT(*) FROM officers WHERE linkedin_enriched_at IS NOT NULL")
             total_attempted = cursor.fetchone()[0]
 
-            cursor.execute(
-                'SELECT COUNT(*) FROM officers WHERE linkedin_url IS NOT NULL'
-            )
+            cursor.execute("SELECT COUNT(*) FROM officers WHERE linkedin_url IS NOT NULL")
             with_linkedin = cursor.fetchone()[0]
 
-            cursor.execute('''
+            cursor.execute("""
                 SELECT COUNT(*) FROM officers o
                 JOIN companies c ON o.company_id = c.id
                 WHERE o.linkedin_enriched_at IS NULL
                   AND o.is_current = 1
                   AND c.ai_robotics_score >= 1
-            ''')
+            """)
             remaining = cursor.fetchone()[0]
         except Exception:
             total_attempted = 0
@@ -351,9 +344,9 @@ class OfficerLinkedInEnrichmentJob:
             remaining = 0
 
         return {
-            'total_attempted': total_attempted,
-            'with_linkedin_url': with_linkedin,
-            'remaining': remaining,
-            **{k: v for k, v in self.state.items() if k != 'failed_officer_ids'},
-            'failed_count': len(self.state.get('failed_officer_ids', [])),
+            "total_attempted": total_attempted,
+            "with_linkedin_url": with_linkedin,
+            "remaining": remaining,
+            **{k: v for k, v in self.state.items() if k != "failed_officer_ids"},
+            "failed_count": len(self.state.get("failed_officer_ids", [])),
         }

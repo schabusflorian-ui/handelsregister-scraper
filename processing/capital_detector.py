@@ -10,15 +10,15 @@ this module uses alternative strategies:
 """
 
 import re
-from typing import List, Dict, Optional, Tuple
 from dataclasses import dataclass
 from datetime import datetime
-from decimal import Decimal, InvalidOperation
+from typing import Dict, List, Optional, Tuple
 
 
 @dataclass
 class CapitalEvent:
     """Detected capital event."""
+
     event_type: str  # 'increase', 'decrease', 'initial'
     event_date: Optional[str]
     previous_amount: Optional[float]
@@ -40,59 +40,52 @@ class CapitalRaiseDetector:
 
     # Keywords indicating capital raises (German)
     CAPITAL_RAISE_KEYWORDS = [
-        'kapitalerhöhung',
-        'erhöhung des stammkapitals',
-        'erhöhung des grundkapitals',
-        'capital increase',
-        'stammkapital erhöht',
-        'grundkapital erhöht',
-        'neue gesellschafter',
-        'sacheinlage',
-        'bareinlage',
-        'aufstockung',
-        'kapitalaufstockung',
+        "kapitalerhöhung",
+        "erhöhung des stammkapitals",
+        "erhöhung des grundkapitals",
+        "capital increase",
+        "stammkapital erhöht",
+        "grundkapital erhöht",
+        "neue gesellschafter",
+        "sacheinlage",
+        "bareinlage",
+        "aufstockung",
+        "kapitalaufstockung",
     ]
 
     # Keywords indicating capital decrease
     CAPITAL_DECREASE_KEYWORDS = [
-        'kapitalherabsetzung',
-        'herabsetzung des stammkapitals',
-        'capital decrease',
-        'stammkapital herabgesetzt',
+        "kapitalherabsetzung",
+        "herabsetzung des stammkapitals",
+        "capital decrease",
+        "stammkapital herabgesetzt",
     ]
 
     # Patterns to extract amounts (German number format: 1.234.567,89)
     AMOUNT_PATTERNS = [
         # "EUR 100.000,00" or "100.000 EUR"
-        r'(?:EUR|€)\s*([\d.]+(?:,\d{2})?)',
-        r'([\d.]+(?:,\d{2})?)\s*(?:EUR|€|Euro)',
+        r"(?:EUR|€)\s*([\d.]+(?:,\d{2})?)",
+        r"([\d.]+(?:,\d{2})?)\s*(?:EUR|€|Euro)",
         # "Stammkapital: 25.000,00 Euro"
-        r'(?:stamm|grund)kapital[:\s]*([\d.]+(?:,\d{2})?)',
+        r"(?:stamm|grund)kapital[:\s]*([\d.]+(?:,\d{2})?)",
         # "auf EUR 500.000,00 erhöht"
-        r'auf\s*(?:EUR|€)?\s*([\d.]+(?:,\d{2})?)\s*(?:EUR|€|Euro)?\s*erhöht',
+        r"auf\s*(?:EUR|€)?\s*([\d.]+(?:,\d{2})?)\s*(?:EUR|€|Euro)?\s*erhöht",
         # "von EUR 25.000 auf EUR 100.000"
-        r'von\s*(?:EUR|€)?\s*([\d.]+(?:,\d{2})?)\s*auf\s*(?:EUR|€)?\s*([\d.]+(?:,\d{2})?)',
+        r"von\s*(?:EUR|€)?\s*([\d.]+(?:,\d{2})?)\s*auf\s*(?:EUR|€)?\s*([\d.]+(?:,\d{2})?)",
     ]
 
     def __init__(self):
         # Pre-compile patterns
         self._raise_patterns = [
-            re.compile(rf'\b{re.escape(kw)}\b', re.IGNORECASE)
-            for kw in self.CAPITAL_RAISE_KEYWORDS
+            re.compile(rf"\b{re.escape(kw)}\b", re.IGNORECASE) for kw in self.CAPITAL_RAISE_KEYWORDS
         ]
         self._decrease_patterns = [
-            re.compile(rf'\b{re.escape(kw)}\b', re.IGNORECASE)
-            for kw in self.CAPITAL_DECREASE_KEYWORDS
+            re.compile(rf"\b{re.escape(kw)}\b", re.IGNORECASE) for kw in self.CAPITAL_DECREASE_KEYWORDS
         ]
-        self._amount_patterns = [
-            re.compile(p, re.IGNORECASE)
-            for p in self.AMOUNT_PATTERNS
-        ]
+        self._amount_patterns = [re.compile(p, re.IGNORECASE) for p in self.AMOUNT_PATTERNS]
 
     def detect_from_publications(
-        self,
-        publications: List[Dict],
-        current_capital: Optional[float] = None
+        self, publications: List[Dict], current_capital: Optional[float] = None
     ) -> List[CapitalEvent]:
         """
         Detect capital events from publication texts.
@@ -107,14 +100,14 @@ class CapitalRaiseDetector:
         events = []
 
         for pub in publications:
-            text = pub.get('text', '')
+            text = pub.get("text", "")
             if not text:
                 continue
 
             event = self._analyze_publication(
                 text=text,
-                pub_date=pub.get('date'),
-                pub_type=pub.get('type'),
+                pub_date=pub.get("date"),
+                pub_type=pub.get("type"),
                 current_capital=current_capital,
             )
 
@@ -154,7 +147,7 @@ class CapitalRaiseDetector:
             if pct_change < 0.1 and abs(change) < 10000:
                 return None
 
-        event_type = 'increase' if change > 0 else 'decrease'
+        event_type = "increase" if change > 0 else "decrease"
 
         return CapitalEvent(
             event_type=event_type,
@@ -162,9 +155,9 @@ class CapitalRaiseDetector:
             previous_amount=previous_capital,
             new_amount=current_capital,
             change_amount=abs(change),
-            currency='EUR',
-            publication_text=f'Capital changed from {previous_capital:,.2f} to {current_capital:,.2f} EUR',
-            source='diff',
+            currency="EUR",
+            publication_text=f"Capital changed from {previous_capital:,.2f} to {current_capital:,.2f} EUR",
+            source="diff",
             confidence_score=0.7,  # Medium confidence for diff detection
         )
 
@@ -186,7 +179,7 @@ class CapitalRaiseDetector:
             return None
 
         # Determine event type
-        event_type = 'increase' if raise_matches > decrease_matches else 'decrease'
+        event_type = "increase" if raise_matches > decrease_matches else "decrease"
 
         # Extract amounts
         amounts = self._extract_amounts(text)
@@ -199,7 +192,7 @@ class CapitalRaiseDetector:
         if len(amounts) >= 2:
             # Assume smaller is previous, larger is new (for increases)
             sorted_amounts = sorted(amounts)
-            if event_type == 'increase':
+            if event_type == "increase":
                 previous_amount = sorted_amounts[0]
                 new_amount = sorted_amounts[-1]
             else:
@@ -225,9 +218,9 @@ class CapitalRaiseDetector:
             previous_amount=previous_amount,
             new_amount=new_amount,
             change_amount=change_amount,
-            currency='EUR',
+            currency="EUR",
             publication_text=text[:500] if len(text) > 500 else text,
-            source='publication',
+            source="publication",
             confidence_score=confidence,
         )
 
@@ -271,7 +264,7 @@ class CapitalRaiseDetector:
 
         try:
             # Remove thousand separators (.) and convert decimal comma to dot
-            cleaned = num_str.replace('.', '').replace(',', '.')
+            cleaned = num_str.replace(".", "").replace(",", ".")
             return float(cleaned)
         except (ValueError, TypeError):
             return None
@@ -308,26 +301,26 @@ class NewsCapitalMonitor:
 
     # German tech/startup news RSS feeds
     NEWS_FEEDS = [
-        'https://www.gruenderszene.de/feed',
-        'https://t3n.de/rss.xml',
-        'https://www.deutsche-startups.de/feed/',
+        "https://www.gruenderszene.de/feed",
+        "https://t3n.de/rss.xml",
+        "https://www.deutsche-startups.de/feed/",
     ]
 
     # Keywords indicating funding news
     FUNDING_KEYWORDS = [
-        'finanzierung',
-        'funding',
-        'investment',
-        'millionen',
-        'million',
-        'seed',
-        'series a',
-        'series b',
-        'series c',
-        'kapital',
-        'venture',
-        'fundraising',
-        'einsammeln',
+        "finanzierung",
+        "funding",
+        "investment",
+        "millionen",
+        "million",
+        "seed",
+        "series a",
+        "series b",
+        "series c",
+        "kapital",
+        "venture",
+        "fundraising",
+        "einsammeln",
     ]
 
     def __init__(self, feeds: Optional[List[str]] = None):
@@ -353,19 +346,21 @@ class NewsCapitalMonitor:
                 feed = feedparser.parse(feed_url)
 
                 for entry in feed.entries[:20]:  # Check recent entries
-                    title = entry.get('title', '')
-                    summary = entry.get('summary', '')
+                    title = entry.get("title", "")
+                    summary = entry.get("summary", "")
                     text = f"{title} {summary}".lower()
 
                     # Check for funding keywords
                     if any(kw in text for kw in self.FUNDING_KEYWORDS):
-                        articles.append({
-                            'title': title,
-                            'link': entry.get('link'),
-                            'date': entry.get('published'),
-                            'summary': summary,
-                            'source': feed_url,
-                        })
+                        articles.append(
+                            {
+                                "title": title,
+                                "link": entry.get("link"),
+                                "date": entry.get("published"),
+                                "summary": summary,
+                                "source": feed_url,
+                            }
+                        )
 
             except Exception as e:
                 print(f"Error parsing feed {feed_url}: {e}")
@@ -394,9 +389,9 @@ class NewsCapitalMonitor:
         name_patterns = []
         for name in company_names:
             # Extract core name (without legal form)
-            core_name = re.sub(r'\s*(GmbH|AG|UG|KG|e\.V\.).*$', '', name, flags=re.IGNORECASE)
+            core_name = re.sub(r"\s*(GmbH|AG|UG|KG|e\.V\.).*$", "", name, flags=re.IGNORECASE)
             if len(core_name) >= 3:
-                pattern = re.compile(rf'\b{re.escape(core_name)}\b', re.IGNORECASE)
+                pattern = re.compile(rf"\b{re.escape(core_name)}\b", re.IGNORECASE)
                 name_patterns.append((name, pattern))
 
         for article in articles:

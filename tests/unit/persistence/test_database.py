@@ -5,15 +5,9 @@ Tests CRUD operations, search functionality, relationships,
 and data integrity constraints.
 """
 
-import pytest
 import json
-import sys
-from pathlib import Path
 
-# Add project root to path
-sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
-
-from persistence.database import Database, Company
+import pytest
 
 
 class TestDatabaseCompanyCRUD:
@@ -50,16 +44,16 @@ class TestDatabaseCompanyCRUD:
 
         result = test_db.get_company(company_id)
         assert result is not None
-        assert result['name'] == sample_company['name']
-        assert result['company_number'] == sample_company['company_number']
+        assert result["name"] == sample_company["name"]
+        assert result["company_number"] == sample_company["company_number"]
 
     def test_get_company_by_number(self, test_db, sample_company):
         """Retrieves company by company_number."""
         test_db.insert_company(**sample_company)
 
-        result = test_db.get_company_by_number(sample_company['company_number'])
+        result = test_db.get_company_by_number(sample_company["company_number"])
         assert result is not None
-        assert result['name'] == sample_company['name']
+        assert result["name"] == sample_company["name"]
 
     def test_get_company_by_native_number(self, test_db):
         """Retrieves company by native_company_number."""
@@ -72,7 +66,7 @@ class TestDatabaseCompanyCRUD:
 
         result = test_db.get_company_by_native_number("DE-HRB-10003")
         assert result is not None
-        assert result['name'] == "Native Number Test GmbH"
+        assert result["name"] == "Native Number Test GmbH"
 
     def test_get_nonexistent_company_returns_none(self, test_db):
         """Nonexistent company returns None."""
@@ -86,8 +80,8 @@ class TestDatabaseCompanyCRUD:
         test_db.update_company(company_id, city="Munich", capital_amount=50000.0)
 
         result = test_db.get_company(company_id)
-        assert result['city'] == "Munich"
-        assert result['capital_amount'] == 50000.0
+        assert result["city"] == "Munich"
+        assert result["capital_amount"] == 50000.0
 
     def test_update_sets_last_updated(self, test_db, sample_company):
         """Update sets last_updated timestamp."""
@@ -97,7 +91,7 @@ class TestDatabaseCompanyCRUD:
         test_db.update_company(company_id, city="Hamburg")
 
         updated = test_db.get_company(company_id)
-        assert updated['last_updated'] != original['last_updated']
+        assert updated["last_updated"] != original["last_updated"]
 
     def test_upsert_new_company(self, test_db):
         """Upsert inserts new company."""
@@ -111,14 +105,14 @@ class TestDatabaseCompanyCRUD:
         assert company_id > 0
 
         result = test_db.get_company(company_id)
-        assert result['name'] == "Upsert New GmbH"
+        assert result["name"] == "Upsert New GmbH"
 
     def test_upsert_existing_company(self, test_db, sample_company):
         """Upsert updates existing company."""
         original_id = test_db.insert_company(**sample_company)
 
         company_id, is_new = test_db.upsert_company(
-            company_number=sample_company['company_number'],
+            company_number=sample_company["company_number"],
             name="Updated Name GmbH",
             source="test",
         )
@@ -127,7 +121,7 @@ class TestDatabaseCompanyCRUD:
         assert company_id == original_id
 
         result = test_db.get_company(company_id)
-        assert result['name'] == "Updated Name GmbH"
+        assert result["name"] == "Updated Name GmbH"
 
 
 class TestDatabaseSearch:
@@ -137,19 +131,19 @@ class TestDatabaseSearch:
         """LIKE query works."""
         results = test_db_with_companies.search_companies(name_pattern="AI")
         assert len(results) >= 1
-        assert any("AI" in r['name'] for r in results)
+        assert any("AI" in r["name"] for r in results)
 
     def test_search_by_city(self, test_db_with_companies):
         """City filter works."""
         results = test_db_with_companies.search_companies(city="Berlin")
         assert len(results) >= 1
-        assert all(r['city'] == "Berlin" for r in results)
+        assert all(r["city"] == "Berlin" for r in results)
 
     def test_search_by_min_ai_score(self, test_db_with_companies):
         """Score filter works."""
         results = test_db_with_companies.search_companies(min_ai_score=4)
         assert len(results) >= 1
-        assert all(r['ai_robotics_score'] >= 4 for r in results)
+        assert all(r["ai_robotics_score"] >= 4 for r in results)
 
     def test_search_pagination(self, test_db_with_companies):
         """Limit and offset work."""
@@ -160,7 +154,7 @@ class TestDatabaseSearch:
         assert len(page_1) == 1
         assert len(page_2) == 1
         if len(all_results) > 1:
-            assert page_1[0]['id'] != page_2[0]['id']
+            assert page_1[0]["id"] != page_2[0]["id"]
 
     def test_search_multiple_filters(self, test_db_with_companies):
         """Multiple filters combine with AND."""
@@ -169,8 +163,8 @@ class TestDatabaseSearch:
             min_ai_score=3,
         )
         for r in results:
-            assert r['city'] == "Berlin"
-            assert r['ai_robotics_score'] >= 3
+            assert r["city"] == "Berlin"
+            assert r["ai_robotics_score"] >= 3
 
     def test_count_companies(self, test_db_with_companies):
         """Count works correctly."""
@@ -200,7 +194,7 @@ class TestDatabaseOfficers:
 
         officers = test_db.get_officers(company_id)
         assert len(officers) == 1
-        assert officers[0]['name'] == sample_officer['name']
+        assert officers[0]["name"] == sample_officer["name"]
 
     def test_get_officers_current_only(self, test_db, sample_company):
         """Current flag respected."""
@@ -216,7 +210,7 @@ class TestDatabaseOfficers:
 
         assert len(all_officers) == 2
         assert len(current_officers) == 1
-        assert current_officers[0]['name'] == "Current CEO"
+        assert current_officers[0]["name"] == "Current CEO"
 
     def test_clear_officers(self, test_db, sample_company, sample_officer):
         """All officers removed."""
@@ -247,8 +241,8 @@ class TestDatabaseCapitalEvents:
 
         events = test_db.get_capital_events(company_id)
         assert len(events) == 1
-        assert events[0]['event_type'] == sample_capital_event['event_type']
-        assert events[0]['new_amount'] == sample_capital_event['new_amount']
+        assert events[0]["event_type"] == sample_capital_event["event_type"]
+        assert events[0]["new_amount"] == sample_capital_event["new_amount"]
 
     def test_capital_events_ordered_by_date(self, test_db, sample_company):
         """Events ordered by date DESC."""
@@ -258,7 +252,7 @@ class TestDatabaseCapitalEvents:
         test_db.insert_capital_event(company_id, event_type="increase", event_date="2024-01-01")
 
         events = test_db.get_capital_events(company_id)
-        assert events[0]['event_date'] == "2024-01-01"  # Most recent first
+        assert events[0]["event_date"] == "2024-01-01"  # Most recent first
 
 
 class TestDatabaseEnrichmentQueue:
@@ -283,7 +277,7 @@ class TestDatabaseEnrichmentQueue:
 
         companies = test_db.get_companies_for_enrichment(limit=2)
         assert len(companies) == 2
-        assert companies[0]['company_number'] == "HRB20002"  # High priority first
+        assert companies[0]["company_number"] == "HRB20002"  # High priority first
 
     def test_mark_enriched_success(self, test_db, sample_company):
         """Status updated and removed from queue."""
@@ -293,7 +287,7 @@ class TestDatabaseEnrichmentQueue:
         test_db.mark_enriched(company_id, success=True)
 
         company = test_db.get_company(company_id)
-        assert company['enrichment_status'] == 'enriched'
+        assert company["enrichment_status"] == "enriched"
 
         queue_size = test_db.get_enrichment_queue_size()
         assert queue_size == 0
@@ -306,7 +300,7 @@ class TestDatabaseEnrichmentQueue:
         test_db.mark_enriched(company_id, success=False)
 
         company = test_db.get_company(company_id)
-        assert company['enrichment_status'] == 'failed'
+        assert company["enrichment_status"] == "failed"
 
 
 class TestDatabaseChangeLog:
@@ -325,7 +319,7 @@ class TestDatabaseChangeLog:
 
         changes = test_db.get_unnotified_changes()
         assert len(changes) == 1
-        assert changes[0]['change_type'] == "capital_increase"
+        assert changes[0]["change_type"] == "capital_increase"
 
     def test_get_unnotified_changes(self, test_db, sample_company):
         """Filters notified=0."""
@@ -341,7 +335,7 @@ class TestDatabaseChangeLog:
         test_db.log_change(company_id, change_type="update")
 
         changes = test_db.get_unnotified_changes()
-        change_ids = [c['id'] for c in changes]
+        change_ids = [c["id"] for c in changes]
 
         test_db.mark_changes_notified(change_ids)
 
@@ -379,20 +373,20 @@ class TestDatabaseAnnouncements:
 
         filtered = test_db.get_announcements(announcement_type="neueintragung")
         assert len(filtered) == 1
-        assert filtered[0]['announcement_type'] == "neueintragung"
+        assert filtered[0]["announcement_type"] == "neueintragung"
 
     def test_link_announcement_to_company(self, test_db, sample_company):
         """Link works correctly."""
         company_id = test_db.insert_company(**sample_company)
         ann_id = test_db.insert_announcement(
-            company_name=sample_company['name'],
+            company_name=sample_company["name"],
             announcement_type="neueintragung",
         )
 
         test_db.link_announcement_to_company(ann_id, company_id)
 
         announcements = test_db.get_announcements()
-        assert announcements[0]['company_id'] == company_id
+        assert announcements[0]["company_id"] == company_id
 
     def test_announcement_stats(self, test_db):
         """Grouped counts work."""
@@ -414,10 +408,13 @@ class TestDatabaseTransactions:
             with test_db.transaction():
                 # Use raw SQL to avoid insert_company's auto-commit
                 cursor = test_db.conn.cursor()
-                cursor.execute('''
+                cursor.execute(
+                    """
                     INSERT INTO companies (company_number, name, source, first_seen_date, last_updated, enrichment_status)
                     VALUES (?, ?, ?, datetime('now'), datetime('now'), 'pending')
-                ''', ("HRB30001", "Will Be Rolled Back", "test"))
+                """,
+                    ("HRB30001", "Will Be Rolled Back", "test"),
+                )
                 raise ValueError("Simulated error")
         except ValueError:
             pass
@@ -454,8 +451,8 @@ class TestDatabaseJSONFields:
 
         result = test_db.get_company(company_id)
         # Should be stored as JSON string
-        assert result['matched_keywords'] is not None
-        parsed = json.loads(result['matched_keywords'])
+        assert result["matched_keywords"] is not None
+        parsed = json.loads(result["matched_keywords"])
         assert parsed == keywords
 
     def test_tech_categories_stored_as_json(self, test_db):
@@ -469,7 +466,7 @@ class TestDatabaseJSONFields:
         )
 
         result = test_db.get_company(company_id)
-        parsed = json.loads(result['tech_categories'])
+        parsed = json.loads(result["tech_categories"])
         assert parsed == categories
 
 
@@ -480,14 +477,14 @@ class TestDatabaseStatistics:
         """Returns all stat categories."""
         stats = test_db_with_companies.get_statistics()
 
-        assert 'total_companies' in stats
-        assert 'companies_by_source' in stats
-        assert 'companies_by_enrichment' in stats
-        assert 'total_officers' in stats
-        assert 'total_capital_events' in stats
-        assert 'enrichment_queue_size' in stats
+        assert "total_companies" in stats
+        assert "companies_by_source" in stats
+        assert "companies_by_enrichment" in stats
+        assert "total_officers" in stats
+        assert "total_capital_events" in stats
+        assert "enrichment_queue_size" in stats
 
-        assert stats['total_companies'] >= 3
+        assert stats["total_companies"] >= 3
 
 
 class TestDatabaseForeignKeys:

@@ -42,22 +42,22 @@ Usage:
 
 import argparse
 import logging
-import sys
 import os
-from typing import List, Optional, Dict, Any
+import sys
+from typing import Dict, List, Optional
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from sources.bundesapi import BundesAPISource
+from persistence.database import Database
+from processing.brand_name_scorer import BrandNameScorer
 from processing.filters import AIRoboticsFilter, extract_legal_form
 from processing.startup_scorer import StartupScorer
-from processing.brand_name_scorer import BrandNameScorer
-from persistence.database import Database
+from sources.bundesapi import BundesAPISource
 
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s %(levelname)-6s %(message)s',
-    datefmt='%H:%M:%S',
+    format="%(asctime)s %(levelname)-6s %(message)s",
+    datefmt="%H:%M:%S",
 )
 logger = logging.getLogger(__name__)
 
@@ -68,15 +68,15 @@ logger = logging.getLogger(__name__)
 # Court code → config for register number scanning
 # HRB numbers are sequential per court; higher = more recently registered
 COURT_CONFIGS = {
-    'Berlin': {
-        'court_code': 'F1103',    # Amtsgericht Charlottenburg
-        'state': 'be',
-        'estimated_max_hrb': 285000,  # Approximate current max (Feb 2026)
+    "Berlin": {
+        "court_code": "F1103",  # Amtsgericht Charlottenburg
+        "state": "be",
+        "estimated_max_hrb": 285000,  # Approximate current max (Feb 2026)
     },
-    'München': {
-        'court_code': 'D2601',    # Amtsgericht München
-        'state': 'by',
-        'estimated_max_hrb': 310000,  # Approximate current max (Feb 2026)
+    "München": {
+        "court_code": "D2601",  # Amtsgericht München
+        "state": "by",
+        "estimated_max_hrb": 310000,  # Approximate current max (Feb 2026)
     },
 }
 
@@ -90,22 +90,23 @@ BERLIN_PLZ_PREFIXES = [str(i) for i in range(101, 142)]
 MUNICH_PLZ_PREFIXES = [str(i) for i in range(803, 820)]
 
 CITY_CONFIGS = {
-    'Berlin': {
-        'state': 'be',
-        'plz_prefixes': BERLIN_PLZ_PREFIXES,
+    "Berlin": {
+        "state": "be",
+        "plz_prefixes": BERLIN_PLZ_PREFIXES,
     },
-    'München': {
-        'state': 'by',
-        'plz_prefixes': MUNICH_PLZ_PREFIXES,
+    "München": {
+        "state": "by",
+        "plz_prefixes": MUNICH_PLZ_PREFIXES,
     },
 }
 
-RECHTSFORM_GMBH = '8'
+RECHTSFORM_GMBH = "8"
 
 
 # ============================================================================
 # Shared scoring/insertion logic
 # ============================================================================
+
 
 def score_and_collect(
     result,
@@ -122,14 +123,14 @@ def score_and_collect(
     Returns True if the result was a candidate, False otherwise.
     """
     # Skip deleted/dissolved companies
-    if result.status and result.status in ('deleted', 'dissolved'):
+    if result.status and result.status in ("deleted", "dissolved"):
         return False
 
     # Check if already in DB (by native company number)
     if not dry_run and db:
         existing = db.get_company_by_native_number(result.native_company_number)
         if existing:
-            stats['already_in_db'] += 1
+            stats["already_in_db"] += 1
             return False
 
     # Extract legal form
@@ -141,31 +142,35 @@ def score_and_collect(
     # Also check AI keyword filter
     filter_result = ai_filter.filter_company(
         name=result.name,
-        status=result.status or 'currently registered',
+        status=result.status or "currently registered",
     )
 
     if brand_result.is_likely_tech_startup:
-        stats['passed_brand'] += 1
-        all_candidates.append({
-            'result': result,
-            'method': 'brand_heuristic',
-            'brand_result': brand_result,
-            'filter_result': filter_result,
-            'legal_form': legal_form,
-        })
+        stats["passed_brand"] += 1
+        all_candidates.append(
+            {
+                "result": result,
+                "method": "brand_heuristic",
+                "brand_result": brand_result,
+                "filter_result": filter_result,
+                "legal_form": legal_form,
+            }
+        )
         return True
     elif filter_result.passes:
-        stats['passed_ai_keyword'] += 1
-        all_candidates.append({
-            'result': result,
-            'method': 'ai_keyword',
-            'brand_result': brand_result,
-            'filter_result': filter_result,
-            'legal_form': legal_form,
-        })
+        stats["passed_ai_keyword"] += 1
+        all_candidates.append(
+            {
+                "result": result,
+                "method": "ai_keyword",
+                "brand_result": brand_result,
+                "filter_result": filter_result,
+                "legal_form": legal_form,
+            }
+        )
         return True
     else:
-        stats['skipped_low_score'] += 1
+        stats["skipped_low_score"] += 1
         return False
 
 
@@ -176,25 +181,32 @@ def display_candidates(all_candidates: List):
     logger.info("")
 
     for candidate in all_candidates:
-        result = candidate['result']
-        method = candidate['method']
-        brand = candidate['brand_result']
-        filt = candidate['filter_result']
-        legal = candidate['legal_form'] or '?'
+        result = candidate["result"]
+        method = candidate["method"]
+        brand = candidate["brand_result"]
+        filt = candidate["filter_result"]
+        legal = candidate["legal_form"] or "?"
 
-        if method == 'brand_heuristic':
-            signals = ', '.join(brand.signals[:4])
+        if method == "brand_heuristic":
+            signals = ", ".join(brand.signals[:4])
             logger.info(
                 "  [BRAND  ] %s (%s, %s) score=%d [%s]",
-                result.name, legal, result.city or '?',
-                brand.total_score, signals,
+                result.name,
+                legal,
+                result.city or "?",
+                brand.total_score,
+                signals,
             )
         else:
-            kw = ', '.join(filt.matched_keywords[:3])
+            kw = ", ".join(filt.matched_keywords[:3])
             logger.info(
                 "  [KEYWORD] %s (%s, %s) AI=%d brand=%d kw=[%s]",
-                result.name, legal, result.city or '?',
-                filt.relevance_score, brand.total_score, kw,
+                result.name,
+                legal,
+                result.city or "?",
+                filt.relevance_score,
+                brand.total_score,
+                kw,
             )
 
 
@@ -208,37 +220,38 @@ def insert_candidates(
     logger.info("")
     logger.info("Inserting into database...")
     for candidate in all_candidates:
-        result = candidate['result']
-        brand = candidate['brand_result']
-        filt = candidate['filter_result']
+        result = candidate["result"]
+        brand = candidate["brand_result"]
+        filt = candidate["filter_result"]
 
         # Double-check dedup
         existing = db.get_company_by_native_number(result.native_company_number)
         if existing:
-            stats['already_in_db'] += 1
+            stats["already_in_db"] += 1
             continue
 
         # Compute startup score
         ai_score = filt.relevance_score if filt.passes else 0
         startup_result = startup_scorer.score_company(
             name=result.name,
-            legal_form=candidate['legal_form'],
+            legal_form=candidate["legal_form"],
             city=result.city,
             ai_relevance_score=ai_score,
         )
         classification = startup_scorer.classify(
-            startup_result, ai_relevance_score=ai_score,
+            startup_result,
+            ai_relevance_score=ai_score,
         )
 
         company_id = db.insert_company(
             company_number=f"regscan_{hash(result.native_company_number) & 0xFFFFFFFF:08x}",
             name=result.name,
-            source='registration_scan',
+            source="registration_scan",
             native_company_number=result.native_company_number,
-            current_status=result.status or 'currently registered',
+            current_status=result.status or "currently registered",
             registry_court=result.registry_court,
             registry_type=result.registry_type,
-            legal_form=candidate['legal_form'],
+            legal_form=candidate["legal_form"],
             city=result.city,
             state=result.state,
             ai_robotics_score=ai_score,
@@ -252,14 +265,17 @@ def insert_candidates(
 
         priority = 0 if brand.is_likely_tech_startup else 2
         db.add_to_enrichment_queue(
-            company_id, priority=priority, reason='new_from_registration_scan',
+            company_id,
+            priority=priority,
+            reason="new_from_registration_scan",
         )
-        stats['inserted'] += 1
+        stats["inserted"] += 1
 
 
 # ============================================================================
 # Mode 1: Register Number Scan (default, most efficient)
 # ============================================================================
+
 
 def find_highest_hrb(
     source: BundesAPISource,
@@ -297,12 +313,14 @@ def find_highest_hrb(
         logger.info("  Checking HRB %d (range %d-%d)...", mid, low, high)
 
         try:
-            results = list(source.search(
-                register_number=str(mid),
-                register_court=court_code,
-                registry_types=['HRB'],
-                max_results=1,
-            ))
+            results = list(
+                source.search(
+                    register_number=str(mid),
+                    register_court=court_code,
+                    registry_types=["HRB"],
+                    max_results=1,
+                )
+            )
             requests_used += 1
         except Exception as e:
             logger.error("  Error checking HRB %d: %s", mid, e)
@@ -326,7 +344,7 @@ def find_highest_hrb(
 
 
 def run_register_scan(
-    db_path: str = 'handelsregister.db',
+    db_path: str = "handelsregister.db",
     courts: Optional[List[str]] = None,
     start_number: Optional[int] = None,
     max_requests: int = 50,
@@ -363,17 +381,17 @@ def run_register_scan(
     brand_scorer = BrandNameScorer()
 
     if courts is None:
-        courts = ['Berlin', 'München']
+        courts = ["Berlin", "München"]
 
     stats = {
-        'searches_performed': 0,
-        'total_results': 0,
-        'already_in_db': 0,
-        'passed_brand': 0,
-        'passed_ai_keyword': 0,
-        'skipped_low_score': 0,
-        'inserted': 0,
-        'empty_lookups': 0,
+        "searches_performed": 0,
+        "total_results": 0,
+        "already_in_db": 0,
+        "passed_brand": 0,
+        "passed_ai_keyword": 0,
+        "skipped_low_score": 0,
+        "inserted": 0,
+        "empty_lookups": 0,
     }
 
     all_candidates = []
@@ -385,17 +403,18 @@ def run_register_scan(
             logger.warning("Unknown court: %s (known: %s)", court_name, list(COURT_CONFIGS.keys()))
             continue
 
-        court_code = config['court_code']
+        court_code = config["court_code"]
 
         # Determine start number
         if start_number is not None:
             watermark = start_number - 1  # Will start scanning from start_number
             logger.info("Using explicit start number: HRB %d", start_number)
         elif db:
-            watermark = db.get_scan_watermark(court_code, 'HRB')
+            watermark = db.get_scan_watermark(court_code, "HRB")
             if watermark == 0:
-                logger.info("No watermark for %s (%s) — use --start-number or --find-highest first",
-                           court_name, court_code)
+                logger.info(
+                    "No watermark for %s (%s) — use --start-number or --find-highest first", court_name, court_code
+                )
                 continue
             logger.info("Watermark for %s: HRB %d", court_name, watermark)
         else:
@@ -414,18 +433,20 @@ def run_register_scan(
 
         while total_requests_left > 0 and misses < consecutive_misses:
             try:
-                results = list(source.search(
-                    register_number=str(current_number),
-                    register_court=court_code,
-                    registry_types=['HRB'],
-                    max_results=1,
-                ))
-                stats['searches_performed'] += 1
+                results = list(
+                    source.search(
+                        register_number=str(current_number),
+                        register_court=court_code,
+                        registry_types=["HRB"],
+                        max_results=1,
+                    )
+                )
+                stats["searches_performed"] += 1
                 total_requests_left -= 1
                 court_scanned += 1
             except Exception as e:
                 logger.error("  Error looking up HRB %d: %s", current_number, e)
-                stats['searches_performed'] += 1
+                stats["searches_performed"] += 1
                 total_requests_left -= 1
                 current_number += 1
                 misses += 1
@@ -434,42 +455,56 @@ def run_register_scan(
             if results:
                 misses = 0  # Reset miss counter
                 result = results[0]
-                stats['total_results'] += 1
+                stats["total_results"] += 1
                 court_found += 1
                 highest_seen = current_number
 
                 logger.info(
                     "  HRB %d: %s | %s",
-                    current_number, result.name[:60], result.city or '?',
+                    current_number,
+                    result.name[:60],
+                    result.city or "?",
                 )
 
                 score_and_collect(
-                    result, brand_scorer, ai_filter, db, dry_run,
-                    stats, all_candidates,
+                    result,
+                    brand_scorer,
+                    ai_filter,
+                    db,
+                    dry_run,
+                    stats,
+                    all_candidates,
                 )
             else:
                 misses += 1
-                stats['empty_lookups'] += 1
+                stats["empty_lookups"] += 1
                 logger.debug("  HRB %d: empty (miss %d/%d)", current_number, misses, consecutive_misses)
 
             current_number += 1
 
         # Report for this court
         if misses >= consecutive_misses:
-            logger.info("  Reached %d consecutive misses at HRB %d — frontier reached",
-                       consecutive_misses, current_number - 1)
+            logger.info(
+                "  Reached %d consecutive misses at HRB %d — frontier reached", consecutive_misses, current_number - 1
+            )
         if total_requests_left <= 0:
             logger.info("  Reached max requests limit")
 
-        logger.info("  %s: scanned %d numbers, found %d companies, watermark: %d → %d",
-                    court_name, court_scanned, court_found, watermark, highest_seen)
+        logger.info(
+            "  %s: scanned %d numbers, found %d companies, watermark: %d → %d",
+            court_name,
+            court_scanned,
+            court_found,
+            watermark,
+            highest_seen,
+        )
 
         # Update watermark
         if not dry_run and db and highest_seen > watermark:
             db.set_scan_watermark(
                 court_code=court_code,
                 last_scanned_number=highest_seen,
-                registry_type='HRB',
+                registry_type="HRB",
                 scanned_count=court_scanned,
                 found_count=court_found,
             )
@@ -487,16 +522,16 @@ def run_register_scan(
     # Print summary
     logger.info("")
     logger.info("=== Summary (Register Scan) ===")
-    logger.info("Requests used:          %d / %d", stats['searches_performed'], max_requests)
-    logger.info("Companies found:        %d", stats['total_results'])
-    logger.info("Empty lookups:          %d", stats['empty_lookups'])
-    logger.info("Already in DB:          %d", stats['already_in_db'])
+    logger.info("Requests used:          %d / %d", stats["searches_performed"], max_requests)
+    logger.info("Companies found:        %d", stats["total_results"])
+    logger.info("Empty lookups:          %d", stats["empty_lookups"])
+    logger.info("Already in DB:          %d", stats["already_in_db"])
     logger.info("---")
-    logger.info("Passed brand heuristic: %d", stats['passed_brand'])
-    logger.info("Passed AI keywords:     %d", stats['passed_ai_keyword'])
-    logger.info("Skipped (low score):    %d", stats['skipped_low_score'])
+    logger.info("Passed brand heuristic: %d", stats["passed_brand"])
+    logger.info("Passed AI keywords:     %d", stats["passed_ai_keyword"])
+    logger.info("Skipped (low score):    %d", stats["skipped_low_score"])
     if not dry_run:
-        logger.info("Inserted:               %d", stats['inserted'])
+        logger.info("Inserted:               %d", stats["inserted"])
     else:
         logger.info("")
         logger.info("DRY RUN - no changes made")
@@ -511,8 +546,9 @@ def run_register_scan(
 # Mode 2: PLZ Prefix Scan (broad coverage)
 # ============================================================================
 
+
 def run_plz_scan(
-    db_path: str = 'handelsregister.db',
+    db_path: str = "handelsregister.db",
     cities: Optional[List[str]] = None,
     plz_prefixes: Optional[List[str]] = None,
     max_requests: int = 20,
@@ -535,16 +571,16 @@ def run_plz_scan(
     brand_scorer = BrandNameScorer()
 
     if cities is None:
-        cities = ['Berlin', 'München']
+        cities = ["Berlin", "München"]
 
     stats = {
-        'searches_performed': 0,
-        'total_results': 0,
-        'already_in_db': 0,
-        'passed_brand': 0,
-        'passed_ai_keyword': 0,
-        'skipped_low_score': 0,
-        'inserted': 0,
+        "searches_performed": 0,
+        "total_results": 0,
+        "already_in_db": 0,
+        "passed_brand": 0,
+        "passed_ai_keyword": 0,
+        "skipped_low_score": 0,
+        "inserted": 0,
     }
 
     all_candidates = []
@@ -555,44 +591,51 @@ def run_plz_scan(
             logger.warning("Unknown city: %s (known: %s)", city_name, list(CITY_CONFIGS.keys()))
             continue
 
-        prefixes = plz_prefixes or config['plz_prefixes']
-        state_code = config['state']
+        prefixes = plz_prefixes or config["plz_prefixes"]
+        state_code = config["state"]
 
         logger.info("=== Scanning %s (%d PLZ prefixes) ===", city_name, len(prefixes))
 
         for plz_prefix in prefixes:
-            if stats['searches_performed'] >= max_requests:
+            if stats["searches_performed"] >= max_requests:
                 logger.info("Reached max requests (%d), stopping", max_requests)
                 break
 
             logger.info("  Searching PLZ %s* in %s...", plz_prefix, city_name)
 
             try:
-                results = list(source.search(
-                    city=city_name,
-                    legal_form_code=RECHTSFORM_GMBH,
-                    postal_code=f'{plz_prefix}*',
-                    states=[state_code],
-                    registry_types=['HRB'],
-                    max_results=100,
-                    results_per_page=100,
-                ))
-                stats['searches_performed'] += 1
+                results = list(
+                    source.search(
+                        city=city_name,
+                        legal_form_code=RECHTSFORM_GMBH,
+                        postal_code=f"{plz_prefix}*",
+                        states=[state_code],
+                        registry_types=["HRB"],
+                        max_results=100,
+                        results_per_page=100,
+                    )
+                )
+                stats["searches_performed"] += 1
             except Exception as e:
                 logger.error("  Error searching PLZ %s*: %s", plz_prefix, e)
-                stats['searches_performed'] += 1
+                stats["searches_performed"] += 1
                 continue
 
             logger.info("  Found %d results", len(results))
-            stats['total_results'] += len(results)
+            stats["total_results"] += len(results)
 
             for result in results:
                 score_and_collect(
-                    result, brand_scorer, ai_filter, db, dry_run,
-                    stats, all_candidates,
+                    result,
+                    brand_scorer,
+                    ai_filter,
+                    db,
+                    dry_run,
+                    stats,
+                    all_candidates,
                 )
 
-        if stats['searches_performed'] >= max_requests:
+        if stats["searches_performed"] >= max_requests:
             break
 
     # Display and insert candidates
@@ -604,15 +647,15 @@ def run_plz_scan(
     # Print summary
     logger.info("")
     logger.info("=== Summary (PLZ Scan) ===")
-    logger.info("Searches performed:     %d / %d", stats['searches_performed'], max_requests)
-    logger.info("Total results fetched:  %d", stats['total_results'])
-    logger.info("Already in DB:          %d", stats['already_in_db'])
+    logger.info("Searches performed:     %d / %d", stats["searches_performed"], max_requests)
+    logger.info("Total results fetched:  %d", stats["total_results"])
+    logger.info("Already in DB:          %d", stats["already_in_db"])
     logger.info("---")
-    logger.info("Passed brand heuristic: %d", stats['passed_brand'])
-    logger.info("Passed AI keywords:     %d", stats['passed_ai_keyword'])
-    logger.info("Skipped (low score):    %d", stats['skipped_low_score'])
+    logger.info("Passed brand heuristic: %d", stats["passed_brand"])
+    logger.info("Passed AI keywords:     %d", stats["passed_ai_keyword"])
+    logger.info("Skipped (low score):    %d", stats["skipped_low_score"])
     if not dry_run:
-        logger.info("Inserted:               %d", stats['inserted'])
+        logger.info("Inserted:               %d", stats["inserted"])
     else:
         logger.info("")
         logger.info("DRY RUN - no changes made")
@@ -627,9 +670,10 @@ def run_plz_scan(
 # CLI
 # ============================================================================
 
+
 def main():
     parser = argparse.ArgumentParser(
-        description='Scan Handelsregister for new tech startup registrations',
+        description="Scan Handelsregister for new tech startup registrations",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
@@ -650,55 +694,73 @@ Examples:
 
     # Mode selection
     parser.add_argument(
-        '--mode', choices=['register', 'plz'], default='register',
-        help='Scan mode: "register" scans sequential HRB numbers (default), '
-             '"plz" scans by postal code prefix',
+        "--mode",
+        choices=["register", "plz"],
+        default="register",
+        help='Scan mode: "register" scans sequential HRB numbers (default), "plz" scans by postal code prefix',
     )
     parser.add_argument(
-        '--dry-run', action='store_true',
-        help='Show results without inserting into database',
+        "--dry-run",
+        action="store_true",
+        help="Show results without inserting into database",
     )
     parser.add_argument(
-        '--max-requests', type=int, default=50,
-        help='Maximum portal requests per run (default: 50)',
+        "--max-requests",
+        type=int,
+        default=50,
+        help="Maximum portal requests per run (default: 50)",
     )
     parser.add_argument(
-        '--db', type=str, default='handelsregister.db',
-        help='Path to SQLite database (default: handelsregister.db)',
+        "--db",
+        type=str,
+        default="handelsregister.db",
+        help="Path to SQLite database (default: handelsregister.db)",
     )
 
     # Register scan options
-    reg_group = parser.add_argument_group('register scan options')
+    reg_group = parser.add_argument_group("register scan options")
     reg_group.add_argument(
-        '--courts', nargs='+', default=None,
-        help='Courts to scan (default: Berlin München)',
+        "--courts",
+        nargs="+",
+        default=None,
+        help="Courts to scan (default: Berlin München)",
     )
     reg_group.add_argument(
-        '--start-number', type=int, default=None,
-        help='Override start HRB number (sets the scanning position)',
+        "--start-number",
+        type=int,
+        default=None,
+        help="Override start HRB number (sets the scanning position)",
     )
     reg_group.add_argument(
-        '--consecutive-misses', type=int, default=10,
-        help='Stop after N consecutive empty HRB lookups (default: 10)',
+        "--consecutive-misses",
+        type=int,
+        default=10,
+        help="Stop after N consecutive empty HRB lookups (default: 10)",
     )
     reg_group.add_argument(
-        '--find-highest', action='store_true',
-        help='Binary search to find the current highest HRB number per court',
+        "--find-highest",
+        action="store_true",
+        help="Binary search to find the current highest HRB number per court",
     )
     reg_group.add_argument(
-        '--show-watermarks', action='store_true',
-        help='Show current scan watermarks and exit',
+        "--show-watermarks",
+        action="store_true",
+        help="Show current scan watermarks and exit",
     )
 
     # PLZ scan options
-    plz_group = parser.add_argument_group('PLZ scan options')
+    plz_group = parser.add_argument_group("PLZ scan options")
     plz_group.add_argument(
-        '--cities', nargs='+', default=None,
-        help='Cities to scan in PLZ mode (default: Berlin München)',
+        "--cities",
+        nargs="+",
+        default=None,
+        help="Cities to scan in PLZ mode (default: Berlin München)",
     )
     plz_group.add_argument(
-        '--plz-prefixes', nargs='+', default=None,
-        help='Override PLZ prefixes (e.g., 101 102 103)',
+        "--plz-prefixes",
+        nargs="+",
+        default=None,
+        help="Override PLZ prefixes (e.g., 101 102 103)",
     )
 
     args = parser.parse_args()
@@ -712,16 +774,20 @@ Examples:
         else:
             logger.info("=== Scan Watermarks ===")
             for s in states:
-                court_name = '?'
+                court_name = "?"
                 for name, cfg in COURT_CONFIGS.items():
-                    if cfg['court_code'] == s['court_code']:
+                    if cfg["court_code"] == s["court_code"]:
                         court_name = name
                         break
                 logger.info(
                     "  %s (%s %s): last_scanned=%d, total_scanned=%d, total_found=%d, last_scan=%s",
-                    court_name, s['court_code'], s['registry_type'],
-                    s['last_scanned_number'], s['total_scanned'], s['total_found'],
-                    s['last_scan_at'] or 'never',
+                    court_name,
+                    s["court_code"],
+                    s["registry_type"],
+                    s["last_scanned_number"],
+                    s["total_scanned"],
+                    s["total_found"],
+                    s["last_scan_at"] or "never",
                 )
         db.close()
         return
@@ -729,7 +795,7 @@ Examples:
     # Handle --find-highest
     if args.find_highest:
         source = BundesAPISource()
-        courts = args.courts or ['Berlin', 'München']
+        courts = args.courts or ["Berlin", "München"]
         db = None if args.dry_run else Database(args.db)
 
         for court_name in courts:
@@ -740,31 +806,30 @@ Examples:
 
             highest = find_highest_hrb(
                 source=source,
-                court_code=config['court_code'],
+                court_code=config["court_code"],
                 court_name=court_name,
-                estimated_max=config['estimated_max_hrb'],
+                estimated_max=config["estimated_max_hrb"],
                 max_requests=min(args.max_requests, 20),
             )
 
             if db and highest > 0:
-                current_wm = db.get_scan_watermark(config['court_code'], 'HRB')
+                current_wm = db.get_scan_watermark(config["court_code"], "HRB")
                 if highest > current_wm:
                     db.set_scan_watermark(
-                        court_code=config['court_code'],
+                        court_code=config["court_code"],
                         last_scanned_number=highest,
-                        registry_type='HRB',
+                        registry_type="HRB",
                     )
                     logger.info("Set watermark for %s to HRB %d", court_name, highest)
                 else:
-                    logger.info("Existing watermark %d >= found %d, keeping existing",
-                               current_wm, highest)
+                    logger.info("Existing watermark %d >= found %d, keeping existing", current_wm, highest)
 
         if db:
             db.close()
         return
 
     # Run the selected scan mode
-    if args.mode == 'register':
+    if args.mode == "register":
         run_register_scan(
             db_path=args.db,
             courts=args.courts,
@@ -773,7 +838,7 @@ Examples:
             consecutive_misses=args.consecutive_misses,
             dry_run=args.dry_run,
         )
-    elif args.mode == 'plz':
+    elif args.mode == "plz":
         run_plz_scan(
             db_path=args.db,
             cities=args.cities,
@@ -783,5 +848,5 @@ Examples:
         )
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
