@@ -42,8 +42,10 @@ STEALTH_QUERIES = [
     'site:linkedin.com/in "working on something new" founder germany',
     'site:linkedin.com/in "working on something new" founder berlin',
     'site:linkedin.com/in "working on something exciting" founder germany',
+    'site:linkedin.com/in "working on something exciting" founder berlin',  # city variant
     'site:linkedin.com/in "building something exciting" founder berlin',
     'site:linkedin.com/in "building my next company" germany',
+    'site:linkedin.com/in "building my next company" berlin',  # city variant
     'site:linkedin.com/in "working on my next thing" founder germany',
 
     # === GERMANY - Transition/new venture phrases ===
@@ -53,6 +55,7 @@ STEALTH_QUERIES = [
     'site:linkedin.com/in "new venture" founder germany',
     'site:linkedin.com/in "new venture" founder berlin',
     'site:linkedin.com/in "exploring opportunities" founder germany',
+    'site:linkedin.com/in "exploring opportunities" founder berlin',  # city variant of top producer
     'site:linkedin.com/in "between ventures" germany',
     'site:linkedin.com/in "figuring out" founder germany',
 
@@ -68,7 +71,7 @@ STEALTH_QUERIES = [
     # === GERMANY - Ex-FAANG founders ===
     'site:linkedin.com/in "ex-google" founder germany',
     'site:linkedin.com/in "ex-google" founder berlin',
-    'site:linkedin.com/in "ex-meta" founder germany',
+    # 'site:linkedin.com/in "ex-meta" founder germany',  # zero yield — removed
     'site:linkedin.com/in "ex-amazon" founder germany',
     'site:linkedin.com/in "ex-microsoft" founder germany',
     'site:linkedin.com/in "ex-apple" founder germany',
@@ -106,7 +109,8 @@ STEALTH_QUERIES = [
     'site:linkedin.com/in "working on something new" vienna',
     'site:linkedin.com/in "serial entrepreneur" austria',
     'site:linkedin.com/in "serial entrepreneur" vienna',
-    'site:linkedin.com/in stealth co-founder graz',
+    # 'site:linkedin.com/in stealth co-founder graz',  # zero yield — removed
+    'site:linkedin.com/in "exploring opportunities" founder austria',  # top query pattern
     'site:linkedin.com/in "next venture" founder austria',
     'site:linkedin.com/in "ex-bitpanda" founder',
 
@@ -121,6 +125,7 @@ STEALTH_QUERIES = [
     'site:linkedin.com/in stealth co-founder geneva',
     'site:linkedin.com/in "crypto" founder zug',
     'site:linkedin.com/in "web3" founder switzerland',
+    'site:linkedin.com/in "exploring opportunities" founder switzerland',  # top query pattern
     'site:linkedin.com/in "next venture" founder zurich',
 ]
 
@@ -290,9 +295,10 @@ class SlowStealthScraper:
         Parse LinkedIn search result to extract name and headline.
 
         Strategy:
-        1. Try to parse clean "Name - Headline" format (DuckDuckGo)
-        2. For messy titles (Brave), extract name from URL
-        3. Extract headline from snippet if available
+        1. Handle DDG multi-profile results ("Name1 – Headline1 Name2 – Headline2")
+        2. Try to parse clean "Name - Headline" format (DuckDuckGo)
+        3. For messy titles (Brave), extract name from URL
+        4. Extract headline from snippet if available
         """
         import re
         from urllib.parse import unquote
@@ -303,22 +309,40 @@ class SlowStealthScraper:
         # Remove common suffixes
         clean_title = title.replace(' | LinkedIn', '').replace(' - LinkedIn', '').strip()
 
+        # Handle DDG multi-profile results: "Name1 – Headline1 Name2 – Headline2 ..."
+        # The en-dash (–) separates name from headline within each profile
+        if ' \u2013 ' in clean_title:
+            parts = clean_title.split(' \u2013 ')
+            name = parts[0].strip()
+            if len(parts) > 1:
+                # Headline is everything up to the next person's name or "..."
+                raw_headline = parts[1].strip()
+                # Cut at "..." or at what looks like the next person's name
+                # (next name starts with a capital letter after whitespace)
+                for cut_marker in ['...', '\u2026']:
+                    if cut_marker in raw_headline:
+                        raw_headline = raw_headline.split(cut_marker)[0].strip()
+                        break
+                headline = raw_headline[:100] if raw_headline else None
         # Check if title is messy (Brave-style with linkedin.com or ›)
-        is_messy = 'linkedin.com' in title.lower() or '›' in title
-
-        if not is_messy and ' - ' in clean_title:
+        elif 'linkedin.com' in title.lower() or '\u203a' in title:
+            # Messy format - extract name from URL
+            if url and '/in/' in url:
+                username = unquote(url.split('/in/')[-1].rstrip('/'))
+                name = username.replace('-', ' ').title()
+                # Remove trailing numbers (like "john-doe-123")
+                name = re.sub(r'\s+\d+$', '', name)
+                # Remove trailing hex-like IDs (like "54173729B")
+                name = re.sub(r'\s+[0-9A-Fa-f]{5,}[A-Za-z]?\s*$', '', name)
+        elif ' - ' in clean_title:
             # Clean format: "Name - Headline"
             parts = clean_title.split(' - ', 1)
             name = parts[0].strip()
             headline = parts[1].strip() if len(parts) > 1 else None
-        else:
-            # Messy format - extract name from URL
-            if url and '/in/' in url:
-                username = unquote(url.split('/in/')[-1].rstrip('/'))
-                # Clean up username: replace hyphens, handle encoded chars
-                name = username.replace('-', ' ').title()
-                # Remove numbers at end (like "john-doe-123")
-                name = re.sub(r'\s+\d+$', '', name)
+
+        # For URL-extracted names, also clean hex IDs
+        if name and not headline:
+            name = re.sub(r'\s+[0-9A-Fa-f]{5,}[A-Za-z]?\s*$', '', name)
 
         # Try to extract headline from snippet if we don't have one
         if not headline and snippet:
@@ -327,9 +351,9 @@ class SlowStealthScraper:
             if ' - ' in snippet:
                 parts = snippet.split(' - ', 1)
                 if len(parts) > 1 and len(parts[1]) > 3:
-                    headline = parts[1].split('|')[0].split('·')[0].strip()[:100]
+                    headline = parts[1].split('|')[0].split('\u00b7')[0].strip()[:100]
             elif 'Experience:' in snippet:
-                match = re.search(r'Experience:\s*([^·|]+)', snippet)
+                match = re.search(r'Experience:\s*([^\u00b7|]+)', snippet)
                 if match:
                     headline = match.group(1).strip()
 
@@ -339,21 +363,36 @@ class SlowStealthScraper:
 
         return name, headline
 
-    def _calculate_snippet_confidence(self, title: str, snippet: str) -> tuple:
+    def _calculate_snippet_confidence(self, title: str, snippet: str, search_query: str = None) -> tuple:
         """
         Calculate confidence score from search snippet without scraping LinkedIn.
 
+        Scoring strategy:
+        - Stealth keywords: +0.15 each, capped at 0.25 total (prevents triple-count of stealth/stealth mode/stealth startup)
+        - Founder keywords: +0.10 each, capped at 0.20 total (prevents founder+co-founder+ceo+entrepreneur stacking)
+        - Ex-FAANG/unicorn: +0.15 each (high-value signal)
+        - DACH location: +0.05 (one-time, query-aware — ignores terms echoed from query)
+        - Combo bonus: +0.10 if BOTH stealth AND founder signals present
+
+        Args:
+            title: Search result title
+            snippet: Search result snippet
+            search_query: The search query used (to strip echoed DACH terms from scoring)
+
         Returns: (confidence_score, detected_signals)
         """
+        import re
+
         text = f"{title} {snippet}".lower()
         signals = []
         score = 0.0
 
-        # Stealth keywords (strong signal)
+        # Stealth keywords (strong signal, capped)
         stealth_words = [
             'stealth', 'stealth mode', 'stealth startup',
             'building something', 'something new', 'something exciting',
             'working on something', 'working on my next',
+            'building my next', 'my next company', 'my next thing', 'next company',
             'pre-launch', 'pre-seed', 'unannounced', 'confidential',
             'coming soon', 'launching soon', 'secret project',
             'next chapter', 'next adventure', 'next venture', 'new venture',
@@ -361,12 +400,14 @@ class SlowStealthScraper:
             'figuring out', "what's next", 'exploring opportunities',
             'im aufbau', 'neugründung',  # German
         ]
+        stealth_score = 0.0
         for word in stealth_words:
             if word in text:
                 signals.append(word)
-                score += 0.15
+                stealth_score += 0.15
+        score += min(stealth_score, 0.25)  # Cap stealth contribution
 
-        # Founder keywords
+        # Founder keywords (capped)
         founder_words = [
             'founder', 'co-founder', 'cofounder', 'mitgründer', 'gründer',
             'ceo', 'chief executive', 'entrepreneur', 'unternehmer',
@@ -374,10 +415,16 @@ class SlowStealthScraper:
             '2x founder', '3x founder', '4x founder',
             'angel investor', 'venture partner', 'eir', 'entrepreneur in residence',
         ]
+        founder_score = 0.0
         for word in founder_words:
             if word in text:
                 signals.append(word)
-                score += 0.1
+                founder_score += 0.1
+        score += min(founder_score, 0.20)  # Cap founder contribution
+
+        # Combo bonus: stealth + founder together = strong signal
+        if stealth_score > 0 and founder_score > 0:
+            score += 0.10
 
         # High-value background (ex-FAANG and European unicorns)
         companies = [
@@ -390,21 +437,197 @@ class SlowStealthScraper:
         for company in companies:
             if f"ex-{company}" in text or f"ex {company}" in text or f"former {company}" in text or f"previously {company}" in text:
                 signals.append(f"ex-{company}")
-                score += 0.1
+                score += 0.15
 
-        # DACH location indicators
+        # DACH location indicators (query-aware: strip terms from search query)
         dach_indicators = [
             'germany', 'deutschland', 'berlin', 'munich', 'münchen', 'hamburg', 'frankfurt', 'cologne', 'köln',
             'austria', 'österreich', 'vienna', 'wien', 'graz', 'salzburg',
             'switzerland', 'schweiz', 'zurich', 'zürich', 'geneva', 'genf', 'basel', 'zug',
         ]
+
+        # Strip DACH terms that came from the search query before checking
+        if search_query:
+            from sources.linkedin_scraper import _extract_dach_terms_from_query
+            query_dach_terms = _extract_dach_terms_from_query(search_query)
+            if query_dach_terms:
+                # Build text with query DACH terms stripped
+                dach_check_text = text
+                for term in sorted(query_dach_terms, key=len, reverse=True):
+                    dach_check_text = re.sub(r'\b' + re.escape(term) + r'\b', '', dach_check_text)
+            else:
+                dach_check_text = text
+        else:
+            dach_check_text = text
+
         for loc in dach_indicators:
-            if loc in text:
+            if loc in dach_check_text:
                 signals.append(f"loc:{loc}")
                 score += 0.05
                 break  # Only count location once
 
         return min(score, 1.0), signals
+
+    def cleanup_existing_founders(self):
+        """
+        Retroactively clean up existing stealth_founders entries:
+        1. Re-parse multi-person names (DDG concatenated results) → keep first person only
+        2. Strip hex-like IDs from names
+        3. Re-evaluate DACH location (query-aware — delete false positives)
+        4. Recalculate confidence with new scoring (query-aware)
+        Note: Low-confidence entries are kept (not deleted) for manual review.
+        """
+        import re
+        from sources.linkedin_scraper import is_dach_from_search_result
+
+        cursor = self.db.conn.cursor()
+        cursor.execute('''
+            SELECT id, name, headline, linkedin_url, summary, stealth_signals,
+                   search_query, location, detection_source
+            FROM stealth_founders
+        ''')
+        rows = cursor.fetchall()
+
+        stats = {
+            'fixed_names': 0, 'fixed_hex': 0, 'rescored': 0,
+            'deleted': 0, 'deleted_non_dach': 0,
+            'location_updated': 0, 'total': len(rows),
+        }
+
+        for row in rows:
+            fid, name, headline, url, summary, signals_json, search_query, location, detection_source = row
+            original_name = name
+            new_headline = headline
+            changed = False
+
+            # 1. Fix multi-person names
+            # a) Contains en-dash – (DDG profile separator)
+            if name and ' \u2013 ' in name:
+                parts = name.split(' \u2013 ')
+                name = parts[0].strip()
+                if len(parts) > 1 and not new_headline:
+                    raw_hl = parts[1].strip()
+                    for cut in ['...', '\u2026']:
+                        if cut in raw_hl:
+                            raw_hl = raw_hl.split(cut)[0].strip()
+                            break
+                    new_headline = raw_hl[:100] if raw_hl else None
+                stats['fixed_names'] += 1
+                changed = True
+
+            # b) Contains " ... " (DDG concatenation of multiple profiles)
+            if name and ' ... ' in name:
+                name = name.split(' ... ')[0].strip()
+                # If that part still has " - ", take name before it
+                if ' - ' in name:
+                    parts = name.split(' - ', 1)
+                    name = parts[0].strip()
+                    if not new_headline and len(parts) > 1:
+                        new_headline = parts[1].strip()[:100]
+                stats['fixed_names'] += 1
+                changed = True
+
+            # c) Contains " - " (DDG "Name - Headline OtherName" concatenation)
+            # These look like: "Name1 - Headline1 stuff Name2 - Headline2 Name3"
+            # Split on first " - " and take name before it, headline after it (trimmed)
+            if name and ' - ' in name:
+                parts = name.split(' - ', 1)
+                first_name = parts[0].strip()
+                rest = parts[1].strip() if len(parts) > 1 else ''
+
+                # Check if the rest contains another person's name (multi-profile)
+                # Heuristic 1: many capitalized words or very long = likely multi-person
+                # Heuristic 2: regex detects "FirstName LastName" pattern after initial text
+                cap_words = [w for w in rest.split() if w and w[0].isupper() and w not in ('CEO', 'CTO', 'COO', 'CFO', 'VP', 'MD', 'PhD', 'AI', 'ML', 'IT')]
+                has_second_name = bool(re.search(r'(?:^.{5,})\s([A-Z][a-zäöüß]+\s+[A-Z][a-zäöüß]+)', rest))
+                if len(cap_words) >= 5 or len(rest) > 80 or has_second_name:
+                    # Likely multi-person — just keep first name
+                    name = first_name
+                    # Try to extract a clean headline from beginning of rest
+                    # Cut at the first capitalized "First Last" pattern that looks like another name
+                    headline_candidate = rest
+                    # Truncate at common break points
+                    for marker in ['. ', ' | ', '\u00b7']:
+                        if marker in headline_candidate:
+                            headline_candidate = headline_candidate.split(marker)[0].strip()
+                            break
+                    if headline_candidate and len(headline_candidate) < 80:
+                        new_headline = new_headline or headline_candidate
+                    stats['fixed_names'] += 1
+                    changed = True
+
+            # 2. Strip hex-like IDs from names
+            if name:
+                cleaned = re.sub(r'\s+[0-9A-Fa-f]{5,}[A-Za-z]?\s*$', '', name)
+                if cleaned != name:
+                    name = cleaned
+                    stats['fixed_hex'] += 1
+                    changed = True
+
+            # 3. Re-evaluate DACH location (query-aware)
+            # Use search_query stored with the founder to strip echoed DACH terms
+            # For entries with headline from the title (not snippet), use it
+            is_dach, extracted_location = is_dach_from_search_result(
+                title=original_name or '',
+                snippet=summary or '',
+                url=url or '',
+                search_query=search_query or '',
+                headline=new_headline or headline,
+            )
+
+            if not is_dach:
+                cursor.execute('DELETE FROM stealth_founders WHERE id = ?', (fid,))
+                stats['deleted'] += 1
+                stats['deleted_non_dach'] += 1
+                logger.info(f"  Deleting non-DACH: {name} (query: {search_query})")
+                continue
+
+            # Update location if we extracted one and there wasn't one before
+            new_location = location
+            if extracted_location and not location:
+                new_location = extracted_location
+                stats['location_updated'] += 1
+                changed = True
+
+            # 4. Recalculate confidence with new query-aware scoring
+            search_text_title = original_name or ''
+            search_text_snippet = summary or ''
+            new_confidence, new_signals = self._calculate_snippet_confidence(
+                search_text_title, search_text_snippet, search_query=search_query
+            )
+
+            # Update entry (low-confidence entries are kept for manual review)
+            cursor.execute('''
+                UPDATE stealth_founders
+                SET name = ?, headline = COALESCE(?, headline),
+                    location = COALESCE(?, location),
+                    confidence_score = ?, stealth_signals = ?
+                WHERE id = ?
+            ''', (
+                name, new_headline,
+                new_location,
+                new_confidence,
+                json.dumps(new_signals) if new_signals else signals_json,
+                fid,
+            ))
+            stats['rescored'] += 1
+
+        self.db.conn.commit()
+
+        print(f"\n{'='*60}")
+        print("CLEANUP RESULTS")
+        print(f"{'='*60}")
+        print(f"  Total entries:     {stats['total']}")
+        print(f"  Names fixed:       {stats['fixed_names']} (multi-person → first person)")
+        print(f"  Hex IDs stripped:  {stats['fixed_hex']}")
+        print(f"  Non-DACH deleted:  {stats['deleted_non_dach']} (false positives from query echo)")
+        print(f"  Total deleted:     {stats['deleted']}")
+        print(f"  Locations added:   {stats['location_updated']}")
+        print(f"  Rescored:          {stats['rescored']}")
+        print(f"  Remaining:         {stats['total'] - stats['deleted']}")
+        print()
+
+        return stats
 
     def _store_from_search_result(self, result, search_query: str):
         """
@@ -412,14 +635,21 @@ class SlowStealthScraper:
 
         This avoids 999 blocks by extracting info from DuckDuckGo results.
         """
-        from sources.linkedin_scraper import is_dach_location
+        from sources.linkedin_scraper import is_dach_from_search_result
 
         name, headline = self._parse_search_title(result.title, result.url, result.snippet)
-        confidence, signals = self._calculate_snippet_confidence(result.title, result.snippet)
+        confidence, signals = self._calculate_snippet_confidence(
+            result.title, result.snippet, search_query=search_query
+        )
 
-        # Check if likely DACH based on search result
-        combined_text = f"{result.title} {result.snippet}"
-        is_dach = is_dach_location(combined_text, headline, result.snippet)
+        # Check if genuinely DACH (query-aware: strips echoed terms)
+        is_dach, extracted_location = is_dach_from_search_result(
+            title=result.title,
+            snippet=result.snippet,
+            url=result.url,
+            search_query=search_query,
+            headline=headline,
+        )
 
         # Skip if not DACH or too low confidence
         if not is_dach:
@@ -427,7 +657,7 @@ class SlowStealthScraper:
             self.state['skipped_non_german'] = self.state.get('skipped_non_german', 0) + 1
             return
 
-        if confidence < 0.1:
+        if confidence < 0.2:
             logger.debug(f"  Skipping low confidence: {name} ({confidence:.2f})")
             self.state['skipped_low_confidence'] = self.state.get('skipped_low_confidence', 0) + 1
             return
@@ -438,14 +668,15 @@ class SlowStealthScraper:
 
         cursor.execute('''
             INSERT OR IGNORE INTO stealth_founders (
-                linkedin_url, name, headline, summary,
+                linkedin_url, name, headline, location, summary,
                 detection_source, search_query, stealth_signals,
                 confidence_score, first_seen_at, last_checked_at, created_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ''', (
             result.url,
             name,
             headline,
+            extracted_location,  # Store the extracted DACH location
             result.snippet,  # Use snippet as summary
             'search_snippet',
             search_query,
@@ -547,12 +778,16 @@ class SlowStealthScraper:
         # Track which companies we've already searched in state
         searched_company_ids = set(self.state.get('officer_searched_companies', []))
 
+        # Use first_seen_date (populated) or registration_date (often NULL)
+        # to find recently discovered companies
         cursor.execute('''
-            SELECT c.id, c.name, c.city, c.registration_date
+            SELECT c.id, c.name, c.city,
+                   COALESCE(c.registration_date, c.first_seen_date) as effective_date
             FROM companies c
-            WHERE c.registration_date >= date('now', '-30 days')
+            WHERE (c.first_seen_date >= date('now', '-30 days')
+                   OR c.registration_date >= date('now', '-30 days'))
               AND c.id NOT IN ({})
-            ORDER BY c.registration_date DESC
+            ORDER BY effective_date DESC
             LIMIT ?
         '''.format(','.join('?' * len(searched_company_ids)) if searched_company_ids else '0'),
             list(searched_company_ids) + [batch_size]
@@ -632,19 +867,30 @@ class SlowStealthScraper:
 
     def _store_officer_crossref_result(self, result, officer_name: str, company_name: str, company_id: int):
         """Store a founder found via Handelsregister officer cross-reference."""
-        from sources.linkedin_scraper import is_dach_location
+        from sources.linkedin_scraper import is_dach_from_search_result
+
+        # Officer queries like 'site:linkedin.com/in "Hans Müller" founder'
+        # typically don't contain DACH terms, so the filter works well here
+        search_query = f'officer:{officer_name}'
 
         name, headline = self._parse_search_title(result.title, result.url, result.snippet)
-        confidence, signals = self._calculate_snippet_confidence(result.title, result.snippet)
+        confidence, signals = self._calculate_snippet_confidence(
+            result.title, result.snippet, search_query=search_query
+        )
 
         # Boost confidence for officer cross-ref (these are high-value leads)
         confidence = min(confidence + 0.2, 1.0)
         signals.append(f'handelsregister_officer:{officer_name}')
         signals.append(f'company:{company_name}')
 
-        # Check if likely DACH
-        combined_text = f"{result.title} {result.snippet}"
-        is_dach = is_dach_location(combined_text, headline, result.snippet)
+        # Check if genuinely DACH (query-aware)
+        is_dach, extracted_location = is_dach_from_search_result(
+            title=result.title,
+            snippet=result.snippet,
+            url=result.url,
+            search_query=search_query,
+            headline=headline,
+        )
 
         if not is_dach:
             logger.debug(f"    Skipping non-DACH: {name}")
@@ -655,18 +901,19 @@ class SlowStealthScraper:
 
         cursor.execute('''
             INSERT OR IGNORE INTO stealth_founders (
-                linkedin_url, name, headline, summary,
+                linkedin_url, name, headline, location, summary,
                 detection_source, search_query, stealth_signals,
                 confidence_score, first_seen_at, last_checked_at, created_at,
                 company_id
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ''', (
             result.url,
             name,
             headline,
+            extracted_location,  # Store extracted DACH location
             result.snippet,
             'handelsregister_crossref',
-            f'officer:{officer_name}',
+            search_query,
             json.dumps(signals) if signals else None,
             confidence,
             now,
@@ -1004,9 +1251,14 @@ class SlowStealthScraper:
                 stats['details'] = result
         else:
             stats['action'] = 'search'
-            new_urls = self._do_search()
-            stats['success'] = len(new_urls) > 0
-            stats['details'] = {'new_urls': len(new_urls)}
+            try:
+                new_urls = self._do_search()
+                stats['success'] = True  # Search worked, even if 0 new URLs
+                stats['details'] = {'new_urls': len(new_urls)}
+            except Exception as e:
+                stats['success'] = False
+                stats['details'] = {'error': str(e)}
+                logger.warning(f"  Search failed: {e}")
 
         return stats
 

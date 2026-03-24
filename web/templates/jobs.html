@@ -143,8 +143,12 @@
                 </tr>
                 {% else %}
                 <tr>
-                    <td colspan="7" class="px-6 py-4 text-center text-sm text-gray-500">
-                        No job runs recorded yet.
+                    <td colspan="7" class="px-6 py-12">
+                        <div class="text-center">
+                            <svg class="mx-auto h-12 w-12 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"/></svg>
+                            <h3 class="mt-2 text-sm font-semibold text-gray-900">No job runs yet</h3>
+                            <p class="mt-1 text-sm text-gray-500">Run a job from the Quick Actions above to get started.</p>
+                        </div>
                     </td>
                 </tr>
                 {% endfor %}
@@ -210,8 +214,12 @@
                 </tr>
                 {% else %}
                 <tr>
-                    <td colspan="8" class="px-6 py-4 text-center text-sm text-gray-500">
-                        No scrape runs recorded yet.
+                    <td colspan="8" class="px-6 py-12">
+                        <div class="text-center">
+                            <svg class="mx-auto h-12 w-12 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4"/></svg>
+                            <h3 class="mt-2 text-sm font-semibold text-gray-900">No scrape runs yet</h3>
+                            <p class="mt-1 text-sm text-gray-500">Scrape data will appear here after running discovery or enrichment jobs.</p>
+                        </div>
                     </td>
                 </tr>
                 {% endfor %}

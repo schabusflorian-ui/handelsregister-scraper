@@ -49,8 +49,16 @@ def main():
         help="Only find recently indexed profiles (past month). Use for incremental runs."
     )
     parser.add_argument(
-        "--no-officers", action="store_true",
-        help="Disable Handelsregister officer cross-reference (enabled by default)"
+        "--officers", action="store_true",
+        help="Enable Handelsregister officer cross-reference (off by default, enable once new registrations flow in)"
+    )
+    parser.add_argument(
+        "--sync", action="store_true",
+        help="Sync with Railway before starting (pull companies/officers, push founders)"
+    )
+    parser.add_argument(
+        "--cleanup", action="store_true",
+        help="Clean up existing founders (fix names, recalculate scores, remove junk) and exit"
     )
     args = parser.parse_args()
 
@@ -75,6 +83,15 @@ def main():
         state_file.unlink()
         print("State reset - starting fresh")
 
+    # Sync with Railway if requested
+    if args.sync:
+        try:
+            from scripts.sync_db import sync
+            sync(str(db_path), pull=True, push=True, days=30)
+        except Exception as e:
+            print(f"Sync failed: {e}")
+            print("Continuing without sync...\n")
+
     print("=" * 60)
     print("STEALTH FOUNDER DISCOVERY")
     print("=" * 60)
@@ -84,7 +101,8 @@ def main():
     print(f"Search delay: {args.delay}s")
     print(f"Search engine: {args.engine}")
     print(f"Fresh mode: {'ON (past month only)' if args.fresh else 'OFF (all time)'}")
-    print(f"Officer crossref: {'OFF' if args.no_officers else 'ON'}")
+    print(f"Officer crossref: {'ON' if args.officers else 'OFF (use --officers to enable)'}")
+    print(f"Railway sync: {'done' if args.sync else 'OFF (use --sync to pull companies from Railway)'}")
     print(f"Iterations: {'unlimited' if args.iterations is None else args.iterations}")
     print()
     from scheduler.jobs.slow_stealth_scraper import SlowStealthScraper, STEALTH_QUERIES
@@ -105,12 +123,18 @@ def main():
             scrape_delay=120,  # LinkedIn scraping mostly disabled
             search_engine=args.engine,
             fresh_mode=args.fresh,
-            include_officers=not args.no_officers,
+            include_officers=args.officers,
         )
 
         # Report mode: print query yield stats and exit
         if args.report:
             scraper.print_query_report()
+            db.close()
+            return
+
+        # Cleanup mode: fix existing data and exit
+        if args.cleanup:
+            scraper.cleanup_existing_founders()
             db.close()
             return
 

@@ -100,7 +100,7 @@
         <div class="px-4 py-5 sm:p-6 space-y-4">
             <!-- Manual Run -->
             <div>
-                <button id="run-btn" onclick="runJob()"
+                <button id="run-btn" onclick="runStealthJob()"
                     class="inline-flex items-center rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
                     {% if status.running %}disabled{% endif %}>
                     <svg class="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -134,11 +134,11 @@
                         <option value="12" {% if status.interval_hours == 12 %}selected{% endif %}>Every 12 hours</option>
                         <option value="24" {% if status.interval_hours == 24 %}selected{% endif %}>Every 24 hours</option>
                     </select>
-                    <button onclick="scheduleJob()"
+                    <button onclick="scheduleStealthJob()"
                         class="inline-flex items-center rounded-md bg-green-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-green-500">
                         Enable Schedule
                     </button>
-                    <button onclick="stopSchedule()"
+                    <button onclick="stopStealthSchedule()"
                         class="inline-flex items-center rounded-md bg-red-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-red-500">
                         Disable
                     </button>
@@ -251,72 +251,7 @@
 </div>
 
 <script>
-let refreshInterval = null;
-
-async function runJob() {
-    const btn = document.getElementById('run-btn');
-    btn.disabled = true;
-    btn.innerHTML = '<svg class="animate-spin mr-2 h-4 w-4" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> Running...';
-
-    try {
-        const resp = await fetch('/admin/stealth-job/run', { method: 'POST' });
-        const data = await resp.json();
-
-        if (data.error) {
-            alert('Error: ' + data.error);
-        } else {
-            // Start polling for status
-            startStatusPolling();
-        }
-    } catch (e) {
-        alert('Failed to start job: ' + e);
-        btn.disabled = false;
-        btn.innerHTML = 'Run Now';
-    }
-}
-
-async function scheduleJob() {
-    const hours = document.getElementById('interval').value;
-    try {
-        const resp = await fetch(`/admin/stealth-job/schedule?hours=${hours}`, { method: 'POST' });
-        const data = await resp.json();
-        alert(data.message || data.error);
-        location.reload();
-    } catch (e) {
-        alert('Failed: ' + e);
-    }
-}
-
-async function stopSchedule() {
-    try {
-        const resp = await fetch('/admin/stealth-job/stop', { method: 'POST' });
-        const data = await resp.json();
-        alert(data.message || data.error);
-        location.reload();
-    } catch (e) {
-        alert('Failed: ' + e);
-    }
-}
-
-function startStatusPolling() {
-    if (refreshInterval) clearInterval(refreshInterval);
-
-    refreshInterval = setInterval(async () => {
-        try {
-            const resp = await fetch('/admin/stealth-job/status');
-            const status = await resp.json();
-
-            if (!status.running) {
-                clearInterval(refreshInterval);
-                location.reload();
-            }
-        } catch (e) {
-            console.error('Status poll failed:', e);
-        }
-    }, 5000);
-}
-
-// If job is running on page load, start polling
+// If job is running on page load, start polling (function from app.js)
 {% if status.running %}
 startStatusPolling();
 {% endif %}

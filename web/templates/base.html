@@ -26,12 +26,15 @@
 <body class="h-full">
     <div class="min-h-full">
         <!-- Navigation -->
-        <nav class="bg-indigo-600">
+        <nav class="bg-indigo-600" x-data="{ open: false }">
             <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
                 <div class="flex h-16 items-center justify-between">
                     <div class="flex items-center">
                         <div class="flex-shrink-0">
-                            <a href="/" class="text-white font-bold text-xl">HR Scraper</a>
+                            <a href="/" class="text-white font-bold text-xl flex items-center gap-2">
+                                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                                StartupRadar
+                            </a>
                         </div>
                         <div class="hidden md:block">
                             <div class="ml-10 flex items-baseline space-x-4">
@@ -56,12 +59,38 @@
                         </div>
                     </div>
                     <!-- Mobile menu button -->
-                    <div class="-mr-2 flex md:hidden" x-data="{ open: false }">
+                    <div class="-mr-2 flex md:hidden">
                         <button @click="open = !open" type="button" class="inline-flex items-center justify-center rounded-md bg-indigo-600 p-2 text-indigo-200 hover:bg-indigo-500 hover:text-white">
-                            <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                            <svg x-show="!open" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
                             </svg>
+                            <svg x-show="open" x-cloak class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+                            </svg>
                         </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Mobile menu -->
+            <div class="md:hidden" x-show="open" x-cloak
+                 x-transition:enter="transition ease-out duration-100"
+                 x-transition:enter-start="transform opacity-0 scale-95"
+                 x-transition:enter-end="transform opacity-100 scale-100"
+                 x-transition:leave="transition ease-in duration-75"
+                 x-transition:leave-start="transform opacity-100 scale-100"
+                 x-transition:leave-end="transform opacity-0 scale-95">
+                <div class="space-y-1 px-2 pb-3 pt-2">
+                    <a href="/" class="{% if request.url.path == '/' %}bg-indigo-700 text-white{% else %}text-indigo-100 hover:bg-indigo-500{% endif %} block rounded-md px-3 py-2 text-base font-medium">Dashboard</a>
+                    <a href="/companies" class="{% if '/companies' in request.url.path %}bg-indigo-700 text-white{% else %}text-indigo-100 hover:bg-indigo-500{% endif %} block rounded-md px-3 py-2 text-base font-medium">Companies</a>
+                    <a href="/investors" class="{% if '/investors' in request.url.path %}bg-indigo-700 text-white{% else %}text-indigo-100 hover:bg-indigo-500{% endif %} block rounded-md px-3 py-2 text-base font-medium">Investors</a>
+                    <a href="/capital-events" class="{% if '/capital-events' in request.url.path %}bg-indigo-700 text-white{% else %}text-indigo-100 hover:bg-indigo-500{% endif %} block rounded-md px-3 py-2 text-base font-medium">Capital Events</a>
+                    <a href="/founders" class="{% if '/founders' in request.url.path %}bg-indigo-700 text-white{% else %}text-indigo-100 hover:bg-indigo-500{% endif %} block rounded-md px-3 py-2 text-base font-medium">Stealth Founders</a>
+                    <a href="/jobs" class="{% if '/jobs' in request.url.path %}bg-indigo-700 text-white{% else %}text-indigo-100 hover:bg-indigo-500{% endif %} block rounded-md px-3 py-2 text-base font-medium">Jobs</a>
+                    <a href="/admin/stealth-job" class="{% if '/admin/' in request.url.path %}bg-indigo-700 text-white{% else %}text-indigo-100 hover:bg-indigo-500{% endif %} block rounded-md px-3 py-2 text-base font-medium">Admin</a>
+                    <div class="border-t border-indigo-500 mt-2 pt-2">
+                        <a href="/export/csv?min_score=1" class="text-indigo-100 hover:bg-indigo-500 block rounded-md px-3 py-2 text-base font-medium">Export CSV</a>
+                        <a href="/export/db" class="text-indigo-100 hover:bg-indigo-500 block rounded-md px-3 py-2 text-base font-medium">Download DB</a>
                     </div>
                 </div>
             </div>
@@ -81,12 +110,22 @@
     <!-- Footer -->
     <footer class="bg-white border-t mt-auto">
         <div class="mx-auto max-w-7xl px-4 py-4 sm:px-6 lg:px-8">
-            <p class="text-center text-sm text-gray-500">
-                Handelsregister AI/Robotics Startup Discovery Platform
-            </p>
+            <div class="flex items-center justify-between">
+                <p class="text-sm text-gray-500">
+                    StartupRadar &mdash; AI/Robotics Startup Discovery
+                </p>
+                <div class="hidden md:flex items-center gap-3 text-xs text-gray-400">
+                    <span title="Keyboard shortcuts: j/k navigate, Enter expand, r relevance, c contacted, o open">
+                        <kbd class="px-1.5 py-0.5 bg-gray-100 rounded text-gray-500 font-mono">j</kbd>/<kbd class="px-1.5 py-0.5 bg-gray-100 rounded text-gray-500 font-mono">k</kbd> navigate
+                        <kbd class="ml-1 px-1.5 py-0.5 bg-gray-100 rounded text-gray-500 font-mono">r</kbd> relevance
+                        <kbd class="ml-1 px-1.5 py-0.5 bg-gray-100 rounded text-gray-500 font-mono">Enter</kbd> expand
+                    </span>
+                </div>
+            </div>
         </div>
     </footer>
 
+    <script src="/static/app.js"></script>
     {% block scripts %}{% endblock %}
 </body>
 </html>

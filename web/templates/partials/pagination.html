@@ -1,27 +1,57 @@
-<nav class="flex items-center justify-between border-t border-gray-200 px-4 sm:px-0 mt-4 pt-4">
-    <div class="-mt-px flex w-0 flex-1">
-        {% if page > 1 %}
-        <a href="?{{ query_string }}&page={{ page - 1 }}" class="inline-flex items-center border-t-2 border-transparent pr-1 pt-4 text-sm font-medium text-gray-500 hover:border-gray-300 hover:text-gray-700">
-            <svg class="mr-3 h-5 w-5 text-gray-400" viewBox="0 0 20 20" fill="currentColor">
-                <path fill-rule="evenodd" d="M18 10a.75.75 0 01-.75.75H4.66l2.1 1.95a.75.75 0 11-1.02 1.1l-3.5-3.25a.75.75 0 010-1.1l3.5-3.25a.75.75 0 111.02 1.1l-2.1 1.95h12.59A.75.75 0 0118 10z" clip-rule="evenodd" />
-            </svg>
-            Previous
-        </a>
-        {% endif %}
+{#
+    Pagination component with page numbers.
+
+    Required context variables:
+    - page: current page number (1-indexed)
+    - total_pages: total number of pages
+    - base_qs: query string for links (without &page=)
+
+    Renders: [Previous] [1] ... [4] [5] [*6*] [7] [8] ... [50] [Next]
+#}
+{% if total_pages > 1 %}
+<div class="bg-white px-4 py-3 border-t border-gray-200 sm:px-6 pagination-controls">
+    <div class="flex items-center justify-between">
+        <div class="text-sm text-gray-700">
+            Page <span class="font-medium">{{ page }}</span> of <span class="font-medium">{{ total_pages }}</span>
+        </div>
+        <nav class="flex items-center gap-1" aria-label="Pagination">
+            {# Previous button #}
+            {% if page > 1 %}
+            <a href="?{{ base_qs }}&page={{ page - 1 }}"
+                class="relative inline-flex items-center rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 ring-1 ring-inset ring-gray-300 hover:bg-gray-50">
+                <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+                Prev
+            </a>
+            {% endif %}
+
+            {# Page numbers with ellipsis #}
+            {% set window = 2 %}
+            {% for p in range(1, total_pages + 1) %}
+                {% if p == 1 or p == total_pages or (p >= page - window and p <= page + window) %}
+                    {% if p == page %}
+                    <span class="relative inline-flex items-center rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white">
+                        {{ p }}
+                    </span>
+                    {% else %}
+                    <a href="?{{ base_qs }}&page={{ p }}"
+                        class="relative inline-flex items-center rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 ring-1 ring-inset ring-gray-300 hover:bg-gray-50">
+                        {{ p }}
+                    </a>
+                    {% endif %}
+                {% elif p == page - window - 1 or p == page + window + 1 %}
+                    <span class="px-2 text-gray-400">&hellip;</span>
+                {% endif %}
+            {% endfor %}
+
+            {# Next button #}
+            {% if page < total_pages %}
+            <a href="?{{ base_qs }}&page={{ page + 1 }}"
+                class="relative inline-flex items-center rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 ring-1 ring-inset ring-gray-300 hover:bg-gray-50">
+                Next
+                <svg class="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+            </a>
+            {% endif %}
+        </nav>
     </div>
-    <div class="hidden md:-mt-px md:flex">
-        <span class="inline-flex items-center border-t-2 border-transparent px-4 pt-4 text-sm font-medium text-gray-500">
-            Page {{ page }} of {{ total_pages }}
-        </span>
-    </div>
-    <div class="-mt-px flex w-0 flex-1 justify-end">
-        {% if page < total_pages %}
-        <a href="?{{ query_string }}&page={{ page + 1 }}" class="inline-flex items-center border-t-2 border-transparent pl-1 pt-4 text-sm font-medium text-gray-500 hover:border-gray-300 hover:text-gray-700">
-            Next
-            <svg class="ml-3 h-5 w-5 text-gray-400" viewBox="0 0 20 20" fill="currentColor">
-                <path fill-rule="evenodd" d="M2 10a.75.75 0 01.75-.75h12.59l-2.1-1.95a.75.75 0 111.02-1.1l3.5 3.25a.75.75 0 010 1.1l-3.5 3.25a.75.75 0 11-1.02-1.1l2.1-1.95H2.75A.75.75 0 012 10z" clip-rule="evenodd" />
-            </svg>
-        </a>
-        {% endif %}
-    </div>
-</nav>
+</div>
+{% endif %}

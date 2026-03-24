@@ -33,7 +33,7 @@
                 </div>
             </div>
             <div class="mt-4 flex md:ml-4 md:mt-0 space-x-2">
-                <button id="contacted-btn" onclick="toggleContacted()"
+                <button id="contacted-btn" onclick="toggleContacted({{ company.id }})"
                     class="inline-flex items-center rounded-md px-3 py-2 text-sm font-semibold shadow-sm
                     {% if company.contacted %}bg-green-600 text-white hover:bg-green-500{% else %}bg-white text-gray-700 ring-1 ring-inset ring-gray-300 hover:bg-gray-50{% endif %}">
                     <svg class="mr-1.5 h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
@@ -459,7 +459,7 @@
                 <textarea id="notes" rows="4"
                     class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
                     placeholder="Add your notes here...">{{ company.notes or '' }}</textarea>
-                <button onclick="saveNotes()"
+                <button onclick="saveNotes({{ company.id }})"
                     class="mt-2 inline-flex items-center rounded-md bg-indigo-600 px-3 py-1.5 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500">
                     Save Notes
                 </button>
@@ -469,54 +469,5 @@
     </div>
 </div>
 
-<script>
-const companyId = {{ company.id }};
-let isContacted = {{ 'true' if company.contacted else 'false' }};
-
-async function toggleContacted() {
-    try {
-        const resp = await fetch(`/companies/${companyId}/toggle-contacted`, { method: 'POST' });
-        const data = await resp.json();
-
-        if (data.success) {
-            isContacted = data.contacted;
-            const btn = document.getElementById('contacted-btn');
-            const text = document.getElementById('contacted-text');
-
-            if (isContacted) {
-                btn.className = btn.className.replace('bg-white text-gray-700 ring-1 ring-inset ring-gray-300 hover:bg-gray-50', 'bg-green-600 text-white hover:bg-green-500');
-                text.textContent = 'Contacted';
-            } else {
-                btn.className = btn.className.replace('bg-green-600 text-white hover:bg-green-500', 'bg-white text-gray-700 ring-1 ring-inset ring-gray-300 hover:bg-gray-50');
-                text.textContent = 'Mark Contacted';
-            }
-        }
-    } catch (e) {
-        console.error('Failed to toggle contacted:', e);
-    }
-}
-
-async function saveNotes() {
-    const notes = document.getElementById('notes').value;
-    const status = document.getElementById('notes-status');
-
-    try {
-        const resp = await fetch(`/companies/${companyId}/notes`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ notes }),
-        });
-        const data = await resp.json();
-
-        if (data.success) {
-            status.textContent = 'Saved!';
-            status.className = 'ml-2 text-sm text-green-600';
-            setTimeout(() => { status.textContent = ''; }, 2000);
-        }
-    } catch (e) {
-        status.textContent = 'Failed to save';
-        status.className = 'ml-2 text-sm text-red-600';
-    }
-}
-</script>
+<!-- JS functions provided by /static/app.js -->
 {% endblock %}

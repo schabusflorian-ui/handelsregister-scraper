@@ -826,6 +826,149 @@ def is_dach_location(location: Optional[str], headline: Optional[str] = None, su
 is_german_location = is_dach_location
 
 
+def _extract_dach_terms_from_query(search_query: str) -> set:
+    """
+    Extract DACH location terms that appear in a search query.
+
+    When DDG echoes the search query back in snippets, these terms create
+    false DACH matches. We strip them before checking for genuine profile location signals.
+    """
+    if not search_query:
+        return set()
+
+    query_lower = search_query.lower()
+    found_terms = set()
+    for loc in DACH_LOCATIONS:
+        if loc in query_lower:
+            found_terms.add(loc)
+    return found_terms
+
+
+def is_dach_from_search_result(
+    title: str,
+    snippet: str,
+    url: str,
+    search_query: str,
+    headline: Optional[str] = None,
+) -> tuple:
+    """
+    Check if a search result is genuinely from a DACH-based person.
+
+    Unlike is_dach_location(), this is query-aware: it strips DACH terms that
+    came from the search query itself (which DDG echoes back in snippets) before
+    checking for genuine profile location signals.
+
+    Uses 4 signals in order of reliability:
+    1. Structured LinkedIn location pattern in snippet ("City, Country")
+    2. DACH city names in the LinkedIn URL slug
+    3. DACH keywords in the headline (profile data, not query echo)
+    4. DACH keywords in snippet text AFTER stripping query-echoed terms
+
+    Args:
+        title: Search result title
+        snippet: Search result snippet text
+        url: LinkedIn profile URL
+        search_query: The search query used (to strip echoed terms)
+        headline: Extracted headline from title parsing
+
+    Returns:
+        (is_dach: bool, location: Optional[str]) — location is a human-readable
+        string like "Berlin, Germany" if extracted, else None
+    """
+    import re
+
+    # Get DACH terms from the search query that we need to ignore
+    query_dach_terms = _extract_dach_terms_from_query(search_query)
+
+    snippet_lower = (snippet or '').lower()
+    title_lower = (title or '').lower()
+    url_lower = (url or '').lower()
+    headline_lower = (headline or '').lower()
+
+    # --- Signal 1: Structured location patterns in snippet ---
+    # LinkedIn snippets often contain "City, State, Country" or "Greater X Metropolitan Area"
+    # These are genuine profile location data, not query echoes
+
+    # Pattern: "City, Country" or "City, State, Country" (e.g., "Berlin, Germany", "Munich, Bavaria, Germany")
+    location_patterns = [
+        # "City, Country" at word boundaries
+        r'\b([A-Z][a-zäöüß]+(?:\s[A-Z][a-zäöüß]+)*),\s*(Germany|Deutschland|Austria|Österreich|Switzerland|Schweiz|Suisse)\b',
+        # "City, State, Country"
+        r'\b([A-Z][a-zäöüß]+(?:\s[A-Z][a-zäöüß]+)*),\s*[A-Z][a-zäöüß]+(?:\s[A-Z][a-zäöüß]+)*,\s*(Germany|Deutschland|Austria|Österreich|Switzerland|Schweiz|Suisse)\b',
+        # "Greater X Metropolitan Area" or "Greater X Area"
+        r'Greater\s+(Berlin|Munich|Hamburg|Frankfurt|Vienna|Zurich|Zürich|Wien|Cologne|Stuttgart|Düsseldorf)\s+(?:Metropolitan\s+)?Area',
+    ]
+
+    snippet_raw = snippet or ''
+    for pattern in location_patterns:
+        match = re.search(pattern, snippet_raw)
+        if match:
+            return True, match.group(0)
+
+    # Also check title for structured location
+    title_raw = title or ''
+    for pattern in location_patterns:
+        match = re.search(pattern, title_raw)
+        if match:
+            return True, match.group(0)
+
+    # --- Signal 2: DACH city names in URL slug ---
+    # LinkedIn URLs like /in/john-doe-berlin-123/ contain genuine location info
+    # Extract the slug part after /in/
+    url_slug = ''
+    slug_match = re.search(r'linkedin\.com/in/([^/?]+)', url_lower)
+    if slug_match:
+        url_slug = slug_match.group(1).replace('-', ' ')
+
+    # Check for DACH cities in URL slug (use a curated list of cities, not country names)
+    dach_cities = [
+        # Germany
+        'berlin', 'munich', 'münchen', 'hamburg', 'frankfurt', 'cologne', 'köln',
+        'düsseldorf', 'dusseldorf', 'stuttgart', 'leipzig', 'dresden', 'hannover',
+        'nuremberg', 'nürnberg', 'bonn', 'karlsruhe', 'mannheim', 'heidelberg',
+        'darmstadt', 'potsdam', 'freiburg', 'aachen',
+        # Austria
+        'vienna', 'wien', 'graz', 'linz', 'salzburg', 'innsbruck', 'klagenfurt',
+        # Switzerland
+        'zurich', 'zürich', 'geneva', 'genève', 'basel', 'bern', 'lausanne', 'lucerne', 'luzern', 'zug',
+    ]
+    for city in dach_cities:
+        if city in url_slug:
+            return True, city.title()
+
+    # --- Signal 3: DACH keywords in headline ---
+    # The headline is extracted from the profile title, not from the search query
+    if headline_lower:
+        for loc in DACH_LOCATIONS:
+            if loc in headline_lower:
+                # Make sure it's not also in the query (some queries mention cities in quotes)
+                if loc not in query_dach_terms:
+                    return True, loc.title()
+
+    # --- Signal 4: DACH keywords in snippet AFTER stripping query-echoed terms ---
+    # Remove DACH terms that appear in the search query from the snippet
+    # Only check what remains — if DACH terms still appear, they came from the profile
+    if snippet_lower and query_dach_terms:
+        # Build a cleaned snippet with query DACH terms removed
+        cleaned_snippet = snippet_lower
+        for term in sorted(query_dach_terms, key=len, reverse=True):
+            # Remove the term but be careful not to break other words
+            # Use word boundary-aware replacement
+            cleaned_snippet = re.sub(r'\b' + re.escape(term) + r'\b', '', cleaned_snippet)
+
+        # Now check cleaned snippet for remaining DACH indicators
+        for loc in DACH_LOCATIONS:
+            if loc in cleaned_snippet:
+                return True, loc.title()
+    elif snippet_lower and not query_dach_terms:
+        # No DACH terms in query — any DACH term in snippet is genuine
+        for loc in DACH_LOCATIONS:
+            if loc in snippet_lower:
+                return True, loc.title()
+
+    return False, None
+
+
 class StealthFounderDetector:
     """
     Analyzes LinkedIn profiles to detect potential stealth founders.

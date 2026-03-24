@@ -28,7 +28,7 @@
                 <!-- Year Filter -->
                 <div>
                     <label for="year" class="block text-sm font-medium text-gray-700">Year</label>
-                    <select name="year" id="year"
+                    <select name="year" id="year" onchange="this.form.submit()"
                         class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
                         <option value="">All years</option>
                         {% for y in years %}
@@ -42,7 +42,7 @@
                 <!-- City Filter -->
                 <div>
                     <label for="city" class="block text-sm font-medium text-gray-700">City</label>
-                    <select name="city" id="city"
+                    <select name="city" id="city" onchange="this.form.submit()"
                         class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
                         <option value="">All cities</option>
                         {% for c in cities %}
@@ -56,7 +56,7 @@
                 <!-- State Filter -->
                 <div>
                     <label for="state" class="block text-sm font-medium text-gray-700">State</label>
-                    <select name="state" id="state"
+                    <select name="state" id="state" onchange="this.form.submit()"
                         class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
                         <option value="">All states</option>
                         {% for s in states %}
@@ -70,7 +70,7 @@
                 <!-- Legal Form Filter -->
                 <div>
                     <label for="legal_form" class="block text-sm font-medium text-gray-700">Legal Form</label>
-                    <select name="legal_form" id="legal_form"
+                    <select name="legal_form" id="legal_form" onchange="this.form.submit()"
                         class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
                         <option value="">All forms</option>
                         {% for lf in legal_forms %}
@@ -86,7 +86,7 @@
                 <!-- Min AI Score -->
                 <div>
                     <label for="min_score" class="block text-sm font-medium text-gray-700">Min AI Score</label>
-                    <select name="min_score" id="min_score"
+                    <select name="min_score" id="min_score" onchange="this.form.submit()"
                         class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
                         <option value="">Any</option>
                         {% for score in range(1, 11) %}
@@ -98,7 +98,7 @@
                 <!-- Min Climate Score -->
                 <div>
                     <label for="min_climate" class="block text-sm font-medium text-gray-700">Min Climate</label>
-                    <select name="min_climate" id="min_climate"
+                    <select name="min_climate" id="min_climate" onchange="this.form.submit()"
                         class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
                         <option value="">Any</option>
                         {% for score in range(1, 11) %}
@@ -110,7 +110,7 @@
                 <!-- Classification -->
                 <div>
                     <label for="classification" class="block text-sm font-medium text-gray-700">Classification</label>
-                    <select name="classification" id="classification"
+                    <select name="classification" id="classification" onchange="this.form.submit()"
                         class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
                         <option value="">All</option>
                         <option value="startup" {% if classification == 'startup' %}selected{% endif %}>Startup</option>
@@ -123,6 +123,7 @@
                 <div class="flex items-end">
                     <label class="inline-flex items-center">
                         <input type="checkbox" name="has_website" value="true" {% if has_website %}checked{% endif %}
+                            onchange="this.form.submit()"
                             class="rounded border-gray-300 text-indigo-600 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
                         <span class="ml-2 text-sm text-gray-700">Has Website</span>
                     </label>
@@ -131,7 +132,7 @@
                 <!-- Contacted Filter -->
                 <div>
                     <label for="contacted" class="block text-sm font-medium text-gray-700">Contacted</label>
-                    <select name="contacted" id="contacted"
+                    <select name="contacted" id="contacted" onchange="this.form.submit()"
                         class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
                         <option value="">All</option>
                         <option value="yes" {% if contacted == 'yes' %}selected{% endif %}>Contacted</option>
@@ -142,7 +143,7 @@
                 <!-- Viewed Filter -->
                 <div>
                     <label for="viewed" class="block text-sm font-medium text-gray-700">Viewed</label>
-                    <select name="viewed" id="viewed"
+                    <select name="viewed" id="viewed" onchange="this.form.submit()"
                         class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
                         <option value="">All</option>
                         <option value="yes" {% if viewed == 'yes' %}selected{% endif %}>Viewed</option>
@@ -153,7 +154,7 @@
                 <!-- Relevance Filter -->
                 <div>
                     <label for="relevance" class="block text-sm font-medium text-gray-700">Relevance</label>
-                    <select name="relevance" id="relevance"
+                    <select name="relevance" id="relevance" onchange="this.form.submit()"
                         class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
                         <option value="">All</option>
                         <option value="relevant" {% if relevance == 'relevant' %}selected{% endif %}>Relevant</option>
@@ -183,7 +184,7 @@
         <button onclick="deletePreset({{ preset.id }}, '{{ preset.name }}')" class="pr-2 text-indigo-400 hover:text-red-500" title="Delete">&times;</button>
     </div>
     {% endfor %}
-    <button onclick="savePreset()" class="inline-flex items-center gap-1 rounded-full bg-white px-3 py-1 text-xs font-medium text-gray-600 ring-1 ring-gray-300 hover:bg-gray-50" title="Save current filters">
+    <button onclick="savePreset(CURRENT_FILTER_QS)" class="inline-flex items-center gap-1 rounded-full bg-white px-3 py-1 text-xs font-medium text-gray-600 ring-1 ring-gray-300 hover:bg-gray-50" title="Save current filters">
         <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
         Save
     </button>
@@ -270,7 +271,7 @@
                                value="{{ company.id }}" onchange="updateBulkBar()">
                     </td>
                     <td data-col="relevance" class="px-3 py-3 whitespace-nowrap">
-                        <select onchange="setRelevance({{ company.id }}, this.value)"
+                        <select onchange="setRelevance({{ company.id }}, this.value, this)"
                                 class="rounded-md border-gray-300 text-xs py-1 px-1.5
                                 {% if company.relevance == 'relevant' %}bg-green-50 text-green-800 ring-1 ring-green-300
                                 {% elif company.relevance == 'irrelevant' %}bg-red-50 text-red-800 ring-1 ring-red-300
@@ -380,8 +381,13 @@
                 </tr>
                 {% else %}
                 <tr>
-                    <td colspan="19" class="px-6 py-4 text-center text-sm text-gray-500">
-                        No companies found matching your criteria.
+                    <td colspan="19" class="px-6 py-12">
+                        <div class="text-center">
+                            <svg class="mx-auto h-12 w-12 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                            <h3 class="mt-2 text-sm font-semibold text-gray-900">No companies found</h3>
+                            <p class="mt-1 text-sm text-gray-500">Try adjusting your filters or search criteria.</p>
+                            <a href="/companies" class="mt-3 inline-flex items-center rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white hover:bg-indigo-500">Clear all filters</a>
+                        </div>
                     </td>
                 </tr>
                 {% endfor %}
@@ -410,228 +416,15 @@
                     {% endfor %}
                 </div>
             </div>
-            {% if total_pages > 1 %}
-            <div class="flex space-x-2">
-                {% if page > 1 %}
-                <a href="?{{ filter_qs_with_sort }}&per_page={{ per_page }}&page={{ page - 1 }}"
-                    class="relative inline-flex items-center rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 ring-1 ring-inset ring-gray-300 hover:bg-gray-50">
-                    Previous
-                </a>
-                {% endif %}
-                {% if page < total_pages %}
-                <a href="?{{ filter_qs_with_sort }}&per_page={{ per_page }}&page={{ page + 1 }}"
-                    class="relative inline-flex items-center rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 ring-1 ring-inset ring-gray-300 hover:bg-gray-50">
-                    Next
-                </a>
-                {% endif %}
-            </div>
-            {% endif %}
         </div>
     </div>
+    {% with base_qs=filter_qs_with_sort + '&per_page=' + per_page|string %}
+    {% include "partials/pagination.html" %}
+    {% endwith %}
 </div>
 
 <script>
-// Column configuration: key -> { label, defaultVisible }
-const COLUMNS = {
-    relevance:      { label: 'Relevance',      defaultVisible: true },
-    company:        { label: 'Company',        defaultVisible: true },
-    legal_form:     { label: 'Legal Form',     defaultVisible: true },
-    city:           { label: 'City',           defaultVisible: true },
-    state:          { label: 'State',          defaultVisible: true },
-    year:           { label: 'Year',           defaultVisible: true },
-    website:        { label: 'Website',        defaultVisible: true },
-    ai_score:       { label: 'AI Score',       defaultVisible: true },
-    climate_score:  { label: 'Climate Score',  defaultVisible: true },
-    status:         { label: 'Status',         defaultVisible: true },
-    classification: { label: 'Classification', defaultVisible: false },
-    startup_score:  { label: 'Startup Score',  defaultVisible: false },
-    capital:        { label: 'Capital',        defaultVisible: false },
-    registry:       { label: 'Registry Court', defaultVisible: false },
-    reg_date:       { label: 'Reg. Date',      defaultVisible: false },
-    purpose:        { label: 'Purpose',        defaultVisible: false },
-    source:         { label: 'Source',          defaultVisible: false },
-    keywords:       { label: 'Keywords',       defaultVisible: false },
-};
-
-const STORAGE_KEY = 'hr_visible_columns';
-
-function getVisibleCols() {
-    try {
-        const stored = localStorage.getItem(STORAGE_KEY);
-        if (stored) return JSON.parse(stored);
-    } catch (e) {}
-    return Object.entries(COLUMNS).filter(([_, c]) => c.defaultVisible).map(([k]) => k);
-}
-
-function saveVisibleCols(cols) {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(cols));
-}
-
-function applyColumns() {
-    const visible = new Set(getVisibleCols());
-    const allCells = document.querySelectorAll('[data-col]');
-    allCells.forEach(el => {
-        el.style.display = visible.has(el.dataset.col) ? '' : 'none';
-    });
-    // Update checkboxes
-    document.querySelectorAll('#col-checkboxes input[type=checkbox]').forEach(cb => {
-        cb.checked = visible.has(cb.value);
-    });
-    // Update count
-    document.getElementById('col-count').textContent = visible.size + ' of ' + Object.keys(COLUMNS).length + ' columns';
-}
-
-function toggleCol(colKey) {
-    const cols = getVisibleCols();
-    const idx = cols.indexOf(colKey);
-    if (idx >= 0) {
-        if (cols.length <= 1) return; // keep at least one
-        cols.splice(idx, 1);
-    } else {
-        cols.push(colKey);
-    }
-    saveVisibleCols(cols);
-    applyColumns();
-}
-
-function colSelectAll() {
-    saveVisibleCols(Object.keys(COLUMNS));
-    applyColumns();
-}
-
-function colSelectDefaults() {
-    saveVisibleCols(Object.entries(COLUMNS).filter(([_, c]) => c.defaultVisible).map(([k]) => k));
-    applyColumns();
-}
-
-function toggleColMenu() {
-    document.getElementById('col-menu').classList.toggle('hidden');
-}
-
-// Build checkbox list
-(function() {
-    const container = document.getElementById('col-checkboxes');
-    for (const [key, cfg] of Object.entries(COLUMNS)) {
-        const label = document.createElement('label');
-        label.className = 'flex items-center px-3 py-1 hover:bg-gray-50 cursor-pointer text-sm text-gray-700';
-        label.innerHTML = '<input type="checkbox" value="' + key + '" class="rounded border-gray-300 text-indigo-600 mr-2" onchange="toggleCol(\'' + key + '\')"> ' + cfg.label;
-        container.appendChild(label);
-    }
-    applyColumns();
-})();
-
-// Close menu on outside click
-document.addEventListener('click', function(e) {
-    const selector = document.getElementById('col-selector');
-    if (!selector.contains(e.target)) {
-        document.getElementById('col-menu').classList.add('hidden');
-    }
-});
-
-// Relevance toggle
-async function setRelevance(companyId, value) {
-    const select = event.target;
-    try {
-        const resp = await fetch('/companies/' + companyId + '/relevance', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({relevance: value || null}),
-        });
-        if (!resp.ok) throw new Error('Failed');
-        applyRelevanceStyle(select, value);
-    } catch (e) {
-        alert('Error updating relevance');
-        location.reload();
-    }
-}
-
-function applyRelevanceStyle(select, value) {
-    select.className = select.className.replace(/bg-\S+|text-\S+|ring-\S+/g, '');
-    select.className += ' rounded-md border-gray-300 text-xs py-1 px-1.5 ';
-    if (value === 'relevant') {
-        select.className += 'bg-green-50 text-green-800 ring-1 ring-green-300';
-    } else if (value === 'irrelevant') {
-        select.className += 'bg-red-50 text-red-800 ring-1 ring-red-300';
-    } else {
-        select.className += 'bg-gray-50 text-gray-500';
-    }
-}
-
-// === Bulk selection ===
-function getSelectedIds() {
-    return Array.from(document.querySelectorAll('.row-select:checked')).map(cb => parseInt(cb.value));
-}
-
-function updateBulkBar() {
-    const ids = getSelectedIds();
-    const bar = document.getElementById('bulk-bar');
-    const count = document.getElementById('bulk-count');
-    if (ids.length > 0) {
-        bar.classList.remove('hidden');
-        count.textContent = ids.length;
-    } else {
-        bar.classList.add('hidden');
-    }
-    // Update select-all state
-    const allBoxes = document.querySelectorAll('.row-select');
-    const allChecked = allBoxes.length > 0 && ids.length === allBoxes.length;
-    document.getElementById('select-all').checked = allChecked;
-    document.getElementById('select-all').indeterminate = ids.length > 0 && !allChecked;
-}
-
-function toggleSelectAll(checked) {
-    document.querySelectorAll('.row-select').forEach(cb => cb.checked = checked);
-    updateBulkBar();
-}
-
-function clearSelection() {
-    toggleSelectAll(false);
-}
-
-async function bulkSetRelevance(value) {
-    const ids = getSelectedIds();
-    if (!ids.length) return;
-    try {
-        const resp = await fetch('/companies/bulk-relevance', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({company_ids: ids, relevance: value}),
-        });
-        if (!resp.ok) throw new Error('Failed');
-        // Update UI for each affected row
-        ids.forEach(id => {
-            const row = document.querySelector('tr[data-company-id="' + id + '"]');
-            if (!row) return;
-            const select = row.querySelector('[data-col="relevance"] select');
-            if (select) {
-                select.value = value || '';
-                applyRelevanceStyle(select, value);
-            }
-        });
-        clearSelection();
-    } catch (e) {
-        alert('Error updating relevance');
-        location.reload();
-    }
-}
-
-// === Saved filter presets ===
-function savePreset() {
-    const qs = '{{ filter_qs }}'.trim();
-    if (!qs) { alert('No active filters to save. Apply some filters first.'); return; }
-    const name = prompt('Name this filter preset:');
-    if (!name) return;
-    fetch('/api/filter-presets', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({name: name, params: qs}),
-    }).then(r => { if (r.ok) location.reload(); else alert('Error saving preset'); });
-}
-
-function deletePreset(id, name) {
-    if (!confirm('Delete preset "' + name + '"?')) return;
-    fetch('/api/filter-presets/' + id, {method: 'DELETE'})
-        .then(r => { if (r.ok) location.reload(); else alert('Error deleting preset'); });
-}
+// Page-specific data (needed by app.js functions)
+const CURRENT_FILTER_QS = '{{ filter_qs }}';
 </script>
 {% endblock %}
