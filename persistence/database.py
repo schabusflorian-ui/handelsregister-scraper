@@ -528,6 +528,10 @@ class Database:
                 ("relevance", "TEXT"),
                 ("climate_score", "INTEGER DEFAULT 0"),
                 ("brand_name_score", "INTEGER DEFAULT 0"),
+                ("team_size", "INTEGER"),
+                ("tech_stack", "TEXT"),
+                ("github_url", "TEXT"),
+                ("job_count", "INTEGER DEFAULT 0"),
             ]:
                 if col not in columns and columns:
                     cursor.execute(f"ALTER TABLE companies ADD COLUMN {col} {col_type}")

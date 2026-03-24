@@ -15,6 +15,7 @@ from datetime import datetime, timedelta
 from typing import Any, Dict, Optional
 
 from persistence.database import Database
+from processing.brand_name_scorer import BrandNameScorer
 from processing.filters import AIRoboticsFilter
 from processing.startup_scorer import StartupScorer
 from scheduler.rate_limiter import PersistentRateLimiter
@@ -63,6 +64,7 @@ class AnnouncementMonitoringJob:
 
         self.filter = AIRoboticsFilter()
         self.startup_scorer = StartupScorer()
+        self.brand_scorer = BrandNameScorer()
         self.source = None
 
     def _get_date_range(self) -> tuple:
@@ -75,15 +77,16 @@ class AnnouncementMonitoringJob:
             end_date.strftime("%d.%m.%Y"),
         )
 
-    def _is_ai_relevant(self, company_name: str) -> tuple:
+    def _is_ai_relevant(self, company_name: str, purpose: Optional[str] = None) -> tuple:
         """
-        Check if company name suggests AI/robotics relevance.
+        Check if company name/purpose suggests AI/robotics/tech relevance.
 
         Returns:
             (is_relevant: bool, filter_result: FilterResult or None)
         """
         filter_result = self.filter.filter_company(
             name=company_name,
+            purpose=purpose,
             status="currently registered",
         )
         return (filter_result.passes, filter_result)
@@ -124,8 +127,8 @@ class AnnouncementMonitoringJob:
         Returns:
             company_id if new company was added, None otherwise
         """
-        # Check if AI relevant
-        is_relevant, filter_result = self._is_ai_relevant(ann.company_name)
+        # Check if AI relevant — include purpose text for better classification
+        is_relevant, filter_result = self._is_ai_relevant(ann.company_name, purpose=ann.purpose)
 
         if not is_relevant:
             return None
@@ -152,6 +155,9 @@ class AnnouncementMonitoringJob:
             tech_categories=filter_result.tech_categories,
         )
 
+        # Calculate brand name score
+        brand_result = self.brand_scorer.score(ann.company_name, city=ann.city)
+
         # Extract registry type from native number
         registry_type = ""
         if ann.native_company_number:
@@ -160,7 +166,7 @@ class AnnouncementMonitoringJob:
                     registry_type = rt
                     break
 
-        # Insert new company
+        # Insert new company with all available fields
         company_id = self.db.insert_company(
             company_number=f"announcement_{hash(ann.native_company_number) & 0xFFFFFFFF:08x}",
             name=ann.company_name,
@@ -168,12 +174,20 @@ class AnnouncementMonitoringJob:
             native_company_number=ann.native_company_number,
             current_status="currently registered",
             registry_type=registry_type,
+            city=ann.city,
+            state=ann.state,
+            purpose=ann.purpose,
+            capital_amount=ann.capital_new,
+            postal_code=ann.postal_code,
+            street=ann.street,
+            registration_date=ann.announcement_date,
             ai_robotics_score=filter_result.relevance_score,
             climate_score=filter_result.climate_score,
             matched_keywords=filter_result.matched_keywords,
             tech_categories=filter_result.tech_categories,
             startup_score=startup_result.total_score,
             startup_classification=classification,
+            brand_name_score=brand_result.total_score,
         )
 
         # Add to enrichment queue for detailed lookup

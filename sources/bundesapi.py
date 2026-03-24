@@ -126,6 +126,9 @@ class Announcement:
     city: Optional[str] = None
     state: Optional[str] = None
     registry_type: Optional[str] = None
+    purpose: Optional[str] = None  # Business purpose (Gegenstand)
+    postal_code: Optional[str] = None
+    street: Optional[str] = None
 
 
 class BundesAPISource:
@@ -922,6 +925,12 @@ class BundesAPISource:
             # Try to extract capital amounts
             capital_old, capital_new = self._extract_capital_amounts(text)
 
+            # Extract purpose from new-registration announcements
+            purpose = self._extract_purpose(text) if announcement_type == "neueintragung" else None
+
+            # Extract address
+            postal_code, street = self._extract_address(text)
+
             announcements.append(
                 Announcement(
                     company_name=company_name,
@@ -931,6 +940,9 @@ class BundesAPISource:
                     text=text,
                     capital_old=capital_old,
                     capital_new=capital_new,
+                    purpose=purpose,
+                    postal_code=postal_code,
+                    street=street,
                 )
             )
 
@@ -1046,6 +1058,64 @@ class BundesAPISource:
         elif len(amounts) == 1:
             # Single amount - probably the new capital
             return (None, amounts[0])
+
+        return (None, None)
+
+    @staticmethod
+    def _extract_purpose(text: str) -> Optional[str]:
+        """
+        Extract business purpose (Gegenstand) from announcement text.
+
+        German Handelsregister announcements for new registrations typically contain:
+        "Gegenstand: <purpose description>." or
+        "Gegenstand des Unternehmens: <purpose description>."
+        """
+        # Pattern 1: "Gegenstand: ..." or "Gegenstand des Unternehmens: ..."
+        m = re.search(
+            r"Gegenstand(?:\s+des\s+Unternehmens)?:\s*(.+?)(?:\.\s*(?:Stammkapital|Kapital|Geschäftsführer|Alleiniger|Vertretung|Bestellt|Sitz|Eingetragen|Rechtsform|Gesellschaft mit)|$)",
+            text,
+            re.IGNORECASE | re.DOTALL,
+        )
+        if m:
+            purpose = m.group(1).strip().rstrip(".")
+            if len(purpose) > 10:  # Ignore very short matches
+                return purpose[:1000]
+
+        # Pattern 2: "Unternehmensgegenstand: ..."
+        m = re.search(
+            r"Unternehmensgegenstand:\s*(.+?)(?:\.\s*(?:Stammkapital|Kapital|Geschäftsführer|Sitz)|$)",
+            text,
+            re.IGNORECASE | re.DOTALL,
+        )
+        if m:
+            purpose = m.group(1).strip().rstrip(".")
+            if len(purpose) > 10:
+                return purpose[:1000]
+
+        return None
+
+    @staticmethod
+    def _extract_address(text: str) -> tuple:
+        """
+        Extract postal code and street from announcement text.
+
+        Returns:
+            (postal_code, street) tuple
+        """
+        # Common patterns: "Geschäftsanschrift: Musterstr. 1, 12345 Berlin"
+        # or "Sitz: Berlin, Geschäftsanschrift: Musterstr. 1, 12345 Berlin"
+        m = re.search(
+            r"Geschäftsanschrift:\s*(.+?),\s*(\d{5})\s+\w",
+            text,
+            re.IGNORECASE,
+        )
+        if m:
+            return (m.group(2), m.group(1).strip())
+
+        # Try standalone postal code pattern near address context
+        m = re.search(r"(\d{5})\s+(?:Berlin|München|Hamburg|Köln|Frankfurt|Stuttgart|Düsseldorf|Leipzig|Dresden|Hannover|Nürnberg|Bremen|Essen|Dortmund|Bonn|Mannheim|Augsburg|Wiesbaden|Karlsruhe|Heidelberg|Freiburg|Aachen)", text)
+        if m:
+            return (m.group(1), None)
 
         return (None, None)
 

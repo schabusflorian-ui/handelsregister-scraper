@@ -16,11 +16,61 @@ import json
 import logging
 import os
 import random
+import re
 import time
 from datetime import datetime
 from typing import Any, Dict, Optional
 
 logger = logging.getLogger(__name__)
+
+# Role keywords for headline parsing — ordered by specificity
+_ROLE_PATTERNS = [
+    # Founder roles (highest priority)
+    (r"\b(?:co-?)?founder\b|\bgründer(?:in)?\b|\bmitgründer(?:in)?\b", "Founder"),
+    # C-suite
+    (r"\bCEO\b|\bchief executive\b|\bgeschäftsführ(?:er|erin|ung)\b", "CEO"),
+    (r"\bCTO\b|\bchief technology\b|\bchief technical\b", "CTO"),
+    (r"\bCFO\b|\bchief financial\b", "CFO"),
+    (r"\bCOO\b|\bchief operating\b", "COO"),
+    (r"\bCMO\b|\bchief marketing\b", "CMO"),
+    (r"\bCPO\b|\bchief product\b", "CPO"),
+    # VP / Director
+    (r"\bVP\b|\bvice president\b", "VP"),
+    (r"\bdirector\b|\bleiter(?:in)?\b", "Director"),
+    # Head of
+    (r"\bhead of\b", "Head of Department"),
+    # Manager
+    (r"\bmanaging director\b", "Managing Director"),
+]
+_ROLE_PATTERNS_COMPILED = [(re.compile(p, re.IGNORECASE), role) for p, role in _ROLE_PATTERNS]
+
+
+def _parse_role_from_headline(headline: Optional[str]) -> Optional[str]:
+    """
+    Extract a standardized role from a LinkedIn headline.
+
+    Examples:
+        "CEO & Co-Founder at TechCo" → "Founder / CEO"
+        "Geschäftsführerin bei StartupX" → "CEO"
+        "Head of Engineering" → "Head of Department"
+    """
+    if not headline:
+        return None
+
+    matched_roles = []
+    for pattern, role in _ROLE_PATTERNS_COMPILED:
+        if pattern.search(headline):
+            matched_roles.append(role)
+
+    if not matched_roles:
+        return None
+
+    # If both Founder and a C-suite role, combine them
+    if "Founder" in matched_roles and len(matched_roles) > 1:
+        other = [r for r in matched_roles if r != "Founder"][0]
+        return f"Founder / {other}"
+
+    return matched_roles[0]
 
 
 class OfficerLinkedInEnrichmentJob:
@@ -162,6 +212,16 @@ class OfficerLinkedInEnrichmentJob:
                     linkedin_match_confidence=match.match_confidence,
                     linkedin_enrichment_source=match.source,
                 )
+
+                # Parse standardized role from headline
+                parsed_role = _parse_role_from_headline(match.headline)
+                if parsed_role and parsed_role != officer.get("role"):
+                    self.db.conn.execute(
+                        "UPDATE officers SET role = ? WHERE id = ?",
+                        (parsed_role, officer["id"]),
+                    )
+                    self.db.conn.commit()
+
                 self.state["total_enriched"] += 1
                 stats["success"] = True
                 stats["details"] = {

@@ -245,6 +245,30 @@ class WebsiteScrapeJob:
             update["funding_mentions"] = json.dumps(data.funding_mentions[:5])
             logger.info("Funding mentions for %s: %s", company["name"], data.funding_mentions)
 
+        # Store team size (from team members or indicator)
+        if data.team_members:
+            update["team_size"] = len(data.team_members)
+        elif data.team_size_indicator:
+            # Parse indicator like "10-50" → take midpoint
+            try:
+                parts = data.team_size_indicator.split("-")
+                if len(parts) == 2:
+                    update["team_size"] = (int(parts[0]) + int(parts[1])) // 2
+            except (ValueError, IndexError):
+                pass
+
+        # Store tech stack as JSON
+        if data.tech_stack:
+            update["tech_stack"] = json.dumps(data.tech_stack[:20])
+
+        # Store GitHub URL
+        if data.github_url:
+            update["github_url"] = data.github_url
+
+        # Store job count (strong hiring signal)
+        if data.job_count > 0:
+            update["job_count"] = data.job_count
+
         # Update the database
         self.db.update_company(company_id, **update)
 
@@ -258,7 +282,78 @@ class WebsiteScrapeJob:
                 result.get("investments_created", 0),
             )
 
+        # Re-score with purpose text if we just added a description
+        # This can significantly improve classification for companies with generic names
+        if result["description_added"]:
+            self._rescore_with_purpose(company, update.get("purpose", ""))
+
         return result
+
+    def _rescore_with_purpose(self, company: Dict, purpose: str):
+        """Re-run scoring pipeline now that we have purpose text."""
+        from processing.filters import AIRoboticsFilter
+        from processing.startup_scorer import StartupScorer
+
+        filt = AIRoboticsFilter()
+        scorer = StartupScorer()
+
+        filter_result = filt.filter_company(
+            name=company["name"],
+            purpose=purpose,
+        )
+
+        # Only update if scores improved (don't downgrade)
+        new_ai = max(filter_result.relevance_score, company.get("ai_robotics_score", 0))
+        new_climate = max(filter_result.climate_score, company.get("climate_score", 0))
+
+        rescore_update = {}
+        if new_ai > company.get("ai_robotics_score", 0):
+            rescore_update["ai_robotics_score"] = new_ai
+        if new_climate > company.get("climate_score", 0):
+            rescore_update["climate_score"] = new_climate
+        if filter_result.tech_categories:
+            # Merge with existing categories
+            existing = company.get("tech_categories")
+            if existing:
+                try:
+                    existing_cats = json.loads(existing)
+                except (json.JSONDecodeError, TypeError):
+                    existing_cats = []
+            else:
+                existing_cats = []
+            merged = list(set(existing_cats + filter_result.tech_categories))
+            if len(merged) > len(existing_cats):
+                rescore_update["tech_categories"] = json.dumps(merged)
+
+        if rescore_update:
+            # Re-classify with updated scores
+            startup_result = scorer.score_company(
+                name=company["name"],
+                city=company.get("city"),
+                purpose=purpose,
+                capital_amount=company.get("capital_amount"),
+                ai_relevance_score=new_ai,
+                climate_score=new_climate,
+                tech_categories=filter_result.tech_categories,
+            )
+            new_classification = scorer.classify(
+                startup_result,
+                ai_relevance_score=new_ai,
+                climate_score=new_climate,
+                tech_categories=filter_result.tech_categories,
+            )
+            rescore_update["startup_score"] = startup_result.total_score
+            rescore_update["startup_classification"] = new_classification
+            rescore_update["matched_keywords"] = json.dumps(filter_result.matched_keywords)
+
+            self.db.update_company(company["id"], **rescore_update)
+            logger.info(
+                "Re-scored %s with purpose: AI=%d→%d, climate=%d→%d, class=%s",
+                company["name"],
+                company.get("ai_robotics_score", 0), new_ai,
+                company.get("climate_score", 0), new_climate,
+                new_classification,
+            )
 
     def _ensure_investors_seeded(self):
         """Ensure investor data is in the database (needed for matching)."""
