@@ -38,8 +38,8 @@
                     {% else %}bg-gray-100 text-gray-800{% endif %}">
                     Rel: {{ company.ai_robotics_score }}
                 </span>
-                {% if company.startup_classification %}
-                <span class="text-xs text-purple-600">{{ company.startup_classification }}</span>
+                {% if company.startup_classification and company.startup_classification != 'unknown' %}
+                <span class="text-xs text-purple-600">{{ company.startup_classification|classify_label }}</span>
                 {% endif %}
             </div>
         </a>
@@ -51,23 +51,23 @@
 
 <!-- Section 2: Quick Stats -->
 <div class="mb-8 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
-    <div class="bg-white rounded-lg shadow px-4 py-5">
-        <dt class="text-sm font-medium text-gray-500 truncate">Total Companies</dt>
+    <a href="/companies" class="bg-white rounded-lg shadow px-4 py-5 border-l-4 border-indigo-500 hover:bg-gray-50 transition-colors">
+        <dt class="text-sm font-medium text-gray-500 truncate">Companies</dt>
         <dd class="mt-1 text-2xl font-semibold text-gray-900">{{ "{:,}".format(stats.total_companies) }}</dd>
-    </div>
-    <a href="/companies?contacted=yes" class="bg-green-50 border border-green-200 rounded-lg px-4 py-5 hover:bg-green-100 transition-colors">
-        <dt class="text-sm font-medium text-green-800">Contacted</dt>
-        <dd class="mt-1 text-2xl font-semibold text-green-900">{{ contacted_count }}</dd>
     </a>
-    <div class="bg-white rounded-lg shadow px-4 py-5">
+    <a href="/companies?contacted=yes" class="bg-white rounded-lg shadow px-4 py-5 border-l-4 border-green-500 hover:bg-gray-50 transition-colors">
+        <dt class="text-sm font-medium text-gray-500 truncate">Contacted</dt>
+        <dd class="mt-1 text-2xl font-semibold text-green-700">{{ contacted_count }}</dd>
+    </a>
+    <div class="bg-white rounded-lg shadow px-4 py-5 border-l-4 border-blue-500">
         <dt class="text-sm font-medium text-gray-500 truncate">Officers</dt>
         <dd class="mt-1 text-2xl font-semibold text-gray-900">{{ "{:,}".format(stats.total_officers) }}</dd>
     </div>
-    <div class="bg-white rounded-lg shadow px-4 py-5">
+    <a href="/capital-events" class="bg-white rounded-lg shadow px-4 py-5 border-l-4 border-emerald-500 hover:bg-gray-50 transition-colors">
         <dt class="text-sm font-medium text-gray-500 truncate">Capital Events</dt>
         <dd class="mt-1 text-2xl font-semibold text-gray-900">{{ "{:,}".format(stats.total_capital_events) }}</dd>
-    </div>
-    <div class="bg-white rounded-lg shadow px-4 py-5">
+    </a>
+    <div class="bg-white rounded-lg shadow px-4 py-5 border-l-4 border-amber-500">
         <dt class="text-sm font-medium text-gray-500 truncate">Enrichment Queue</dt>
         <dd class="mt-1 text-2xl font-semibold text-gray-900">{{ "{:,}".format(stats.enrichment_queue_size) }}</dd>
     </div>

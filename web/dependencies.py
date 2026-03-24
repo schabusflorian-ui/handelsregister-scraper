@@ -55,3 +55,27 @@ templates.env.filters["currency"] = format_currency
 templates.env.filters["date"] = format_date
 templates.env.filters["split"] = lambda s, sep=",": s.split(sep) if s else []
 templates.env.filters["from_json"] = lambda s: _json.loads(s) if s else []
+templates.env.filters["humanize"] = lambda s: s.replace("_", " ").title() if s else "-"
+templates.env.filters["timeago"] = lambda s: _timeago(s)
+templates.env.filters["classify_label"] = lambda s: {"startup": "Startup", "scaleup": "Scaleup", "established": "Established"}.get(s, s.title() if s else "—")
+
+
+def _timeago(date_str: Optional[str]) -> str:
+    """Format a date as 'X days ago'."""
+    if not date_str:
+        return ""
+    try:
+        dt = datetime.fromisoformat(date_str.replace("Z", "+00:00"))
+        delta = datetime.now() - dt.replace(tzinfo=None)
+        if delta.days == 0:
+            return "today"
+        elif delta.days == 1:
+            return "yesterday"
+        elif delta.days < 30:
+            return f"{delta.days}d ago"
+        elif delta.days < 365:
+            return f"{delta.days // 30}mo ago"
+        else:
+            return f"{delta.days // 365}y ago"
+    except:
+        return ""

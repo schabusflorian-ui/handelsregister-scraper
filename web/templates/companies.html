@@ -285,12 +285,13 @@
                         <a href="/companies/{{ company.id }}" class="text-sm font-medium text-indigo-600 hover:text-indigo-900">
                             {{ company.name[:50] }}{% if company.name|length > 50 %}...{% endif %}
                         </a>
-                        {% if company.startup_classification %}
+                        {% if company.startup_classification and company.startup_classification != 'unknown' %}
                         <span class="ml-1 inline-flex items-center rounded-full px-1.5 py-0.5 text-xs font-medium
                             {% if company.startup_classification == 'startup' %}bg-purple-100 text-purple-800
-                            {% elif company.startup_classification == 'tech_company' %}bg-blue-100 text-blue-800
-                            {% else %}bg-gray-100 text-gray-800{% endif %}">
-                            {{ company.startup_classification[:1]|upper }}
+                            {% elif company.startup_classification == 'scaleup' %}bg-blue-100 text-blue-800
+                            {% else %}bg-gray-100 text-gray-800{% endif %}"
+                            title="{{ company.startup_classification|classify_label }}">
+                            {{ company.startup_classification|classify_label }}
                         </span>
                         {% endif %}
                     </td>
@@ -353,7 +354,9 @@
                         </div>
                     </td>
                     <td data-col="classification" class="px-3 py-3 whitespace-nowrap text-sm text-gray-500">
-                        {{ company.startup_classification or '-' }}
+                        {% if company.startup_classification and company.startup_classification != 'unknown' %}
+                            {{ company.startup_classification|classify_label }}
+                        {% else %}-{% endif %}
                     </td>
                     <td data-col="startup_score" class="px-3 py-3 whitespace-nowrap text-sm text-gray-500">
                         {{ company.startup_score or '-' }}
