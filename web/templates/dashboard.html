@@ -17,7 +17,7 @@
     <div class="flex items-center justify-between">
         <div>
             <h2 class="text-2xl font-bold text-yellow-900">{{ new_count }} companies need review</h2>
-            <p class="mt-1 text-sm text-yellow-700">Unviewed companies with AI score 3+</p>
+            <p class="mt-1 text-sm text-yellow-700">Unviewed companies with relevance score 3+</p>
         </div>
         <a href="/companies?viewed=no&min_score=3"
            class="inline-flex items-center rounded-lg bg-yellow-600 px-5 py-3 text-base font-semibold text-white shadow-sm hover:bg-yellow-500 transition-colors">
@@ -36,7 +36,7 @@
                     {% if company.ai_robotics_score >= 5 %}bg-green-100 text-green-800
                     {% elif company.ai_robotics_score >= 3 %}bg-yellow-100 text-yellow-800
                     {% else %}bg-gray-100 text-gray-800{% endif %}">
-                    AI: {{ company.ai_robotics_score }}
+                    Rel: {{ company.ai_robotics_score }}
                 </span>
                 {% if company.startup_classification %}
                 <span class="text-xs text-purple-600">{{ company.startup_classification }}</span>
@@ -102,7 +102,7 @@
                                     {% if company.ai_robotics_score >= 5 %}bg-green-100 text-green-800
                                     {% elif company.ai_robotics_score >= 3 %}bg-yellow-100 text-yellow-800
                                     {% else %}bg-gray-100 text-gray-800{% endif %}">
-                                    AI: {{ company.ai_robotics_score }}
+                                    Rel: {{ company.ai_robotics_score }}
                                 </span>
                                 {% if company.startup_classification %}
                                 <span class="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium

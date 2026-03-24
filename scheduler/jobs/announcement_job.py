@@ -1,5 +1,5 @@
 """
-Announcement Monitoring Job - Monitor Registerbekanntmachungen for AI startups.
+Announcement Monitoring Job - Monitor Registerbekanntmachungen for new startups.
 
 This job:
 1. Fetches recent announcements from handelsregister.de

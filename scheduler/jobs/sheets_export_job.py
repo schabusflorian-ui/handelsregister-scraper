@@ -34,7 +34,7 @@ class SheetsExportJob:
     Export discovered companies to Google Sheets.
 
     Creates/updates a spreadsheet with:
-    - Sheet 1: All AI/Robotics companies
+    - Sheet 1: All Matched companies
     - Sheet 2: New companies (last 7 days)
     - Sheet 3: Statistics summary
     """
@@ -255,12 +255,12 @@ class SheetsExportJob:
     def _prepare_stats_sheet(self, stats: Dict) -> List[List]:
         """Prepare data for statistics sheet."""
         rows = [
-            ["Handelsregister AI/Robotics Companies - Statistics"],
+            ["Handelsregister Matched Companies - Statistics"],
             ["Last Updated", stats["last_updated"]],
             [],
             ["Summary"],
             ["Total Companies in Database", stats["total_companies"]],
-            ["AI/Robotics Companies", stats["ai_robotics_count"]],
+            ["Matched Companies", stats["ai_robotics_count"]],
             [],
             ["Score Distribution"],
             ["AI Score", "Count"],

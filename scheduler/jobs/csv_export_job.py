@@ -1,7 +1,7 @@
 """
 CSV Export Job - Daily export of discovered companies to CSV files.
 
-Exports AI/robotics companies to CSV files stored in the data directory.
+Exports discovered companies to CSV files stored in the data directory.
 No external API credentials required.
 """
 
@@ -19,7 +19,7 @@ class CSVExportJob:
     Export discovered companies to CSV files.
 
     Creates:
-    - all_companies.csv: All AI/Robotics companies
+    - all_companies.csv: All matched companies
     - new_companies.csv: Companies discovered in last 7 days
     - statistics.csv: Summary statistics
     """
@@ -242,13 +242,13 @@ class CSVExportJob:
         with open(filepath, "w", newline="", encoding="utf-8") as f:
             writer = csv.writer(f)
 
-            writer.writerow(["Handelsregister AI/Robotics Companies - Statistics"])
+            writer.writerow(["Handelsregister Companies - Statistics"])
             writer.writerow(["Last Updated", stats["last_updated"]])
             writer.writerow([])
 
             writer.writerow(["Summary"])
             writer.writerow(["Total Companies in Database", stats["total_companies"]])
-            writer.writerow(["AI/Robotics Companies", stats["ai_robotics_count"]])
+            writer.writerow(["Matched Companies", stats["ai_robotics_count"]])
             writer.writerow([])
 
             writer.writerow(["Score Distribution"])

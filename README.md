@@ -1,6 +1,8 @@
 # Handelsregister Startup Discovery Platform
 
-A data platform that monitors the German commercial register (Handelsregister) to discover AI, robotics, and climate-tech startups. It continuously ingests data from multiple sources, scores companies on relevance, and serves an interactive web dashboard for browsing, filtering, and exporting results.
+A data platform that monitors the German commercial register (Handelsregister) to discover emerging startups across configurable sectors. It continuously ingests data from multiple sources, scores companies on keyword relevance and startup likelihood, and serves an interactive web dashboard for browsing, filtering, and exporting results.
+
+The sector focus is fully configurable via YAML keyword lists — the default configuration targets tech startups, but the platform works for any industry vertical (e.g. biotech, fintech, energy, logistics).
 
 ## Architecture
 
@@ -30,7 +32,7 @@ A data platform that monitors the German commercial register (Handelsregister) t
 ## Features
 
 - **Multi-source discovery** — BundesAPI, OffeneRegister bulk data, DuckDuckGo/Brave/Serper search, LinkedIn snippet extraction, RSS news feeds, VC portfolio scraping
-- **Intelligent scoring** — AI/robotics relevance, climate-tech relevance, startup likelihood, brand name analysis, investor detection
+- **Configurable keyword scoring** — primary and secondary relevance scores driven by YAML keyword lists, startup likelihood heuristics, brand name analysis, investor detection
 - **Stealth founder tracking** — discover founders building in stealth via LinkedIn search snippets, track emergence into public companies
 - **Web dashboard** — browse, filter (15+ dimensions), sort, tag, and export companies with HTMX-powered UI
 - **Automated scheduling** — 15 background jobs on configurable cron triggers with rate limiting
@@ -100,8 +102,10 @@ See `.env.example` for the full list.
 ### Keyword Configuration
 
 Search keywords and investor lists are configured in `config/`:
-- `config/keywords.yaml` — AI, robotics, climate-tech, and deep-tech keywords (German + English)
-- `config/investors.yaml` — known VC/PE/angel investor names and aliases
+- `config/keywords.yaml` — sector-specific keywords organized by category (German + English). Edit these to target any industry vertical.
+- `config/investors.yaml` — known VC/PE/angel investor names and aliases for fuzzy matching
+
+Companies are scored on two configurable dimensions (primary and secondary relevance) plus a sector-agnostic startup likelihood score.
 
 ## Project Structure
 
@@ -118,7 +122,7 @@ Search keywords and investor lists are configured in `config/`:
 │   ├── website_finder.py      #   Domain guessing and validation
 │   └── ...
 ├── processing/                # Business logic
-│   ├── filters.py             #   AI/robotics/climate keyword scoring
+│   ├── filters.py             #   Configurable keyword scoring (primary + secondary)
 │   ├── startup_scorer.py      #   Startup likelihood heuristics
 │   ├── investor_matcher.py    #   Fuzzy investor name matching
 │   └── ...

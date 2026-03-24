@@ -132,9 +132,9 @@ class NotificationService:
         emoji = "🚀" if startup_classification == "startup" else "🔬"
 
         message = (
-            f"{emoji} *New AI/Robotics Company Discovered*\n\n"
+            f"{emoji} *New Company Discovered*\n\n"
             f"*{company_name}*{location}\n"
-            f"AI Score: {ai_score} | Classification: {startup_classification}"
+            f"Relevance: {ai_score} | Classification: {startup_classification}"
         )
 
         self._send_slack(message)
@@ -144,11 +144,11 @@ class NotificationService:
             self._send_email(
                 subject=f"[Handelsregister] New {startup_classification}: {company_name}",
                 body=f"""
-New AI/Robotics Company Discovered
+New Company Discovered
 
 Company: {company_name}
 Location: {city or "Unknown"}
-AI Score: {ai_score}
+Relevance: {ai_score}
 Classification: {startup_classification}
 
 View in database for more details.

@@ -14,7 +14,7 @@ from fastapi.staticfiles import StaticFiles
 from web.dependencies import WEB_DIR, get_db
 from web.routers import admin, api, capital_events, companies, dashboard, export, founders, investors, jobs
 
-app = FastAPI(title="Handelsregister Scraper", description="AI/Robotics Startup Discovery Platform")
+app = FastAPI(title="Handelsregister Scraper", description="Startup Discovery Platform")
 
 # Static files (if any local static files exist)
 static_dir = WEB_DIR / "static"

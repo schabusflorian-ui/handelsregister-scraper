@@ -1,8 +1,8 @@
 """
-AI/Robotics keyword filtering for company classification.
+Keyword filtering for company classification.
 
 Filters companies based on keyword matches in their name and business purpose.
-Provides separate AI/robotics and climate tech scoring.
+Provides configurable primary and secondary relevance scoring.
 
 IMPORTANT: Two keyword contexts exist:
 - NAME_*_KEYWORDS: Slim lists for scoring company names (Handelsregister).

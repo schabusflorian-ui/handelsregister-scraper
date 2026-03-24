@@ -45,7 +45,7 @@
                     {% if company.ai_robotics_score >= 5 %}bg-green-100 text-green-800
                     {% elif company.ai_robotics_score >= 3 %}bg-yellow-100 text-yellow-800
                     {% else %}bg-gray-100 text-gray-800{% endif %}">
-                    AI Score: {{ company.ai_robotics_score }}
+                    Relevance: {{ company.ai_robotics_score }}
                 </span>
                 {% if company.startup_classification %}
                 <span class="inline-flex items-center rounded-full px-3 py-1 text-sm font-medium
@@ -250,12 +250,12 @@
         <!-- Scores & Keywords -->
         <div class="bg-white shadow rounded-lg">
             <div class="px-4 py-5 sm:px-6 border-b border-gray-200">
-                <h3 class="text-lg font-medium leading-6 text-gray-900">AI Analysis</h3>
+                <h3 class="text-lg font-medium leading-6 text-gray-900">Scoring Analysis</h3>
             </div>
             <div class="px-4 py-5 sm:p-6">
                 <dl class="space-y-4">
                     <div>
-                        <dt class="text-sm font-medium text-gray-500">AI/Robotics Score</dt>
+                        <dt class="text-sm font-medium text-gray-500">Relevance Score</dt>
                         <dd class="mt-1">
                             <div class="flex items-center">
                                 <div class="flex-1">

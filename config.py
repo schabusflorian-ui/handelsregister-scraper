@@ -1,7 +1,9 @@
 """
-Configuration file for Handelsregister Scraper
+Configuration file for Handelsregister Scraper.
 
-Edit these values to customize the scraper behavior
+Edit these values to customize the scraper behavior.
+Sector focus is fully configurable — change SEARCH_KEYWORDS and
+TECH_CATEGORIES to target any industry vertical.
 """
 
 # =============================================================================
@@ -22,8 +24,9 @@ REQUEST_TIMEOUT = 60
 # SEARCH PARAMETERS
 # =============================================================================
 
-# Keywords to search for (German and English)
-# Add or remove keywords based on your focus area
+# Keywords to search for (German and English).
+# Replace these with keywords relevant to your target sector.
+# Examples: biotech, fintech, logistics, energy, etc.
 SEARCH_KEYWORDS = [
     # AI Keywords
     "künstliche intelligenz",

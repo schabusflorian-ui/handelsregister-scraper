@@ -32,7 +32,7 @@ console = Console()
 @click.option("--db", default="handelsregister.db", help="Database file path")
 @click.pass_context
 def cli(ctx, db):
-    """Handelsregister Scraper - Find AI/Robotics startups in Germany."""
+    """Handelsregister Scraper - Discover startups in the German commercial register."""
     ctx.ensure_object(dict)
     ctx.obj["db_path"] = db
 
@@ -491,7 +491,7 @@ def test_connection(ctx):
 
     console.print("\n[bold]Results:[/bold]")
     console.print(f"  Records processed: {count}")
-    console.print(f"  AI/Robotics matches: {matches}")
+    console.print(f"  Keyword matches: {matches}")
     console.print("\n[green]Connection test successful![/green]")
 
 
@@ -1618,7 +1618,7 @@ def news_scan(ctx, funding_only, ai_only):
         console.print(f"\n[bold]Funding-related articles: {len(articles)}[/bold]\n")
     elif ai_only:
         articles = [a for a in articles if monitor.is_ai_robotics_related(a)]
-        console.print(f"\n[bold]AI/Robotics-related articles: {len(articles)}[/bold]\n")
+        console.print(f"\n[bold]Relevant articles: {len(articles)}[/bold]\n")
     else:
         console.print(f"\n[bold]Total articles: {len(articles)}[/bold]\n")
 
