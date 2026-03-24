@@ -265,11 +265,13 @@ class NewsMonitoringJob:
             name=company_name,
             ai_relevance_score=filter_result.relevance_score,
             climate_score=filter_result.climate_score,
+            tech_categories=filter_result.tech_categories,
         )
         classification = self.scorer.classify(
             startup_result,
             ai_relevance_score=filter_result.relevance_score,
             climate_score=filter_result.climate_score,
+            tech_categories=filter_result.tech_categories,
         )
 
         # Generate a stable company_number from the name

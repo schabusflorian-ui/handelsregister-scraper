@@ -141,11 +141,15 @@ class AnnouncementMonitoringJob:
             name=ann.company_name,
             ai_relevance_score=filter_result.relevance_score,
             climate_score=filter_result.climate_score,
+            purpose=getattr(ann, "purpose", None),
+            capital_amount=getattr(ann, "capital_new", None),
+            tech_categories=filter_result.tech_categories,
         )
         classification = self.startup_scorer.classify(
             startup_result,
             ai_relevance_score=filter_result.relevance_score,
             climate_score=filter_result.climate_score,
+            tech_categories=filter_result.tech_categories,
         )
 
         # Extract registry type from native number

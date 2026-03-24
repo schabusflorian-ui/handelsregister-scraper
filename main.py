@@ -144,13 +144,22 @@ def bulk_load(ctx, limit, min_score, force_download):
 
         for company in companies:
             ai_score = company.get("ai_robotics_score", 0)
+            clim_score = company.get("climate_score", 0)
+            tech_cats = company.get("tech_categories")
             startup_result = startup_scorer.score_company(
                 name=company["name"],
                 legal_form=company.get("legal_form"),
                 city=company.get("city"),
                 ai_relevance_score=ai_score,
+                climate_score=clim_score,
+                purpose=company.get("purpose"),
+                capital_amount=company.get("capital_amount"),
+                tech_categories=tech_cats,
             )
-            classification = startup_scorer.classify(startup_result, ai_relevance_score=ai_score)
+            classification = startup_scorer.classify(
+                startup_result, ai_relevance_score=ai_score,
+                climate_score=clim_score, tech_categories=tech_cats,
+            )
 
             if startup_result.total_score != company.get("startup_score", 0) or classification != company.get(
                 "startup_classification"

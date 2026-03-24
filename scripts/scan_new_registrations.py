@@ -237,10 +237,14 @@ def insert_candidates(
             legal_form=candidate["legal_form"],
             city=result.city,
             ai_relevance_score=ai_score,
+            purpose=getattr(result, "purpose", None),
+            capital_amount=getattr(result, "capital_amount", None),
+            tech_categories=filt.tech_categories if filt.passes else None,
         )
         classification = startup_scorer.classify(
             startup_result,
             ai_relevance_score=ai_score,
+            tech_categories=filt.tech_categories if filt.passes else None,
         )
 
         company_id = db.insert_company(

@@ -278,11 +278,15 @@ class BackfillJob:
             city=result.state,
             ai_relevance_score=filter_result.relevance_score,
             climate_score=filter_result.climate_score,
+            purpose=getattr(result, "purpose", None),
+            capital_amount=getattr(result, "capital_amount", None),
+            tech_categories=filter_result.tech_categories,
         )
         classification = self.startup_scorer.classify(
             startup_result,
             ai_relevance_score=filter_result.relevance_score,
             climate_score=filter_result.climate_score,
+            tech_categories=filter_result.tech_categories,
         )
 
         # Extract legal form from company name
