@@ -116,7 +116,7 @@ async def admin_restore_db():
     import base64
     import os
 
-    backup_path = "/app/data/db_backup.b64"
+    backup_path = os.environ.get("BACKUP_PATH", "/app/data/db_backup.b64")
     db_path = os.environ.get("DATABASE_PATH", "/data/handelsregister.db")
 
     if not os.path.exists(backup_path):

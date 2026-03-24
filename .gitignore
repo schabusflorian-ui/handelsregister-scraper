@@ -25,13 +25,15 @@ ENV/
 # Local data
 *.db
 *.sqlite3
+*.b64
+*.bz2
+*.jsonl
 /data/
 !data/.gitkeep
 
 # Exports
 exports/
 *.csv
-!scripts/*.csv
 
 # Environment
 .env
@@ -42,3 +44,13 @@ exports/
 
 # OS
 .DS_Store
+
+# Tool caches
+.ruff_cache/
+.pytest_cache/
+htmlcov/
+.coverage
+*.egg-info/
+
+# Railway
+.railway-trigger

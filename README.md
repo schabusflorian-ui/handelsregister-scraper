@@ -59,6 +59,21 @@ pip install -e ".[dev]"
 make dev
 ```
 
+### Seeding the Database
+
+The application starts with an empty SQLite database. To populate it:
+
+```bash
+# Option 1: Bulk-load from OffeneRegister (free, ~260MB download, no API key needed)
+python main.py bulk-load
+
+# Option 2: Scan the Handelsregister API (requires HANDELSREGISTER_API_KEY)
+python main.py scan
+
+# Option 3: Start the scheduler — it will discover companies automatically
+python -m scheduler.main
+```
+
 ### Running Tests
 
 ```bash
