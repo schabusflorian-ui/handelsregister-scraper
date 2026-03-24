@@ -471,15 +471,24 @@ class NewsMonitor:
         self.feeds = feeds or DEFAULT_RSS_FEEDS
         self.user_agent = user_agent
 
-    def fetch_feed(self, feed_url: str) -> Optional[str]:
-        """Fetch RSS feed content."""
-        try:
-            request = urllib.request.Request(feed_url, headers={"User-Agent": self.user_agent})
-            with urllib.request.urlopen(request, timeout=30) as response:
-                return response.read().decode("utf-8")
-        except Exception as e:
-            logger.warning("Failed to fetch feed %s: %s", feed_url, e)
-            return None
+    def fetch_feed(self, feed_url: str, retries: int = 2) -> Optional[str]:
+        """Fetch RSS feed content with retry on transient errors."""
+        import time
+
+        for attempt in range(retries + 1):
+            try:
+                request = urllib.request.Request(feed_url, headers={"User-Agent": self.user_agent})
+                with urllib.request.urlopen(request, timeout=30) as response:
+                    return response.read().decode("utf-8")
+            except (urllib.error.URLError, TimeoutError, OSError) as e:
+                if attempt < retries:
+                    time.sleep(2 * (attempt + 1))  # 2s, 4s backoff
+                    continue
+                logger.warning("Failed to fetch feed %s after %d attempts: %s", feed_url, retries + 1, e)
+                return None
+            except Exception as e:
+                logger.warning("Failed to fetch feed %s: %s", feed_url, e)
+                return None
 
     def parse_feed(self, xml_content: str, source_name: str) -> List[NewsArticle]:
         """Parse RSS/Atom feed XML into articles."""
@@ -566,18 +575,32 @@ class NewsMonitor:
     def fetch_all_articles(self, max_per_feed: int = 50) -> List[NewsArticle]:
         """Fetch articles from all configured feeds."""
         all_articles = []
+        self.feed_health = {}  # Track feed status per run
 
         for feed in self.feeds:
-            logger.info("Fetching feed: %s", feed["name"])
+            logger.debug("Fetching feed: %s", feed["name"])
 
             content = self.fetch_feed(feed["url"])
             if not content:
+                self.feed_health[feed["name"]] = {"status": "error", "articles": 0}
                 continue
 
             articles = self.parse_feed(content, feed["name"])
             all_articles.extend(articles[:max_per_feed])
+            self.feed_health[feed["name"]] = {"status": "ok", "articles": len(articles)}
 
-            logger.info("Got %d articles from %s", len(articles), feed["name"])
+            logger.debug("Got %d articles from %s", len(articles), feed["name"])
+
+        # Log feed health summary
+        ok_feeds = sum(1 for v in self.feed_health.values() if v["status"] == "ok")
+        failed_feeds = [name for name, v in self.feed_health.items() if v["status"] == "error"]
+        logger.info(
+            "Feed health: %d/%d feeds OK, %d articles total%s",
+            ok_feeds,
+            len(self.feeds),
+            len(all_articles),
+            f" — failed: {', '.join(failed_feeds)}" if failed_feeds else "",
+        )
 
         return all_articles
 
@@ -598,10 +621,68 @@ class NewsMonitor:
         return score >= 2
 
     def is_ai_robotics_related(self, article: NewsArticle) -> bool:
-        """Check if article is about AI/robotics/climate tech."""
+        """
+        Check if article is substantively about AI/robotics/climate tech.
+
+        Uses weighted scoring to avoid false positives from articles that
+        mention AI tangentially. A bare "AI" mention scores 1; we require >= 2
+        to filter out articles that just happen to mention AI in passing.
+        """
         text = f"{article.title} {article.description or ''}"
 
-        return any(re.search(p, text, re.IGNORECASE) for p in AI_ROBOTICS_CLIMATE_PATTERNS)
+        # Strong patterns score 2 (enough on their own)
+        strong_patterns = [
+            r"\bkünstliche(?:r|n|s)?\s+intelligenz\b",
+            r"\bartificial\s+intelligence\b",
+            r"\bmachine\s+learning\b",
+            r"\bmaschinelles\s+lernen\b",
+            r"\bdeep\s+learning\b",
+            r"\bgenerative\s+(?:ai|ki)\b",
+            r"\blarge\s+language\s+model\b",
+            r"\bfoundation\s+model\b",
+            r"\brobotik\b", r"\brobotics\b", r"\brobot(?:er)?\b", r"\bcobot\b",
+            r"\bautonome\s+(?:systeme|fahrzeuge|fahren)\b",
+            r"\bcomputer\s+vision\b",
+            r"\bcleantech\b", r"\bgreentech\b", r"\bclimate\s*tech\b",
+            r"\bwasserstoff\b", r"\bhydrogen\b",
+            r"\bphotovoltaik\b", r"\bsolar(?:energie|energy)\b",
+            r"\bwindenergie\b",
+            r"\belektromobilität\b",
+            r"\bKI-\w+",  # KI-Startup, KI-Firma, etc.
+        ]
+        # Weak patterns score 1 (need multiple or title-match to count)
+        weak_patterns = [
+            r"\bAI\b",
+            r"\bKI\b",
+            r"\bnlp\b", r"\bchatbot\b", r"\bllm\b",
+            r"\bdrohne\b", r"\bdrone\b",
+            r"\bsmart\s+factory\b",
+            r"\bdata\s+science\b",
+            r"\berneuerbare\s+energie\b",
+            r"\benergy\s+storage\b",
+            r"\bbatterietechnologie\b",
+            r"\bcarbon\s+capture\b",
+        ]
+
+        score = 0
+        for p in strong_patterns:
+            if re.search(p, text, re.IGNORECASE):
+                score += 2
+                break  # One strong match is enough
+
+        if score < 2:
+            for p in weak_patterns:
+                if re.search(p, text, re.IGNORECASE):
+                    score += 1
+
+            # Boost: weak pattern in title is stronger signal
+            title = article.title or ""
+            for p in weak_patterns:
+                if re.search(p, title, re.IGNORECASE):
+                    score += 1
+                    break
+
+        return score >= 2
 
     def is_early_stage_signal(self, article: NewsArticle) -> bool:
         """
@@ -623,36 +704,48 @@ class NewsMonitor:
         """
         Extract structured funding information from article.
 
-        Tries source-specific parsers first (DealMonitor format),
-        then falls back to generic extraction.
+        Returns the first/best funding mention. For DealMonitor articles
+        with multiple deals, use extract_all_funding_info() instead.
+        """
+        mentions = self.extract_all_funding_info(article)
+        return mentions[0] if mentions else None
+
+    def extract_all_funding_info(self, article: NewsArticle) -> List[FundingMention]:
+        """
+        Extract ALL structured funding mentions from an article.
+
+        DealMonitor articles often list 3-5 deals; this returns all of them.
+        Other article types return 0 or 1 mention.
         """
         # Try DealMonitor format first (deutsche-startups)
         if "#DealMonitor" in (article.title or ""):
-            return self._parse_dealmonitor(article)
+            return self._parse_dealmonitor_all(article)
 
         # Try StartupTicker format
         if "#StartupTicker" in (article.title or ""):
-            return self._parse_startup_ticker(article)
+            mention = self._parse_startup_ticker(article)
+            return [mention] if mention else []
 
         # Generic extraction
-        return self._extract_generic(article)
+        mention = self._extract_generic(article)
+        return [mention] if mention else []
 
-    def _parse_dealmonitor(self, article: NewsArticle) -> Optional[FundingMention]:
+    def _parse_dealmonitor_all(self, article: NewsArticle) -> List[FundingMention]:
         """
-        Parse deutsche-startups #DealMonitor format.
+        Parse deutsche-startups #DealMonitor format, extracting ALL deals.
 
-        Example: "#DealMonitor - Enua erhält 25 Millionen – Additive Drives..."
+        Example: "#DealMonitor - Enua erhält 25 Millionen – Additive Drives sammelt 10 Mio ein"
+        Returns a list of all funding mentions found.
         """
         text = f"{article.title} {article.description or ''}"
+        mentions = []
 
         # DealMonitor titles list multiple deals separated by – or +++
-        # Extract the first/main deal
         deals = re.split(r"\s*[–—]\s*|\s*\+\+\+\s*", text)
 
-        # Name fragment allowing lowercase starts (one.five, co-reactive, etc.)
-        _n = r"[A-Za-z][A-Za-z0-9\.\-]*(?:\s+[A-Za-z][A-Za-z0-9\.\-]+)*"
+        # Name fragment allowing lowercase starts, Umlauts
+        _n = r"[A-Za-zÄÖÜäöüß][A-Za-zÄÖÜäöüß0-9\.\-]*(?:\s+[A-Za-zÄÖÜäöüß][A-Za-zÄÖÜäöüß0-9\.\-]+)*"
 
-        # Find the first segment with a funding amount
         for deal in deals:
             deal = deal.strip()
             if not deal:
@@ -665,13 +758,21 @@ class NewsMonitor:
                 r"(\d+(?:[,\.]\d+)?)\s*(?:Millionen|Mio\.?)",
                 deal,
             )
+            if not match:
+                # Pattern: "CompanyName sammelt X Millionen ein"
+                match = re.search(
+                    rf"({_n})\s+"
+                    r"sammelt\s+(\d+(?:[,\.]\d+)?)\s*(?:Millionen|Mio\.?)\s+ein",
+                    deal,
+                )
+
             if match:
                 company = match.group(1).strip()
                 if self._is_valid_company_name(company):
                     amount = float(match.group(2).replace(",", ".")) * 1_000_000
-                    return FundingMention(
+                    mentions.append(FundingMention(
                         company_name=company,
-                        investors=[],
+                        investors=self._extract_investors(deal),
                         amount=amount,
                         currency="EUR",
                         round_type=self._extract_round_type(deal),
@@ -680,32 +781,9 @@ class NewsMonitor:
                         source=article.source,
                         extracted_at=datetime.utcnow().isoformat(),
                         confidence=0.9,
-                    )
+                    ))
 
-            # Pattern: "CompanyName sammelt X Millionen ein"
-            match = re.search(
-                rf"({_n})\s+"
-                r"sammelt\s+(\d+(?:[,\.]\d+)?)\s*(?:Millionen|Mio\.?)\s+ein",
-                deal,
-            )
-            if match:
-                company = match.group(1).strip()
-                if self._is_valid_company_name(company):
-                    amount = float(match.group(2).replace(",", ".")) * 1_000_000
-                    return FundingMention(
-                        company_name=company,
-                        investors=[],
-                        amount=amount,
-                        currency="EUR",
-                        round_type=self._extract_round_type(deal),
-                        article_url=article.url,
-                        article_title=article.title,
-                        source=article.source,
-                        extracted_at=datetime.utcnow().isoformat(),
-                        confidence=0.9,
-                    )
-
-        return None
+        return mentions
 
     def _parse_startup_ticker(self, article: NewsArticle) -> Optional[FundingMention]:
         """
@@ -847,10 +925,10 @@ class NewsMonitor:
 
         Uses verb-context patterns specific to German funding headlines.
         Handles both uppercase and lowercase startup names (e.g. one.five, co-reactive).
+        Supports German Umlauts (Ä, Ö, Ü) in company names.
         """
-        # Name fragment: 1-4 words, allows lowercase starts, dots, hyphens
-        # Limited to max 4 words to avoid grabbing sentence fragments
-        _w = r"[A-Za-z][A-Za-z0-9\.\-]*"
+        # Name fragment: 1-4 words, allows lowercase starts, dots, hyphens, Umlauts
+        _w = r"[A-Za-zÄÖÜäöüß][A-Za-zÄÖÜäöüß0-9\.\-]*"
         _n = rf"{_w}(?:\s+{_w}){{0,3}}"
 
         # Patterns ordered by specificity (most specific first)
@@ -863,27 +941,46 @@ class NewsMonitor:
             rf"hat\s+({_n})\s+.*?(?:eingesammelt|geschlossen|erhalten|bekommen)",
             # "CompanyName hat ... eingesammelt"
             rf"({_n})\s+(?:hat|haben)\s+.*eingesammelt",
-            # "X raises/secures/closes"
-            rf"({_n})\s+(?:raises|secures|closes)",
+            # "X raises/secures/closes" (English patterns)
+            rf"({_n})\s+(?:raises?|secures?|closes?|announces?|lands?|bags?|nabs?)",
+            # "Berlin-based X raises" / "Munich-based X secures"
+            rf"(?:[A-Z]\w+-based)\s+({_n})\s+(?:raises?|secures?|closes?|announces?)",
             # "Startup X" / "Fintech X" / "KI-Startup X"
-            rf"(?:Startup|Start-up|Fintech|Healthtech|Insurtech|SaaS|KI-Startup|AI-Startup|Cleantech-Startup|HealthTech-Startup)\s+({_n})",
+            rf"(?:Startup|Start-up|Fintech|Healthtech|Insurtech|Proptech|SaaS|KI-Startup|AI-Startup|Cleantech-Startup|HealthTech-Startup|Biotech|Medtech)\s+({_n})",
             # "Gründer von X" / "Gründer-Team von X"
             rf"(?:Gründer(?:-Team)?|Founder)\s+(?:von|of)\s+({_n})",
             # "Series/Seed/Runde für CompanyName" (funding context only)
             rf"(?:Series\s+\w|Seed|Finanzierung|Runde)\s+für\s+({_n})",
             # "bei X" in funding context, e.g. "investiert bei CompanyName"
             rf"investier\w*\s+(?:bei|in)\s+({_n})",
+            # "X gets/receives €Y million"
+            rf"({_n})\s+(?:gets?|receives?)\s+[€$£]\s*\d",
         ]
 
         for pattern in patterns:
             match = re.search(pattern, text, re.MULTILINE)
             if match:
-                name = match.group(1).strip()
+                name = self._clean_company_name(match.group(1).strip())
                 # Validate: not a stopword, not too short
-                if self._is_valid_company_name(name):
+                if name and self._is_valid_company_name(name):
                     return name
 
         return None
+
+    def _clean_company_name(self, name: str) -> str:
+        """Strip trailing verbs/articles that got captured by greedy regex."""
+        # Common trailing words that aren't part of company names
+        trailing_verbs = {
+            "erhält", "sammelt", "bekommt", "sichert", "schließt",
+            "hat", "haben", "will", "wird", "kann", "soll",
+            "raises", "secures", "closes", "announces", "gets",
+            "receives", "launches", "lands",
+        }
+        words = name.split()
+        # Strip trailing non-name words
+        while words and words[-1].lower() in trailing_verbs:
+            words.pop()
+        return " ".join(words)
 
     def _is_valid_company_name(self, name: str) -> bool:
         """Check if extracted name is plausibly a company name."""
@@ -1011,6 +1108,21 @@ class NewsMonitor:
             "climate",
             "skaliert",
             "running",
+            # German verbs from funding headlines
+            "erhält",
+            "sammelt",
+            "bekommt",
+            "sichert",
+            "schließt",
+            "investiert",
+            "launches",
+            "raises",
+            "secures",
+            "closes",
+            "announces",
+            "gets",
+            "receives",
+            "lands",
         }
         if len(words) > 1 and any(w in fragment_words for w in words):
             return False

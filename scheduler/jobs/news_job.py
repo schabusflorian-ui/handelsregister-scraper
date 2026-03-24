@@ -12,7 +12,7 @@ Runs periodically to:
 import hashlib
 import logging
 import re
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional, Tuple
 
 from processing.filters import AIRoboticsFilter
@@ -70,6 +70,9 @@ class NewsMonitoringJob:
 
         stats = {
             "articles_fetched": 0,
+            "articles_new": 0,
+            "articles_skipped_old": 0,
+            "articles_skipped_seen": 0,
             "funding_mentions": 0,
             "ai_articles": 0,
             "early_stage_articles": 0,
@@ -77,6 +80,7 @@ class NewsMonitoringJob:
             "companies_created": 0,
             "companies_enriched_hr": 0,
             "investors_detected": 0,
+            "investments_created": 0,
             "new_alerts": 0,
             "errors": 0,
         }
@@ -86,15 +90,29 @@ class NewsMonitoringJob:
             articles = self.monitor.fetch_all_articles()
             stats["articles_fetched"] = len(articles)
 
+            # Load already-seen URLs from database to skip re-processing
+            seen_urls = self._get_seen_article_urls()
+
             for article in articles:
+                # Skip already-processed articles (dedup check BEFORE expensive work)
+                if article.url in seen_urls:
+                    stats["articles_skipped_seen"] += 1
+                    continue
+
+                # Skip articles older than 7 days
+                if self._is_article_too_old(article, max_age_days=7):
+                    stats["articles_skipped_old"] += 1
+                    continue
+
+                stats["articles_new"] += 1
                 is_funding = self.monitor.is_funding_related(article)
                 is_ai = self.monitor.is_ai_robotics_related(article)
                 is_early_stage = self.monitor.is_early_stage_signal(article)
 
-                # Process funding articles
+                # Process funding articles — extract ALL mentions (DealMonitor has multiple)
                 if is_funding:
-                    mention = self.monitor.extract_funding_info(article)
-                    if mention:
+                    mentions = self.monitor.extract_all_funding_info(article)
+                    for mention in mentions:
                         stats["funding_mentions"] += 1
 
                         # Match or create company
@@ -118,11 +136,25 @@ class NewsMonitoringJob:
                             )
                             stats["new_alerts"] += 1
 
-                        # Detect investors mentioned
-                        for inv_name in mention.investors:
-                            inv_matches = self.matcher.match(inv_name)
-                            if inv_matches:
-                                stats["investors_detected"] += 1
+                        # Detect and store investor relationships
+                        if company_id and mention.investors:
+                            for inv_name in mention.investors:
+                                inv_matches = self.matcher.match(inv_name, min_confidence=0.7)
+                                if inv_matches:
+                                    stats["investors_detected"] += 1
+                                    best = inv_matches[0]
+                                    created = self._record_investment(
+                                        company_id=company_id,
+                                        investor_id=best.investor_id,
+                                        source="news",
+                                        confidence=best.confidence,
+                                        round_type=mention.round_type,
+                                        amount=mention.amount,
+                                        currency=mention.currency,
+                                        notes=f"From news: {article.title[:200]}",
+                                    )
+                                    if created:
+                                        stats["investments_created"] += 1
 
                 # Track AI/robotics/climate articles
                 if is_ai:
@@ -173,10 +205,21 @@ class NewsMonitoringJob:
         stats["companies_enriched_hr"] = self._hr_lookups_done
         stats["duration_seconds"] = (datetime.utcnow() - started_at).total_seconds()
 
+        # Attach feed health if available
+        if hasattr(self.monitor, "feed_health"):
+            failed = [n for n, v in self.monitor.feed_health.items() if v["status"] == "error"]
+            stats["feeds_ok"] = sum(1 for v in self.monitor.feed_health.values() if v["status"] == "ok")
+            stats["feeds_failed"] = len(failed)
+            if failed:
+                stats["feeds_failed_names"] = failed
+
         logger.info(
-            "News monitoring complete: %d articles, %d funding, %d AI, %d early-stage, "
-            "%d companies created, %d HR enriched",
+            "News monitoring complete: %d fetched (%d new, %d seen, %d old), "
+            "%d funding, %d AI, %d early-stage, %d companies created, %d HR enriched",
             stats["articles_fetched"],
+            stats["articles_new"],
+            stats["articles_skipped_seen"],
+            stats["articles_skipped_old"],
             stats["funding_mentions"],
             stats["ai_articles"],
             stats["early_stage_articles"],
@@ -185,6 +228,47 @@ class NewsMonitoringJob:
         )
 
         return stats
+
+    # =========================================================================
+    # Deduplication and filtering
+    # =========================================================================
+
+    def _get_seen_article_urls(self) -> set:
+        """Load URLs of already-processed articles from database."""
+        try:
+            rows = self.db.conn.execute("SELECT url FROM news_articles").fetchall()
+            return {row["url"] for row in rows}
+        except Exception:
+            return set()
+
+    def _is_article_too_old(self, article, max_age_days: int = 7) -> bool:
+        """Check if article is older than max_age_days based on published_date."""
+        if not article.published_date:
+            return False  # Can't determine age, process it
+
+        try:
+            # Try common RSS date formats
+            for fmt in [
+                "%a, %d %b %Y %H:%M:%S %z",     # RFC 822: "Mon, 01 Jan 2024 12:00:00 +0100"
+                "%a, %d %b %Y %H:%M:%S %Z",     # "Mon, 01 Jan 2024 12:00:00 GMT"
+                "%Y-%m-%dT%H:%M:%S%z",           # ISO 8601 with tz
+                "%Y-%m-%dT%H:%M:%SZ",            # ISO 8601 UTC
+                "%Y-%m-%d %H:%M:%S",             # Simple datetime
+                "%Y-%m-%d",                       # Simple date
+            ]:
+                try:
+                    pub_date = datetime.strptime(article.published_date.strip(), fmt)
+                    # Make timezone-naive for comparison
+                    if pub_date.tzinfo:
+                        pub_date = pub_date.replace(tzinfo=None)
+                    cutoff = datetime.utcnow() - timedelta(days=max_age_days)
+                    return pub_date < cutoff
+                except ValueError:
+                    continue
+        except Exception:
+            pass
+
+        return False  # Can't parse date, process it to be safe
 
     # =========================================================================
     # Company matching and creation
@@ -221,18 +305,77 @@ class NewsMonitoringJob:
         return company_id, (company_id is not None)
 
     def _match_company(self, company_name: str) -> Optional[int]:
-        """Try to match company name to database."""
+        """
+        Try to match company name to database using progressive matching.
+
+        Tries in order:
+        1. Exact case-insensitive match
+        2. Name without legal form suffix (GmbH, UG, etc.)
+        3. Core name words overlap (for "Enua" matching "Enua GmbH")
+        """
         if not company_name:
             return None
 
         conn = self.db.conn
+        name_lower = company_name.strip().lower()
 
-        # Try exact match first
+        # 1. Exact match (case-insensitive)
         row = conn.execute(
-            "SELECT id FROM companies WHERE name LIKE ? COLLATE NOCASE LIMIT 1", (f"%{company_name}%",)
+            "SELECT id FROM companies WHERE LOWER(name) = ? LIMIT 1",
+            (name_lower,),
         ).fetchone()
+        if row:
+            return row["id"]
 
-        return row["id"] if row else None
+        # 2. Try with legal form variations: "Enua" should match "Enua GmbH"
+        legal_forms = ["gmbh", "ug", "ag", "se", "kg", "ohg", "e.v.", "eg",
+                        "gmbh & co. kg", "ug (haftungsbeschränkt)"]
+        for lf in legal_forms:
+            # Search "name + legal form"
+            row = conn.execute(
+                "SELECT id FROM companies WHERE LOWER(name) = ? LIMIT 1",
+                (f"{name_lower} {lf}",),
+            ).fetchone()
+            if row:
+                return row["id"]
+
+        # 3. Strip legal form from search name and try exact core match
+        core_name = self._strip_legal_form(name_lower)
+        if core_name != name_lower:
+            row = conn.execute(
+                "SELECT id FROM companies WHERE LOWER(name) = ? LIMIT 1",
+                (core_name,),
+            ).fetchone()
+            if row:
+                return row["id"]
+
+        # 4. Try prefix match: "Enua" should match "Enua Technologies GmbH"
+        #    Only if name is specific enough (>=4 chars, not a common word)
+        if len(core_name) >= 4:
+            row = conn.execute(
+                "SELECT id, name FROM companies WHERE LOWER(name) LIKE ? ORDER BY LENGTH(name) ASC LIMIT 5",
+                (f"{core_name} %",),
+            ).fetchone()
+            if row:
+                return row["id"]
+
+        return None
+
+    @staticmethod
+    def _strip_legal_form(name: str) -> str:
+        """Remove German legal form suffixes from company name."""
+        # Order matters: longer forms first
+        suffixes = [
+            r"\s+gmbh\s*&\s*co\.?\s*kg\b",
+            r"\s+ug\s*\(haftungsbeschränkt\)",
+            r"\s+gmbh\b", r"\s+ug\b", r"\s+ag\b", r"\s+se\b",
+            r"\s+kg\b", r"\s+ohg\b", r"\s+e\.v\.\b", r"\s+eg\b",
+            r"\s+gbr\b", r"\s+inc\.?\b", r"\s+ltd\.?\b",
+        ]
+        result = name.strip()
+        for suffix in suffixes:
+            result = re.sub(suffix + r"$", "", result, flags=re.IGNORECASE).strip()
+        return result
 
     def _create_company_from_news(
         self,
@@ -327,93 +470,8 @@ class NewsMonitoringJob:
         return company_id
 
     def _is_valid_company_name(self, name: str) -> bool:
-        """Check if extracted name is a plausible company name."""
-        if not name or len(name) < 3:
-            return False
-
-        # Too short single words are usually not company names
-        if len(name.split()) == 1 and len(name) < 4:
-            return False
-
-        # Reject placeholder names
-        if name.lower() in ("unknown", "unbekannt"):
-            return False
-
-        # Filter out common false positives from article titles
-        stopwords = {
-            "das",
-            "die",
-            "der",
-            "ein",
-            "eine",
-            "neue",
-            "neues",
-            "neuer",
-            "deutsche",
-            "berliner",
-            "münchner",
-            "hamburger",
-            "kölner",
-            "startup",
-            "start-up",
-            "startups",
-            "unternehmen",
-            "firma",
-            "millionen",
-            "milliarden",
-            "euro",
-            "dollar",
-            "usd",
-            "serie",
-            "series",
-            "runde",
-            "round",
-            "funding",
-            "investor",
-            "investoren",
-            "gründer",
-            "founder",
-            "warum",
-            "wie",
-            "was",
-            "wer",
-            "welche",
-            "diese",
-            "update",
-            "news",
-            "breaking",
-            "exklusiv",
-            "analyse",
-            # Countries and regions
-            "deutschland",
-            "germany",
-            "europa",
-            "europe",
-            "kroatien",
-            "frankreich",
-            "österreich",
-            "schweiz",
-            "italien",
-            "spanien",
-            "polen",
-            "china",
-            "indien",
-            "bayern",
-            "sachsen",
-            "hessen",
-            "brandenburg",
-            # Generic words
-            "incubation",
-            "investment",
-            "finanzierung",
-            "förderung",
-            "prozent",
-            "umsatz",
-        }
-        if name.lower() in stopwords:
-            return False
-
-        return True
+        """Delegate to NewsMonitor's consolidated validation."""
+        return self.monitor._is_valid_company_name(name)
 
     # =========================================================================
     # Handelsregister enrichment
@@ -546,6 +604,68 @@ class NewsMonitoringJob:
         return best_match
 
     # =========================================================================
+    # Investment recording
+    # =========================================================================
+
+    def _record_investment(
+        self,
+        company_id: int,
+        investor_id: int,
+        source: str,
+        confidence: float,
+        round_type: Optional[str] = None,
+        amount: Optional[float] = None,
+        currency: Optional[str] = None,
+        notes: Optional[str] = None,
+    ) -> bool:
+        """
+        Record an investment in the database, skipping if duplicate exists.
+
+        Returns:
+            True if a new record was created, False if already exists.
+        """
+        conn = self.db.conn
+        try:
+            # Check if already exists (same company, investor, source)
+            existing = conn.execute(
+                """
+                SELECT id FROM investments
+                WHERE company_id = ? AND investor_id = ? AND detection_source = ?
+                """,
+                (company_id, investor_id, source),
+            ).fetchone()
+
+            if existing:
+                # Update confidence if this match is better
+                conn.execute(
+                    "UPDATE investments SET confidence = MAX(confidence, ?) WHERE id = ?",
+                    (confidence, existing["id"]),
+                )
+                conn.commit()
+                return False
+
+            conn.execute(
+                """
+                INSERT INTO investments
+                (company_id, investor_id, round_type, amount, currency,
+                 investment_date, detection_source, confidence, notes)
+                VALUES (?, ?, ?, ?, ?, NULL, ?, ?, ?)
+                """,
+                (company_id, investor_id, round_type, amount, currency or "EUR",
+                 source, confidence, notes),
+            )
+            conn.commit()
+            logger.info(
+                "Investment recorded from news: company=%d, investor=%d, round=%s",
+                company_id, investor_id, round_type,
+            )
+            return True
+
+        except Exception as e:
+            logger.error("Error recording investment: %s", e)
+            return False
+
+    # =========================================================================
     # Signal extraction
     # =========================================================================
 
@@ -562,13 +682,18 @@ class NewsMonitoringJob:
     def _extract_company_from_early_stage(self, article) -> Optional[str]:
         """Try to extract a company name from early-stage article title."""
         title = article.title or ""
-        # Common patterns: "CompanyName erhält EXIST Gründerstipendium"
-        # "CompanyName gewinnt Gründerpreis"
-        # "CompanyName: Ausgründung von TU München"
+        # Word fragment supporting Umlauts and modern lowercase startup names
+        _w = r"[A-Za-zÄÖÜäöüß][A-Za-zÄÖÜäöüß0-9\.\-]*"
+        _n = rf"{_w}(?:\s+{_w})?"  # 1-2 words
         patterns = [
-            r"^([A-Z][A-Za-zÄÖÜäöüß0-9\.\-]+(?:\s+[A-Z][A-Za-zÄÖÜäöüß0-9\.\-]+)?)\s+(?:erhält|bekommt|gewinnt|sichert)",
-            r"^([A-Z][A-Za-zÄÖÜäöüß0-9\.\-]+(?:\s+[A-Z][A-Za-zÄÖÜäöüß0-9\.\-]+)?)\s*[:\-–]",
-            r"(?:Startup|Start-up|Ausgründung)\s+([A-Z][A-Za-zÄÖÜäöüß0-9\.\-]+(?:\s+[A-Z][A-Za-zÄÖÜäöüß0-9\.\-]+)?)",
+            # "CompanyName erhält EXIST Gründerstipendium"
+            rf"^({_n})\s+(?:erhält|bekommt|gewinnt|sichert)",
+            # "CompanyName: Ausgründung von TU München"
+            rf"^({_n})\s*[:\-–]",
+            # "Startup X" / "Start-up X" / "Ausgründung X"
+            rf"(?:Startup|Start-up|Ausgründung|Spin-?off)\s+({_n})",
+            # "X aus München erhält" (city context)
+            rf"^({_n})\s+aus\s+\w+\s+(?:erhält|bekommt|gewinnt)",
         ]
         for p in patterns:
             m = re.search(p, title)

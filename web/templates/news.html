@@ -1,0 +1,188 @@
+{% extends "base.html" %}
+
+{% block title %}News Monitoring - Handelsregister Scraper{% endblock %}
+
+{% block header %}
+<header class="bg-white shadow">
+    <div class="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+        <div class="md:flex md:items-center md:justify-between">
+            <div>
+                <h1 class="text-3xl font-bold tracking-tight text-gray-900">News Monitoring</h1>
+                <p class="mt-1 text-sm text-gray-500">{{ "{:,}".format(total) }} alerts{% if alert_type %} ({{ alert_type }}){% endif %}</p>
+            </div>
+            <div class="mt-4 md:mt-0">
+                <div class="flex space-x-2">
+                    <a href="/news" class="{% if not alert_type %}bg-indigo-600 text-white{% else %}bg-white text-gray-700 ring-1 ring-gray-300{% endif %} rounded-md px-3 py-2 text-sm font-semibold">All</a>
+                    <a href="/news?alert_type=funding" class="{% if alert_type == 'funding' %}bg-indigo-600 text-white{% else %}bg-white text-gray-700 ring-1 ring-gray-300{% endif %} rounded-md px-3 py-2 text-sm font-semibold">Funding</a>
+                    <a href="/news?alert_type=early_stage" class="{% if alert_type == 'early_stage' %}bg-indigo-600 text-white{% else %}bg-white text-gray-700 ring-1 ring-gray-300{% endif %} rounded-md px-3 py-2 text-sm font-semibold">Early Stage</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</header>
+{% endblock %}
+
+{% block content %}
+<!-- Stats cards -->
+{% if stats %}
+<div class="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
+    <div class="bg-white rounded-lg shadow px-4 py-5 border-l-4 border-indigo-500">
+        <dt class="text-sm font-medium text-gray-500 truncate">Total Alerts</dt>
+        <dd class="mt-1 text-2xl font-semibold text-gray-900">{{ "{:,}".format(stats.get('total_alerts', 0)) }}</dd>
+    </div>
+    <div class="bg-white rounded-lg shadow px-4 py-5 border-l-4 border-green-500">
+        <dt class="text-sm font-medium text-gray-500 truncate">Funding Alerts</dt>
+        <dd class="mt-1 text-2xl font-semibold text-gray-900">{{ "{:,}".format(stats.get('funding_alerts', 0)) }}</dd>
+    </div>
+    <div class="bg-white rounded-lg shadow px-4 py-5 border-l-4 border-yellow-500">
+        <dt class="text-sm font-medium text-gray-500 truncate">Early Stage</dt>
+        <dd class="mt-1 text-2xl font-semibold text-gray-900">{{ "{:,}".format(stats.get('early_stage_alerts', 0)) }}</dd>
+    </div>
+    <div class="bg-white rounded-lg shadow px-4 py-5 border-l-4 border-blue-500">
+        <dt class="text-sm font-medium text-gray-500 truncate">Articles Stored</dt>
+        <dd class="mt-1 text-2xl font-semibold text-gray-900">{{ "{:,}".format(stats.get('total_articles', 0)) }}</dd>
+    </div>
+    <div class="bg-white rounded-lg shadow px-4 py-5 border-l-4 border-purple-500">
+        <dt class="text-sm font-medium text-gray-500 truncate">Last 7 Days</dt>
+        <dd class="mt-1 text-2xl font-semibold text-gray-900">{{ "{:,}".format(stats.get('articles_last_7d', 0)) }}</dd>
+    </div>
+</div>
+{% endif %}
+
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+    <!-- Alerts table (main content) -->
+    <div class="lg:col-span-2">
+        <div class="bg-white shadow rounded-lg overflow-hidden">
+            <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Company</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Details</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Source</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
+                        </tr>
+                    </thead>
+                    <tbody class="bg-white divide-y divide-gray-200">
+                        {% for alert in alerts %}
+                        <tr class="hover:bg-gray-50">
+                            <td class="px-4 py-3 whitespace-nowrap">
+                                {% if alert.alert_type == 'funding' %}
+                                    <span class="inline-flex items-center rounded-full bg-green-50 px-2 py-1 text-xs font-medium text-green-700 ring-1 ring-inset ring-green-600/20">Funding</span>
+                                {% elif alert.alert_type == 'early_stage' %}
+                                    <span class="inline-flex items-center rounded-full bg-yellow-50 px-2 py-1 text-xs font-medium text-yellow-700 ring-1 ring-inset ring-yellow-600/20">Early Stage</span>
+                                {% else %}
+                                    <span class="inline-flex items-center rounded-full bg-gray-50 px-2 py-1 text-xs font-medium text-gray-700 ring-1 ring-inset ring-gray-600/20">{{ alert.alert_type|humanize }}</span>
+                                {% endif %}
+                            </td>
+                            <td class="px-4 py-3">
+                                {% if alert.company_id %}
+                                    <a href="/companies/{{ alert.company_id }}" class="text-indigo-600 hover:text-indigo-900 font-medium">{{ alert.company_name or 'Unknown' }}</a>
+                                    {% if alert.city %}
+                                        <span class="text-xs text-gray-400 ml-1">{{ alert.city }}</span>
+                                    {% endif %}
+                                {% else %}
+                                    <span class="text-gray-500">-</span>
+                                {% endif %}
+                            </td>
+                            <td class="px-4 py-3 text-sm text-gray-600">
+                                {% if alert.amount %}
+                                    <span class="font-semibold text-green-700">{{ "%.1f"|format(alert.amount / 1000000) }}M {{ alert.currency or 'EUR' }}</span>
+                                {% endif %}
+                                {% if alert.round_type %}
+                                    <span class="text-xs bg-gray-100 rounded px-1.5 py-0.5 ml-1">{{ alert.round_type|humanize }}</span>
+                                {% endif %}
+                                {% if alert.investors %}
+                                    <div class="text-xs text-gray-400 mt-0.5">{{ alert.investors }}</div>
+                                {% endif %}
+                                {% if alert.early_stage_signals %}
+                                    <div class="text-xs text-yellow-600 mt-0.5">{{ alert.early_stage_signals }}</div>
+                                {% endif %}
+                            </td>
+                            <td class="px-4 py-3 text-sm">
+                                {% if alert.article_url %}
+                                    <a href="{{ alert.article_url }}" target="_blank" class="text-indigo-600 hover:text-indigo-900 text-xs">{{ alert.source or 'Link' }}</a>
+                                {% else %}
+                                    <span class="text-gray-400 text-xs">{{ alert.source or '-' }}</span>
+                                {% endif %}
+                            </td>
+                            <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
+                                {{ alert.created_at[:10] if alert.created_at else '-' }}
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="5" class="px-4 py-8 text-center text-gray-500">No news alerts found</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Pagination -->
+            {% if total_pages > 1 %}
+            <div class="bg-white px-4 py-3 flex items-center justify-between border-t border-gray-200">
+                <div class="text-sm text-gray-700">
+                    Page {{ page }} of {{ total_pages }}
+                </div>
+                <div class="flex space-x-2">
+                    {% if page > 1 %}
+                        <a href="?page={{ page - 1 }}{% if alert_type %}&alert_type={{ alert_type }}{% endif %}"
+                           class="bg-white px-3 py-2 text-sm font-semibold text-gray-900 ring-1 ring-inset ring-gray-300 hover:bg-gray-50 rounded-md">Previous</a>
+                    {% endif %}
+                    {% if page < total_pages %}
+                        <a href="?page={{ page + 1 }}{% if alert_type %}&alert_type={{ alert_type }}{% endif %}"
+                           class="bg-white px-3 py-2 text-sm font-semibold text-gray-900 ring-1 ring-inset ring-gray-300 hover:bg-gray-50 rounded-md">Next</a>
+                    {% endif %}
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Sidebar: Recent articles + top sources -->
+    <div class="space-y-6">
+        <!-- Top sources -->
+        {% if stats.get('top_sources') %}
+        <div class="bg-white shadow rounded-lg p-4">
+            <h3 class="text-sm font-semibold text-gray-900 mb-3">Top Sources (30 days)</h3>
+            <div class="space-y-2">
+                {% for src in stats.top_sources %}
+                <div class="flex justify-between items-center">
+                    <span class="text-sm text-gray-600">{{ src.source }}</span>
+                    <span class="text-sm font-medium text-gray-900">{{ src.cnt }}</span>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Recent articles -->
+        {% if stats.get('recent_articles') %}
+        <div class="bg-white shadow rounded-lg p-4">
+            <h3 class="text-sm font-semibold text-gray-900 mb-3">Recent Articles</h3>
+            <div class="space-y-3">
+                {% for article in stats.recent_articles[:10] %}
+                <div class="border-b border-gray-100 pb-2 last:border-0 last:pb-0">
+                    <a href="{{ article.url }}" target="_blank" class="text-sm text-indigo-600 hover:text-indigo-900 line-clamp-2">{{ article.title }}</a>
+                    <div class="flex items-center gap-2 mt-1">
+                        <span class="text-xs text-gray-400">{{ article.source }}</span>
+                        {% if article.is_funding_related %}
+                            <span class="text-xs bg-green-100 text-green-700 rounded px-1">Funding</span>
+                        {% endif %}
+                        {% if article.is_ai_related %}
+                            <span class="text-xs bg-blue-100 text-blue-700 rounded px-1">AI</span>
+                        {% endif %}
+                        {% if article.is_early_stage_related %}
+                            <span class="text-xs bg-yellow-100 text-yellow-700 rounded px-1">Early</span>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
