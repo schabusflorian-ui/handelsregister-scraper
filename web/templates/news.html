@@ -111,7 +111,7 @@
                                 {{ alert.created_at[:10] if alert.created_at else '-' }}
                             </td>
                         </tr>
-                        {% empty %}
+                        {% else %}
                         <tr>
                             <td colspan="5" class="px-4 py-8 text-center text-gray-500">No news alerts found</td>
                         </tr>
