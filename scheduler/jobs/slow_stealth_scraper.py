@@ -14,6 +14,8 @@ import time
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
+from processing.founder_tagger import tag_founder
+
 logger = logging.getLogger(__name__)
 
 
@@ -162,34 +164,15 @@ class SlowStealthScraper:
         self._ensure_schema()
 
     def _ensure_schema(self):
-        """Ensure stealth_founders table exists."""
+        """Ensure stealth_founders table exists.
+
+        Schema is defined in persistence/database.py — single source of truth.
+        """
         cursor = self.db.conn.cursor()
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS stealth_founders (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                linkedin_url TEXT UNIQUE,
-                name TEXT,
-                headline TEXT,
-                location TEXT,
-                summary TEXT,
-                current_company TEXT,
-                previous_companies TEXT,
-                detection_source TEXT,
-                search_query TEXT,
-                stealth_signals TEXT,
-                confidence_score REAL DEFAULT 0.0,
-                first_seen_at TEXT,
-                last_checked_at TEXT,
-                profile_changed INTEGER DEFAULT 0,
-                company_id INTEGER REFERENCES companies(id),
-                emerged_at TEXT,
-                created_at TEXT DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
-        cursor.execute(
-            "CREATE INDEX IF NOT EXISTS idx_stealth_founders_confidence ON stealth_founders(confidence_score DESC)"
-        )
-        self.db.conn.commit()
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='stealth_founders'")
+        if not cursor.fetchone():
+            logger.warning("stealth_founders table missing — creating via Database migration")
+            self.db._create_tables()
 
     def _calculate_backoff(self) -> int:
         """Calculate backoff delay based on consecutive failures."""
@@ -786,35 +769,104 @@ class SlowStealthScraper:
             logger.info(f"  Stored from snippet: {name} (conf={confidence:.2f}, signals={signals})")
 
     def _store_founder(self, profile, search_query: str):
-        """Store a founder in the database."""
+        """Store or update a founder in the database."""
         cursor = self.db.conn.cursor()
         now = datetime.now().isoformat()
 
-        cursor.execute(
-            """
-            INSERT OR REPLACE INTO stealth_founders (
-                linkedin_url, name, headline, location, summary,
-                detection_source, search_query, stealth_signals,
-                confidence_score, first_seen_at, last_checked_at, created_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """,
-            (
-                profile.url,
-                profile.name,
-                profile.headline,
-                profile.location,
-                profile.summary,
-                "slow_scraper",
-                search_query,
-                json.dumps(profile.stealth_signals) if profile.stealth_signals else None,
-                profile.confidence_score,
-                now,
-                now,
-                now,
-            ),
-        )
+        # Build combined signals JSON
+        all_signals = {}
+        for attr, key in [
+            ("stealth_signals", "stealth"), ("founder_signals", "founder"),
+            ("transition_signals", "transition"), ("urgency_signals", "urgency"),
+            ("traction_signals", "traction"), ("cofounder_signals", "cofounder"),
+            ("high_value_background", "background"),
+        ]:
+            val = getattr(profile, attr, None)
+            if val:
+                all_signals[key] = val
+        signals_json = json.dumps(all_signals) if all_signals else None
+
+        # Check if exists — use INSERT OR UPDATE to preserve first_seen_at
+        cursor.execute("SELECT id FROM stealth_founders WHERE linkedin_url = ?", (profile.url,))
+        existing = cursor.fetchone()
+
+        if existing:
+            cursor.execute(
+                """
+                UPDATE stealth_founders SET
+                    name = COALESCE(?, name),
+                    headline = COALESCE(?, headline),
+                    location = COALESCE(?, location),
+                    summary = COALESCE(?, summary),
+                    current_company = COALESCE(?, current_company),
+                    stealth_signals = ?,
+                    confidence_score = ?,
+                    primary_function = COALESCE(?, primary_function),
+                    company_tier = MAX(COALESCE(?, 0), COALESCE(company_tier, 0)),
+                    is_repeat_founder = MAX(COALESCE(?, 0), COALESCE(is_repeat_founder, 0)),
+                    looking_for_cofounder = MAX(COALESCE(?, 0), COALESCE(looking_for_cofounder, 0)),
+                    last_checked_at = ?,
+                    profile_changed = CASE
+                        WHEN headline != ? OR confidence_score != ? THEN 1
+                        ELSE profile_changed
+                    END
+                WHERE linkedin_url = ?
+                """,
+                (
+                    profile.name, profile.headline, profile.location,
+                    profile.summary, getattr(profile, "current_company", None),
+                    signals_json, profile.confidence_score,
+                    getattr(profile, "primary_function", None),
+                    getattr(profile, "company_tier", 0),
+                    1 if getattr(profile, "is_repeat_founder", False) else 0,
+                    1 if getattr(profile, "looking_for_cofounder", False) else 0,
+                    now, profile.headline, profile.confidence_score, profile.url,
+                ),
+            )
+        else:
+            cursor.execute(
+                """
+                INSERT INTO stealth_founders (
+                    linkedin_url, name, headline, location, summary,
+                    current_company, detection_source, search_query,
+                    stealth_signals, confidence_score,
+                    primary_function, company_tier,
+                    is_repeat_founder, looking_for_cofounder,
+                    first_seen_at, last_checked_at, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    profile.url, profile.name, profile.headline,
+                    profile.location, profile.summary,
+                    getattr(profile, "current_company", None),
+                    "slow_scraper", search_query,
+                    signals_json, profile.confidence_score,
+                    getattr(profile, "primary_function", None),
+                    getattr(profile, "company_tier", 0),
+                    1 if getattr(profile, "is_repeat_founder", False) else 0,
+                    1 if getattr(profile, "looking_for_cofounder", False) else 0,
+                    now, now, now,
+                ),
+            )
+
         self.db.conn.commit()
         logger.info(f"Stored founder: {profile.name} (conf={profile.confidence_score:.2f})")
+
+        # Auto-tag with structured metadata
+        try:
+            tags = tag_founder(profile.name, profile.headline,
+                               getattr(profile, "location", None), signals_json)
+            cursor.execute("SELECT id FROM stealth_founders WHERE linkedin_url = ?", (profile.url,))
+            row = cursor.fetchone()
+            if row and tags:
+                set_parts = [f"{k} = ?" for k in tags.keys()]
+                cursor.execute(
+                    f"UPDATE stealth_founders SET {', '.join(set_parts)} WHERE id = ?",
+                    list(tags.values()) + [row[0]],
+                )
+                self.db.conn.commit()
+        except Exception as e:
+            logger.debug(f"Auto-tagging failed for {profile.name}: {e}")
 
     def _build_exclusion_query(self, base_query: str, max_exclusions: int = 5) -> str:
         """

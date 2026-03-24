@@ -35,6 +35,7 @@ from scheduler.jobs.officer_linkedin_job import OfficerLinkedInEnrichmentJob
 from scheduler.jobs.registration_scan_job import RegistrationScanJob
 from scheduler.jobs.website_job import WebsiteFinderJob
 from scheduler.jobs.website_scrape_job import WebsiteScrapeJob
+from scheduler.jobs.founder_matcher import find_emerged_founders, link_founder_to_company
 from scheduler.rate_limiter import PersistentRateLimiter
 
 logger = logging.getLogger(__name__)
@@ -297,6 +298,46 @@ class HandelsregisterScheduler:
         finally:
             db.close()
 
+    def _run_founder_emergence_job(self):
+        """Check if any stealth founders have emerged (registered a company)."""
+        logger.info("Starting founder emergence detection job")
+
+        db = Database(self.db_path)
+        try:
+            emerged = find_emerged_founders(db, min_similarity=0.85)
+
+            auto_linked = 0
+            for match in emerged:
+                # Auto-link high-confidence matches (exact or near-exact name match)
+                best_officer = match["officer_matches"][0] if match["officer_matches"] else None
+                if best_officer and best_officer["similarity"] >= 0.95:
+                    link_founder_to_company(db, match["founder_id"], best_officer["company_id"])
+                    auto_linked += 1
+                    logger.info(
+                        "Founder emerged: %s -> %s (similarity=%.0f%%)",
+                        match["founder_name"],
+                        best_officer["company_name"],
+                        best_officer["similarity"] * 100,
+                    )
+
+            stats = {
+                "founders_checked": len(emerged),
+                "auto_linked": auto_linked,
+                "pending_review": len(emerged) - auto_linked,
+            }
+
+            logger.info(
+                "Founder emergence: %d potential matches, %d auto-linked, %d for review",
+                len(emerged), auto_linked, len(emerged) - auto_linked,
+            )
+
+            self._log_job_completion("founder_emergence", stats, db)
+
+        except Exception as e:
+            logger.exception("Founder emergence job failed: %s", e)
+        finally:
+            db.close()
+
     def _run_website_finder_job(self):
         """Execute website finder job wrapper."""
         logger.info("Starting website finder job")
@@ -539,6 +580,16 @@ class HandelsregisterScheduler:
             replace_existing=True,
         )
 
+        # Founder emergence detection: daily at 12 PM UTC (after officer LinkedIn)
+        # Matches stealth founders against newly registered company officers
+        self.scheduler.add_job(
+            self._run_founder_emergence_job,
+            trigger=CronTrigger(hour=12, minute=0),
+            id="founder_emergence_job",
+            name="Founder Emergence Detection Job",
+            replace_existing=True,
+        )
+
         # Registration scan job: every 4 hours (offset from discovery's even hours)
         # Scans sequential HRB numbers to find newest company registrations
         self.scheduler.add_job(
@@ -553,7 +604,7 @@ class HandelsregisterScheduler:
             "Jobs configured: discovery every %d hours, backfill 3AM+3PM, enrichment 4AM, "
             "announcements 5AM, CSV export 6AM, investor detection 7AM, news monitoring 8AM, "
             "website finder 9AM, website scrape 10AM, officer LinkedIn 11AM, "
-            "registration scan every 4h (1:30/5:30/9:30/13:30/17:30/21:30)",
+            "founder emergence 12PM, registration scan every 4h",
             self.discovery_interval_hours,
         )
 

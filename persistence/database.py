@@ -583,6 +583,11 @@ class Database:
                 ("stealth_strength", "TEXT"),  # confirmed, likely, weak
                 ("data_quality", "TEXT"),  # clean, partial, junk
                 ("geo_region", "TEXT"),  # berlin, munich, hamburg, dach_other, etc.
+                # Computed from scrape data (headline/summary parsing)
+                ("primary_function", "TEXT"),  # technical, business, product, design, other
+                ("company_tier", "INTEGER DEFAULT 0"),  # 0-4 scale based on background
+                ("is_repeat_founder", "INTEGER DEFAULT 0"),
+                ("looking_for_cofounder", "INTEGER DEFAULT 0"),
             ]:
                 if col not in columns and columns:
                     cursor.execute(f"ALTER TABLE stealth_founders ADD COLUMN {col} {col_type}")
