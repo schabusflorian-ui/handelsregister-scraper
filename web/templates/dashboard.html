@@ -104,12 +104,12 @@
                                     {% else %}bg-gray-100 text-gray-800{% endif %}">
                                     Rel: {{ company.ai_robotics_score }}
                                 </span>
-                                {% if company.startup_classification %}
+                                {% if company.startup_classification and company.startup_classification not in ('unknown', 'established') %}
                                 <span class="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium
                                     {% if company.startup_classification == 'startup' %}bg-purple-100 text-purple-800
-                                    {% elif company.startup_classification == 'tech_company' %}bg-blue-100 text-blue-800
+                                    {% elif company.startup_classification == 'scaleup' %}bg-blue-100 text-blue-800
                                     {% else %}bg-gray-100 text-gray-800{% endif %}">
-                                    {{ company.startup_classification }}
+                                    {{ company.startup_classification|classify_label }}
                                 </span>
                                 {% endif %}
                             </div>
@@ -273,12 +273,12 @@
                             <div class="flex items-center gap-3">
                                 {% if classification == 'startup' %}
                                 <span class="h-3 w-3 rounded-full bg-purple-500"></span>
-                                {% elif classification == 'tech_company' %}
+                                {% elif classification in ('scaleup', 'tech_company') %}
                                 <span class="h-3 w-3 rounded-full bg-blue-500"></span>
                                 {% else %}
                                 <span class="h-3 w-3 rounded-full bg-gray-400"></span>
                                 {% endif %}
-                                <span class="text-sm font-medium text-gray-900 capitalize">{{ classification or 'Unclassified' }}</span>
+                                <span class="text-sm font-medium text-gray-900">{{ classification|classify_label if classification else 'Unclassified' }}</span>
                             </div>
                             <span class="text-sm font-semibold text-gray-700">{{ "{:,}".format(count) }}</span>
                         </a>

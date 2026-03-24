@@ -225,6 +225,7 @@ class StartupScorer:
         legal_form: Optional[str] = None,
         city: Optional[str] = None,
         ai_relevance_score: int = 0,
+        climate_score: int = 0,
     ) -> StartupScore:
         """
         Calculate startup likelihood score.
@@ -234,6 +235,7 @@ class StartupScorer:
             legal_form: Legal form (GmbH, UG, AG, etc.)
             city: City of registration
             ai_relevance_score: AI/robotics relevance score from keyword filter
+            climate_score: Climate tech relevance score from keyword filter
 
         Returns:
             StartupScore with breakdown
@@ -294,17 +296,26 @@ class StartupScorer:
                 name_pattern_score += score  # score is already negative
                 negative_signals.append(f"SME pattern: {desc} ({score})")
 
-        # 4. AI relevance bonus
-        ai_bonus = 0
-        if ai_relevance_score >= 4:
-            ai_bonus = 2
-            signals.append(f"High AI score: {ai_relevance_score} (+2)")
-        elif ai_relevance_score >= 2:
-            ai_bonus = 1
-            signals.append(f"Medium AI score: {ai_relevance_score} (+1)")
+        # 4. Relevance bonus (AI or climate — whichever is higher)
+        # Both AI/robotics companies and climate tech companies deserve
+        # a startup bonus when they have strong keyword signals.
+        relevance_bonus = 0
+        combined_relevance = ai_relevance_score + climate_score
+        if combined_relevance >= 4:
+            relevance_bonus = 2
+            if ai_relevance_score >= climate_score:
+                signals.append(f"High AI score: {ai_relevance_score} (+2)")
+            else:
+                signals.append(f"High climate score: {climate_score} (+2)")
+        elif combined_relevance >= 2:
+            relevance_bonus = 1
+            if ai_relevance_score >= climate_score:
+                signals.append(f"Medium AI score: {ai_relevance_score} (+1)")
+            else:
+                signals.append(f"Medium climate score: {climate_score} (+1)")
 
         # Calculate total
-        total_score = legal_form_score + location_score + name_pattern_score + ai_bonus
+        total_score = legal_form_score + location_score + name_pattern_score + relevance_bonus
 
         return StartupScore(
             total_score=total_score,
@@ -312,28 +323,43 @@ class StartupScorer:
             legal_form_score=legal_form_score,
             location_score=location_score,
             name_pattern_score=name_pattern_score,
-            ai_relevance_bonus=ai_bonus,
+            ai_relevance_bonus=relevance_bonus,
             signals=signals,
             negative_signals=negative_signals,
         )
 
-    def classify(self, score: StartupScore, ai_relevance_score: int = 0) -> str:
+    def classify(
+        self,
+        score: StartupScore,
+        ai_relevance_score: int = 0,
+        climate_score: int = 0,
+    ) -> str:
         """
-        Classify company based on startup score and AI relevance.
+        Classify company based on startup score and relevance signals.
 
         Returns:
-            'startup' - high-growth potential AI/robotics startup
-            'tech_company' - tech-adjacent company
-            'traditional' - traditional SME
+            'startup' - high-growth potential tech/climate startup
+            'scaleup' - tech-adjacent company with growth signals
+            'established' - traditional SME or mature company
+
+        Classification logic:
+        - 'startup': high structural score AND some domain relevance
+          (AI, climate, or both). Prevents pure shell companies from qualifying.
+        - 'scaleup': moderate score — has tech/growth signals but not enough
+          for full startup classification.
+        - 'established': low score — traditional SME patterns dominate.
         """
-        # Require at least some AI relevance for startup classification
-        # This prevents non-AI UGs from being classified as AI startups
-        if score.total_score >= 5 and ai_relevance_score >= 1:
+        combined_relevance = ai_relevance_score + climate_score
+
+        # Startup: strong structural signals + domain relevance
+        if score.total_score >= 5 and combined_relevance >= 1:
             return "startup"
+        # Scaleup: moderate signals — tech-adjacent or growing
         elif score.total_score >= 2:
-            return "tech_company"
+            return "scaleup"
+        # Established: traditional SME
         else:
-            return "traditional"
+            return "established"
 
 
 def score_companies_batch(
@@ -356,13 +382,17 @@ def score_companies_batch(
     results = []
     for company in companies:
         ai_score = company.get("ai_robotics_score", 0)
+        clim_score = company.get("climate_score", 0)
         score = scorer.score_company(
             name=company.get("name", ""),
             legal_form=company.get("legal_form"),
             city=company.get("city"),
             ai_relevance_score=ai_score,
+            climate_score=clim_score,
         )
-        classification = scorer.classify(score, ai_relevance_score=ai_score)
+        classification = scorer.classify(
+            score, ai_relevance_score=ai_score, climate_score=clim_score
+        )
         results.append((company, score, classification))
 
     return results
@@ -372,27 +402,31 @@ def score_companies_batch(
 if __name__ == "__main__":
     scorer = StartupScorer()
 
+    # Test cases: (name, legal_form, city, ai_score, climate_score)
     test_cases = [
-        # Likely startups
-        ("KI Labs UG (haftungsbeschränkt)", "UG (haftungsbeschränkt)", "Berlin", 4),
-        ("DeepTech AI GmbH", "GmbH", "München", 5),
-        ("Robo Solutions UG", "UG", "Hamburg", 3),
-        ("DataAnalytics.io GmbH", "GmbH", "Berlin", 2),
+        # Likely startups (AI)
+        ("KI Labs UG (haftungsbeschränkt)", "UG (haftungsbeschränkt)", "Berlin", 4, 0),
+        ("DeepTech AI GmbH", "GmbH", "München", 5, 0),
+        ("Robo Solutions UG", "UG", "Hamburg", 3, 0),
+        ("DataAnalytics.io GmbH", "GmbH", "Berlin", 2, 0),
+        # Likely startups (Climate) — NEW: these should now classify as startups
+        ("GreenHydrogen Solutions UG", "UG", "Berlin", 0, 4),
+        ("SolarTech Cleantech GmbH", "GmbH", "München", 0, 3),
         # Borderline cases
-        ("Smart Factory Tech GmbH", "GmbH", "Stuttgart", 2),
-        ("AI Software GmbH", "GmbH", "Köln", 3),
-        # Likely traditional SMEs
-        ("Müller Verwaltungs GmbH", "GmbH", "Passau", 0),
-        ("Erste Immobilien Beteiligungs AG", "AG", "Frankfurt", 0),
-        ("Handelshaus Schmidt GmbH & Co. KG", "GmbH & Co. KG", "Bremen", 0),
+        ("Smart Factory Tech GmbH", "GmbH", "Stuttgart", 2, 0),
+        ("AI Software GmbH", "GmbH", "Köln", 3, 0),
+        # Likely established SMEs
+        ("Müller Verwaltungs GmbH", "GmbH", "Passau", 0, 0),
+        ("Erste Immobilien Beteiligungs AG", "AG", "Frankfurt", 0, 0),
+        ("Handelshaus Schmidt GmbH & Co. KG", "GmbH & Co. KG", "Bremen", 0, 0),
     ]
 
     print("Startup Scoring Test Results")
     print("=" * 80)
 
-    for name, legal_form, city, ai_score in test_cases:
-        score = scorer.score_company(name, legal_form, city, ai_score)
-        classification = scorer.classify(score, ai_relevance_score=ai_score)
+    for name, legal_form, city, ai_score, clim_score in test_cases:
+        score = scorer.score_company(name, legal_form, city, ai_score, clim_score)
+        classification = scorer.classify(score, ai_relevance_score=ai_score, climate_score=clim_score)
 
         print(f"\n{name}")
         print(f"  Legal form: {legal_form}, City: {city}, AI Score: {ai_score}")

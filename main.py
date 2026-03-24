@@ -345,7 +345,7 @@ def stats(ctx):
     if startup_class:
         console.print("\n[bold]Startup Classification:[/bold]")
         for classification, count in startup_class.items():
-            emoji = "🚀" if classification == "startup" else "💼" if classification == "tech_company" else "🏢"
+            emoji = "🚀" if classification == "startup" else "💼" if classification in ("scaleup", "tech_company") else "🏢"
             console.print(f"  {emoji} {classification}: {count:,}")
 
     # Startup score distribution

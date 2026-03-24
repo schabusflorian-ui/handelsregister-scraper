@@ -250,8 +250,13 @@ class DiscoveryJob:
             name=result.name,
             city=result.state,  # Use state as city approximation
             ai_relevance_score=filter_result.relevance_score,
+            climate_score=filter_result.climate_score,
         )
-        classification = self.startup_scorer.classify(startup_result, ai_relevance_score=filter_result.relevance_score)
+        classification = self.startup_scorer.classify(
+            startup_result,
+            ai_relevance_score=filter_result.relevance_score,
+            climate_score=filter_result.climate_score,
+        )
 
         # Extract legal form from company name
         from processing.filters import extract_legal_form

@@ -189,7 +189,7 @@ class InvestorDetectionJob:
                 # Reduce false positives from common names:
                 # Only record if company has startup indicators
                 # Common German names like "Johannes Weber" match too often
-                is_startup = row["startup_classification"] in ("startup", "tech_company")
+                is_startup = row["startup_classification"] in ("startup", "scaleup", "tech_company")
                 has_ai_score = (row["ai_robotics_score"] or 0) >= 3
 
                 # Require startup/tech classification OR high AI score for partner matches

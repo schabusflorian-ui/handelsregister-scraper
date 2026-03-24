@@ -350,15 +350,18 @@ class RegistrationScanJob:
 
         # Compute startup score
         ai_score = filter_result.relevance_score if filter_result.passes else 0
+        climate_score = filter_result.climate_score if filter_result.passes else 0
         startup_result = self.startup_scorer.score_company(
             name=result.name,
             legal_form=legal_form,
             city=result.city,
             ai_relevance_score=ai_score,
+            climate_score=climate_score,
         )
         classification = self.startup_scorer.classify(
             startup_result,
             ai_relevance_score=ai_score,
+            climate_score=climate_score,
         )
 
         # Insert company

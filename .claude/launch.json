@@ -4,8 +4,8 @@
     {
       "name": "web",
       "runtimeExecutable": "python3",
-      "runtimeArgs": ["-m", "uvicorn", "web.app:app", "--reload", "--port", "8000"],
-      "port": 8000
+      "runtimeArgs": ["-m", "uvicorn", "web.app:app", "--reload", "--port", "8080"],
+      "port": 8080
     }
   ]
 }

@@ -57,7 +57,10 @@ templates.env.filters["split"] = lambda s, sep=",": s.split(sep) if s else []
 templates.env.filters["from_json"] = lambda s: _json.loads(s) if s else []
 templates.env.filters["humanize"] = lambda s: s.replace("_", " ").title() if s else "-"
 templates.env.filters["timeago"] = lambda s: _timeago(s)
-templates.env.filters["classify_label"] = lambda s: {"startup": "Startup", "scaleup": "Scaleup", "established": "Established"}.get(s, s.title() if s else "—")
+templates.env.filters["classify_label"] = lambda s: {
+    "startup": "Startup", "scaleup": "Scaleup", "established": "Established",
+    "tech_company": "Scaleup", "traditional": "Established",  # Legacy values
+}.get(s, s.title() if s else "—")
 
 
 def _timeago(date_str: Optional[str]) -> str:

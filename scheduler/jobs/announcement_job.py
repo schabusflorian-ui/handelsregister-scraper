@@ -140,10 +140,12 @@ class AnnouncementMonitoringJob:
         startup_result = self.startup_scorer.score_company(
             name=ann.company_name,
             ai_relevance_score=filter_result.relevance_score,
+            climate_score=filter_result.climate_score,
         )
         classification = self.startup_scorer.classify(
             startup_result,
             ai_relevance_score=filter_result.relevance_score,
+            climate_score=filter_result.climate_score,
         )
 
         # Extract registry type from native number
