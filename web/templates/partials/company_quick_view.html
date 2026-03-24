@@ -1,0 +1,162 @@
+{#
+    Compact company detail for inline expansion in the companies table.
+    Used by keyboard navigation (Enter key) and the quick-view API.
+#}
+<div class="bg-indigo-50/50 border-l-4 border-indigo-400 p-4">
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <!-- Left: Purpose + Links -->
+        <div class="lg:col-span-2 space-y-3">
+            {% if company.purpose %}
+            <div>
+                <h4 class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Purpose</h4>
+                <p class="text-sm text-gray-700 leading-relaxed">{{ company.purpose[:400] }}{% if company.purpose|length > 400 %}...{% endif %}</p>
+            </div>
+            {% else %}
+            <p class="text-sm text-gray-400 italic">No purpose/description available</p>
+            {% endif %}
+
+            <!-- External Links -->
+            <div class="flex flex-wrap gap-2">
+                {% if company.website %}
+                <a href="{{ company.website }}" target="_blank"
+                    class="inline-flex items-center rounded-md bg-white px-2.5 py-1 text-xs font-medium text-indigo-700 ring-1 ring-indigo-200 hover:bg-indigo-50 transition-colors">
+                    <svg class="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M4.083 9h1.946c.089-1.546.383-2.97.837-4.118A6.004 6.004 0 004.083 9zM10 2a8 8 0 100 16 8 8 0 000-16zm0 2c-.076 0-.232.032-.465.262-.238.234-.497.623-.737 1.182-.389.907-.673 2.142-.766 3.556h3.936c-.093-1.414-.377-2.649-.766-3.556-.24-.56-.5-.948-.737-1.182C10.232 4.032 10.076 4 10 4zm3.971 5c-.089-1.546-.383-2.97-.837-4.118A6.004 6.004 0 0115.917 9h-1.946zm-2.003 2H8.032c.093 1.414.377 2.649.766 3.556.24.56.5.948.737 1.182.233.23.389.262.465.262.076 0 .232-.032.465-.262.238-.234.498-.623.737-1.182.389-.907.673-2.142.766-3.556zm1.166 4.118c.454-1.147.748-2.572.837-4.118h1.946a6.004 6.004 0 01-2.783 4.118zm-6.268 0C6.412 13.97 6.118 12.546 6.03 11H4.083a6.004 6.004 0 002.783 4.118z" clip-rule="evenodd"/></svg>
+                    Website
+                </a>
+                {% endif %}
+                <a href="https://www.northdata.com/{{ company.name|urlencode }}" target="_blank"
+                    class="inline-flex items-center rounded-md bg-white px-2.5 py-1 text-xs font-medium text-gray-700 ring-1 ring-gray-200 hover:bg-gray-50 transition-colors">
+                    North Data
+                    <svg class="ml-1 w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
+                </a>
+                <a href="https://www.google.com/search?q={{ (company.name + ' startup')|urlencode }}" target="_blank"
+                    class="inline-flex items-center rounded-md bg-white px-2.5 py-1 text-xs font-medium text-gray-700 ring-1 ring-gray-200 hover:bg-gray-50 transition-colors">
+                    Google
+                    <svg class="ml-1 w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
+                </a>
+                <a href="/companies/{{ company.id }}" target="_blank"
+                    class="inline-flex items-center rounded-md bg-indigo-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-indigo-500 transition-colors">
+                    Full Details
+                    <svg class="ml-1 w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
+                </a>
+            </div>
+
+            <!-- Officers (if any) -->
+            {% if officers %}
+            <div>
+                <h4 class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Officers</h4>
+                <div class="flex flex-wrap gap-2">
+                    {% for officer in officers %}
+                    <div class="flex items-center gap-1.5 bg-white rounded-md px-2 py-1 ring-1 ring-gray-200">
+                        <span class="inline-flex h-5 w-5 items-center justify-center rounded-full {% if officer.linkedin_url %}bg-blue-100{% else %}bg-gray-100{% endif %}">
+                            <span class="text-xs font-medium {% if officer.linkedin_url %}text-blue-600{% else %}text-gray-500{% endif %}">{{ officer.name[0] }}</span>
+                        </span>
+                        <span class="text-xs text-gray-900">{{ officer.name }}</span>
+                        {% if officer.linkedin_url %}
+                        <a href="{{ officer.linkedin_url }}" target="_blank" class="text-blue-500 hover:text-blue-700">
+                            <svg class="h-3 w-3" fill="currentColor" viewBox="0 0 24 24"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>
+                        </a>
+                        {% endif %}
+                        {% if officer.role %}
+                        <span class="text-xs text-gray-400">({{ officer.role[:20] }})</span>
+                        {% endif %}
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Investors (if any) -->
+            {% if investments %}
+            <div>
+                <h4 class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Detected Investors</h4>
+                <div class="flex flex-wrap gap-2">
+                    {% for inv in investments %}
+                    <a href="/investors/{{ inv.investor_id }}"
+                        class="inline-flex items-center gap-1 bg-white rounded-md px-2 py-1 ring-1 ring-gray-200 text-xs hover:bg-gray-50 transition-colors">
+                        <span class="font-medium text-gray-900">{{ inv.investor_name }}</span>
+                        <span class="inline-flex items-center rounded-full px-1.5 py-0.5 text-xs font-medium
+                            {% if inv.confidence >= 0.9 %}bg-green-100 text-green-800
+                            {% elif inv.confidence >= 0.7 %}bg-yellow-100 text-yellow-800
+                            {% else %}bg-gray-100 text-gray-800{% endif %}">
+                            {{ (inv.confidence * 100)|int }}%
+                        </span>
+                    </a>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Right: Scores + Quick Actions -->
+        <div class="space-y-3">
+            <!-- Scores -->
+            <div class="bg-white rounded-lg p-3 ring-1 ring-gray-200">
+                <div class="space-y-2">
+                    <div>
+                        <div class="flex items-center justify-between text-xs">
+                            <span class="font-medium text-gray-500">AI/Robotics</span>
+                            <span class="font-semibold text-gray-900">{{ company.ai_robotics_score }}/10</span>
+                        </div>
+                        <div class="mt-1 h-1.5 bg-gray-200 rounded-full">
+                            <div class="h-1.5 rounded-full {% if company.ai_robotics_score >= 7 %}bg-green-500{% elif company.ai_robotics_score >= 4 %}bg-yellow-500{% else %}bg-gray-400{% endif %}"
+                                style="width: {{ company.ai_robotics_score * 10 }}%"></div>
+                        </div>
+                    </div>
+                    {% if company.climate_score %}
+                    <div>
+                        <div class="flex items-center justify-between text-xs">
+                            <span class="font-medium text-gray-500">Climate</span>
+                            <span class="font-semibold text-gray-900">{{ company.climate_score }}/10</span>
+                        </div>
+                        <div class="mt-1 h-1.5 bg-gray-200 rounded-full">
+                            <div class="h-1.5 rounded-full {% if company.climate_score >= 7 %}bg-emerald-500{% elif company.climate_score >= 4 %}bg-teal-500{% else %}bg-gray-400{% endif %}"
+                                style="width: {{ company.climate_score * 10 }}%"></div>
+                        </div>
+                    </div>
+                    {% endif %}
+                    <div>
+                        <div class="flex items-center justify-between text-xs">
+                            <span class="font-medium text-gray-500">Startup</span>
+                            <span class="font-semibold text-gray-900">{{ company.startup_score or 0 }}</span>
+                        </div>
+                        <div class="mt-1 h-1.5 bg-gray-200 rounded-full">
+                            <div class="h-1.5 rounded-full {% if (company.startup_score or 0) >= 5 %}bg-purple-500{% elif (company.startup_score or 0) >= 3 %}bg-blue-500{% else %}bg-gray-400{% endif %}"
+                                style="width: {{ [(company.startup_score or 0) * 10, 100]|min }}%"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Keywords -->
+            {% if company.matched_keywords %}
+            <div class="flex flex-wrap gap-1">
+                {% for keyword in company.matched_keywords|replace('[', '')|replace(']', '')|replace('"', '')|split(',') %}
+                {% set trimmed = keyword|trim %}
+                {% if trimmed %}
+                <span class="inline-flex items-center rounded-full bg-indigo-100 px-2 py-0.5 text-xs font-medium text-indigo-800">
+                    {{ trimmed }}
+                </span>
+                {% endif %}
+                {% endfor %}
+            </div>
+            {% endif %}
+
+            <!-- Quick info -->
+            <div class="text-xs text-gray-500 space-y-0.5">
+                {% if company.city %}<div>{{ company.city }}{% if company.state %}, {{ company.state }}{% endif %}</div>{% endif %}
+                {% if company.legal_form %}<div>{{ company.legal_form }}</div>{% endif %}
+                {% if company.capital_amount %}<div>Capital: {{ company.capital_amount|currency(company.capital_currency or 'EUR') }}</div>{% endif %}
+                {% if company.registration_date %}<div>Registered: {{ company.registration_date|date }}</div>{% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Keyboard hints -->
+    <div class="mt-3 pt-2 border-t border-indigo-200/50 flex items-center gap-4 text-xs text-gray-400">
+        <span><kbd class="px-1 py-0.5 bg-white rounded text-gray-500 font-mono ring-1 ring-gray-200">r</kbd> relevance</span>
+        <span><kbd class="px-1 py-0.5 bg-white rounded text-gray-500 font-mono ring-1 ring-gray-200">c</kbd> contacted</span>
+        <span><kbd class="px-1 py-0.5 bg-white rounded text-gray-500 font-mono ring-1 ring-gray-200">o</kbd> open full</span>
+        <span><kbd class="px-1 py-0.5 bg-white rounded text-gray-500 font-mono ring-1 ring-gray-200">Esc</kbd> close</span>
+    </div>
+</div>

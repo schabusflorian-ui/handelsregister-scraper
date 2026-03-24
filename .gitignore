@@ -26,9 +26,12 @@ ENV/
 *.db
 *.sqlite3
 /data/
+!data/.gitkeep
 
 # Exports
 exports/
+*.csv
+!scripts/*.csv
 
 # Environment
 .env
@@ -36,3 +39,6 @@ exports/
 
 # Logs
 *.log
+
+# OS
+.DS_Store

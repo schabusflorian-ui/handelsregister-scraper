@@ -9,11 +9,16 @@ This example shows how to:
 """
 
 import sqlite3
+import sys
+import os
 from datetime import datetime
 from typing import List, Dict
 import json
 
-from handelsregister_scraper import HandelsregisterAIScraper
+# Add project root to path
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from scripts.legacy_scraper import HandelsregisterAIScraper
 
 
 class StartupDatabase:

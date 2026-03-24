@@ -26,4 +26,4 @@ ENV PYTHONUNBUFFERED=1
 ENV PYTHONDONTWRITEBYTECODE=1
 
 # Default to slow mode for production
-CMD ["python", "run_stealth_scraper.py", "--slow"]
+CMD ["python", "scripts/run_stealth_scraper.py", "--slow"]
