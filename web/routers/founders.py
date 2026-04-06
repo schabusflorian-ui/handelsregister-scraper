@@ -189,9 +189,9 @@ async def founders_list(
         filter_qs_with_sort = urlencode(filter_params)
 
         return templates.TemplateResponse(
-            "founders.html",
-            {
-                "request": request,
+            name="founders.html",
+            request=request,
+            context={
                 "founders": founders,
                 "total": total,
                 "page": page,

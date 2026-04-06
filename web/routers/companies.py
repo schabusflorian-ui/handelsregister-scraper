@@ -209,9 +209,9 @@ async def companies_list(
         filter_qs_with_sort = urlencode(filter_params)
 
         return templates.TemplateResponse(
-            "companies.html",
-            {
-                "request": request,
+            name="companies.html",
+            request=request,
+            context={
                 "companies": companies,
                 "total": total,
                 "page": page,
@@ -305,9 +305,9 @@ async def company_detail(request: Request, company_id: int):
             pass
 
         return templates.TemplateResponse(
-            "company_detail.html",
-            {
-                "request": request,
+            name="company_detail.html",
+            request=request,
+            context={
                 "company": company,
                 "officers": officers,
                 "capital_events": capital_events,
@@ -425,9 +425,9 @@ async def api_companies_search(
         companies = [dict(row) for row in companies]
 
         return templates.TemplateResponse(
-            "partials/company_list.html",
-            {
-                "request": request,
+            name="partials/company_list.html",
+            request=request,
+            context={
                 "companies": companies,
             },
         )
@@ -478,9 +478,9 @@ async def company_quick_view(request: Request, company_id: int):
             pass
 
         return templates.TemplateResponse(
-            "partials/company_quick_view.html",
-            {
-                "request": request,
+            name="partials/company_quick_view.html",
+            request=request,
+            context={
                 "company": company,
                 "officers": officers,
                 "investments": investments,

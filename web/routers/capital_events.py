@@ -37,9 +37,9 @@ async def capital_events(request: Request, days: int = 30, page: int = 1, per_pa
         total_pages = (total + per_page - 1) // per_page
 
         return templates.TemplateResponse(
-            "capital_events.html",
-            {
-                "request": request,
+            name="capital_events.html",
+            request=request,
+            context={
                 "events": events,
                 "days": days,
                 "total": total,

@@ -35,9 +35,9 @@ async def jobs_list(request: Request):
         queue_size = db.get_enrichment_queue_size()
 
         return templates.TemplateResponse(
-            "jobs.html",
-            {
-                "request": request,
+            name="jobs.html",
+            request=request,
+            context={
                 "job_runs": job_runs,
                 "scrape_runs": scrape_runs,
                 "rate_state": rate_state,

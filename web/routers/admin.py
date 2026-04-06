@@ -166,9 +166,9 @@ async def admin_stealth_job_page(request: Request):
             recent_founders = []
 
         return templates.TemplateResponse(
-            "admin_stealth_job.html",
-            {
-                "request": request,
+            name="admin_stealth_job.html",
+            request=request,
+            context={
                 "status": stealth_job_status,
                 "founder_count": founder_count,
                 "high_conf_count": high_conf_count,
@@ -272,9 +272,9 @@ async def admin_sync_founders_page(request: Request):
             founder_count = 0
 
         return templates.TemplateResponse(
-            "admin_sync_founders.html",
-            {
-                "request": request,
+            name="admin_sync_founders.html",
+            request=request,
+            context={
                 "founder_count": founder_count,
             },
         )

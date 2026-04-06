@@ -91,9 +91,9 @@ async def news_page(request: Request, alert_type: str = "", page: int = 1, per_p
             pass
 
         return templates.TemplateResponse(
-            "news.html",
-            {
-                "request": request,
+            name="news.html",
+            request=request,
+            context={
                 "alerts": alerts,
                 "stats": stats,
                 "alert_type": alert_type,

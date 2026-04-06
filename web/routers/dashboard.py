@@ -55,9 +55,9 @@ async def dashboard(request: Request):
             contacted_count = 0
 
         return templates.TemplateResponse(
-            "dashboard.html",
-            {
-                "request": request,
+            name="dashboard.html",
+            request=request,
+            context={
                 "stats": stats,
                 "recent_companies": recent,
                 "capital_events": capital_events,
@@ -78,9 +78,9 @@ async def api_stats_refresh(request: Request):
     try:
         stats = db.get_statistics()
         return templates.TemplateResponse(
-            "partials/stats_cards.html",
-            {
-                "request": request,
+            name="partials/stats_cards.html",
+            request=request,
+            context={
                 "stats": stats,
             },
         )

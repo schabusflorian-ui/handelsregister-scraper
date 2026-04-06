@@ -32,9 +32,9 @@ async def investors_list(request: Request, page: int = 1, per_page: int = 25):
         total_pages = (total + per_page - 1) // per_page
 
         return templates.TemplateResponse(
-            "investors.html",
-            {
-                "request": request,
+            name="investors.html",
+            request=request,
+            context={
                 "investors": investors,
                 "total": total,
                 "page": page,
@@ -82,9 +82,9 @@ async def investor_detail(request: Request, investor_id: int):
         entities = [dict(row) for row in entities]
 
         return templates.TemplateResponse(
-            "investor_detail.html",
-            {
-                "request": request,
+            name="investor_detail.html",
+            request=request,
+            context={
                 "investor": investor,
                 "portfolio": portfolio,
                 "aliases": aliases,

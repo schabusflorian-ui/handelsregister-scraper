@@ -127,7 +127,7 @@ class DiscoveryJob:
         self._state: Optional[DiscoveryJobState] = None
 
     def _ensure_tables(self):
-        """Ensure job tracking tables exist."""
+        """Ensure job tracking tables exist with all required columns."""
         self.db.conn.execute("""
             CREATE TABLE IF NOT EXISTS job_runs (
                 id INTEGER PRIMARY KEY,
@@ -146,6 +146,18 @@ class DiscoveryJob:
                 error_count INTEGER DEFAULT 0
             )
         """)
+        # Migrate older schemas that may be missing columns
+        existing = {row[1] for row in self.db.conn.execute("PRAGMA table_info(job_runs)").fetchall()}
+        for col, col_type in [
+            ("keywords_total", "INTEGER DEFAULT 0"),
+            ("keywords_completed", "INTEGER DEFAULT 0"),
+            ("current_keyword_index", "INTEGER DEFAULT 0"),
+            ("checkpoint_data", "TEXT"),
+            ("last_error", "TEXT"),
+            ("error_count", "INTEGER DEFAULT 0"),
+        ]:
+            if col not in existing:
+                self.db.conn.execute(f"ALTER TABLE job_runs ADD COLUMN {col} {col_type}")
         self.db.conn.commit()
 
     def _create_job_run(self) -> int:
