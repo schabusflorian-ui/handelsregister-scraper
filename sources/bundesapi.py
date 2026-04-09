@@ -129,6 +129,7 @@ class Announcement:
     purpose: Optional[str] = None  # Business purpose (Gegenstand)
     postal_code: Optional[str] = None
     street: Optional[str] = None
+    representation_rules: Optional[str] = None  # Vertretungsregelung
 
 
 class BundesAPISource:
@@ -925,11 +926,14 @@ class BundesAPISource:
             # Try to extract capital amounts
             capital_old, capital_new = self._extract_capital_amounts(text)
 
-            # Extract purpose from new-registration announcements
-            purpose = self._extract_purpose(text) if announcement_type == "neueintragung" else None
+            # Extract purpose (Gegenstand) — present in neueintragung and some amendments
+            purpose = self._extract_purpose(text)
 
             # Extract address
             postal_code, street = self._extract_address(text)
+
+            # Extract representation rules (Vertretungsregelung)
+            representation_rules = self._extract_representation_rules(text)
 
             announcements.append(
                 Announcement(
@@ -943,6 +947,7 @@ class BundesAPISource:
                     purpose=purpose,
                     postal_code=postal_code,
                     street=street,
+                    representation_rules=representation_rules,
                 )
             )
 
@@ -1118,6 +1123,53 @@ class BundesAPISource:
             return (m.group(1), None)
 
         return (None, None)
+
+    @staticmethod
+    def _extract_representation_rules(text: str) -> Optional[str]:
+        """
+        Extract representation rules (Vertretungsregelung) from announcement text.
+
+        Common patterns in German Handelsregister announcements:
+        - "Vertretungsregelung: Jeder Geschäftsführer vertritt einzeln."
+        - "Ist nur ein Geschäftsführer bestellt, vertritt er allein."
+        - "Einzelvertretungsbefugnis"
+        - "Gemeinsame Vertretung durch zwei Geschäftsführer"
+        """
+        # Pattern 1: explicit "Vertretungsregelung:" label
+        m = re.search(
+            r"Vertretungsregelung:\s*(.+?)(?:\.\s*(?:Geschäftsführer|Bestellt|Prokura|Stammkapital|Rechtsform|Eingetragen|Geschäftsanschrift|Gegenstand)|\.?\s*$)",
+            text,
+            re.IGNORECASE | re.DOTALL,
+        )
+        if m:
+            rule = m.group(1).strip().rstrip(".")
+            if len(rule) > 5:
+                return rule[:500]
+
+        # Pattern 2: "Einzelvertretungsbefugnis" or "Gesamtvertretung" standalone
+        m = re.search(
+            r"((?:Einzel|Gesamt)vertretungsbefugnis[^.]*|(?:Jeder|Jede)\s+Geschäftsführer(?:in)?\s+(?:ist\s+)?(?:einzeln\s+)?vertretungsberechtigt[^.]*|"
+            r"Ist\s+nur\s+ein\s+Geschäftsführer\s+bestellt[^.]*vertritt[^.]*)",
+            text,
+            re.IGNORECASE,
+        )
+        if m:
+            rule = m.group(0).strip().rstrip(".")
+            if len(rule) > 5:
+                return rule[:500]
+
+        # Pattern 3: "Mit der Befugnis ... im Namen der Gesellschaft"
+        m = re.search(
+            r"(Mit\s+der\s+Befugnis[^.]+Gesellschaft[^.]*)",
+            text,
+            re.IGNORECASE,
+        )
+        if m:
+            rule = m.group(1).strip().rstrip(".")
+            if len(rule) > 5:
+                return rule[:500]
+
+        return None
 
     def search_announcements(
         self,

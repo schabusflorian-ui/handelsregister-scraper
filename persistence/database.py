@@ -532,6 +532,7 @@ class Database:
                 ("tech_stack", "TEXT"),
                 ("github_url", "TEXT"),
                 ("job_count", "INTEGER DEFAULT 0"),
+                ("representation_rules", "TEXT"),
             ]:
                 if col not in columns and columns:
                     cursor.execute(f"ALTER TABLE companies ADD COLUMN {col} {col_type}")
@@ -625,6 +626,7 @@ class Database:
         startup_score: int = 0,
         startup_classification: Optional[str] = None,
         brand_name_score: int = 0,
+        representation_rules: Optional[str] = None,
     ) -> int:
         """
         Insert a new company record.
@@ -643,9 +645,9 @@ class Database:
                 street, postal_code, city, state, purpose, website,
                 capital_amount, capital_currency, ai_robotics_score, climate_score,
                 matched_keywords, tech_categories, startup_score, startup_classification,
-                brand_name_score,
+                brand_name_score, representation_rules,
                 source, first_seen_date, last_updated, enrichment_status
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
             (
                 company_number,
@@ -671,6 +673,7 @@ class Database:
                 startup_score,
                 startup_classification,
                 brand_name_score,
+                representation_rules,
                 source,
                 now,
                 now,

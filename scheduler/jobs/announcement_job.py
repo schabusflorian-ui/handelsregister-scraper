@@ -136,6 +136,23 @@ class AnnouncementMonitoringJob:
         # Check if already in database
         existing = self._find_existing_company(ann.native_company_number)
         if existing:
+            # Backfill missing fields from announcement data
+            updates = {}
+            if ann.purpose and not existing.get("purpose"):
+                updates["purpose"] = ann.purpose
+            if ann.announcement_date and not existing.get("registration_date"):
+                updates["registration_date"] = ann.announcement_date
+            if ann.capital_new and not existing.get("capital_amount"):
+                updates["capital_amount"] = ann.capital_new
+            if ann.postal_code and not existing.get("postal_code"):
+                updates["postal_code"] = ann.postal_code
+            if ann.street and not existing.get("street"):
+                updates["street"] = ann.street
+            rep_rules = getattr(ann, "representation_rules", None)
+            if rep_rules and not existing.get("representation_rules"):
+                updates["representation_rules"] = rep_rules
+            if updates:
+                self.db.update_company(existing["id"], **updates)
             stats["already_tracked"] += 1
             return existing["id"]
 
@@ -181,6 +198,7 @@ class AnnouncementMonitoringJob:
             postal_code=ann.postal_code,
             street=ann.street,
             registration_date=ann.announcement_date,
+            representation_rules=getattr(ann, "representation_rules", None),
             ai_robotics_score=filter_result.relevance_score,
             climate_score=filter_result.climate_score,
             matched_keywords=filter_result.matched_keywords,
