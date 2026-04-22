@@ -22,6 +22,7 @@ Form field names (verified 2026-02-02, extended 2026-02-17):
 - Submit: form:btnSuche
 """
 
+import random
 import re
 import time
 from collections.abc import Iterator
@@ -32,6 +33,20 @@ from urllib.parse import urljoin
 
 import requests
 from bs4 import BeautifulSoup
+
+# Rotate across a small pool of realistic browser UAs to avoid fingerprinting
+# on a single string. All are recent desktop browsers on macOS.
+_USER_AGENTS = [
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 14.2; rv:122.0) Gecko/20100101 Firefox/122.0",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.2 Safari/605.1.15",
+]
+
+# Cycle the HTTP session after this many requests to drop stale cookies and
+# rotate the UA without tripping JSF ViewState (the scraper re-initialises on
+# the next call).
+_SESSION_MAX_REQUESTS = 50
 
 
 @dataclass
@@ -195,16 +210,18 @@ class BundesAPISource:
         self.rate_limiter = TokenBucketRateLimiter(rate=self.config.requests_per_hour, per_seconds=3600)
         self._session = None
         self._initialized = False
+        self._session_request_count = 0
 
     @property
     def session(self) -> requests.Session:
         """Lazy-initialize requests session with browser-like headers."""
         if self._session is None:
             self._session = requests.Session()
-            # Use comprehensive browser-like headers to avoid being blocked
+            # Rotate UA per session lifetime to reduce fingerprinting pressure
+            ua = random.choice(_USER_AGENTS)
             self._session.headers.update(
                 {
-                    "User-Agent": self.config.user_agent,
+                    "User-Agent": ua,
                     "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
                     "Accept-Language": "de-DE,de;q=0.9,en-US;q=0.8,en;q=0.7",
                     "Accept-Encoding": "gzip, deflate, br",
@@ -217,6 +234,7 @@ class BundesAPISource:
                     "Cache-Control": "max-age=0",
                 }
             )
+            self._session_request_count = 0
         return self._session
 
     def reset_session(self):
@@ -226,25 +244,81 @@ class BundesAPISource:
         self._session = None
         self._initialized = False
         self._last_response = None
+        self._session_request_count = 0
 
     def _make_request(self, method: str, url: str, **kwargs) -> requests.Response:
-        """Make a request with retry logic."""
+        """
+        Make a request with retry logic.
+
+        - Honours Retry-After on 429/503
+        - Exponential backoff with jitter on 5xx and transport errors
+        - Does not retry most 4xx (they're unlikely to change with a retry)
+        - Cycles the session every _SESSION_MAX_REQUESTS to drop stale cookies
+        """
         kwargs.setdefault("timeout", self.config.timeout)
 
+        # Cycle the session periodically so we don't ride the same cookies
+        # and UA forever. Skip during session-initialization (when the state
+        # hasn't been set up yet) to avoid tearing down mid-handshake.
+        if self._initialized and self._session_request_count >= _SESSION_MAX_REQUESTS:
+            self.reset_session()
+
+        last_error: Optional[Exception] = None
         for attempt in range(self.config.max_retries):
             try:
                 if method.lower() == "get":
                     response = self.session.get(url, **kwargs)
                 else:
                     response = self.session.post(url, **kwargs)
+                self._session_request_count += 1
+
+                status = response.status_code
+                if status == 429 or status >= 500:
+                    # Server is telling us to slow down or is flaking.
+                    wait = self._compute_backoff(attempt, response)
+                    if attempt < self.config.max_retries - 1:
+                        print(
+                            f"Request returned {status} (attempt {attempt + 1}), "
+                            f"backing off {wait:.1f}s..."
+                        )
+                        time.sleep(wait)
+                        continue
+                # All other statuses — let raise_for_status surface 4xx errors
                 response.raise_for_status()
                 return response
             except (requests.RequestException, ConnectionError) as e:
+                last_error = e
                 if attempt < self.config.max_retries - 1:
-                    print(f"Request failed (attempt {attempt + 1}), retrying in {self.config.retry_delay}s...")
-                    time.sleep(self.config.retry_delay)
+                    wait = self._compute_backoff(attempt, None)
+                    print(
+                        f"Request failed (attempt {attempt + 1}): {type(e).__name__}, "
+                        f"backing off {wait:.1f}s..."
+                    )
+                    time.sleep(wait)
                 else:
                     raise
+
+        # Exhausted retries with no exception (e.g., repeated 5xx/429)
+        if last_error is not None:
+            raise last_error
+        # Surface the final 5xx/429 response as an HTTPError
+        response.raise_for_status()
+        return response
+
+    def _compute_backoff(self, attempt: int, response: Optional[requests.Response]) -> float:
+        """
+        Compute backoff delay: honour Retry-After header if present, else
+        exponential with full-jitter (cap 60s).
+        """
+        if response is not None:
+            retry_after = response.headers.get("Retry-After")
+            if retry_after:
+                try:
+                    return max(0.0, min(60.0, float(retry_after)))
+                except ValueError:
+                    pass  # RFC date format — fall through to exponential
+        base = self.config.retry_delay * (2 ** attempt)
+        return min(60.0, base + random.uniform(0, base * 0.5))
 
     def _initialize_session(self) -> bool:
         """
@@ -1067,6 +1141,51 @@ class BundesAPISource:
         return (None, None)
 
     @staticmethod
+    def _extract_announcement_date(
+        onclick: str,
+        text: str,
+        fallback: Optional[str] = None,
+    ) -> Optional[str]:
+        """
+        Extract an announcement date with a chain of fallbacks. Returns a
+        string in DD.MM.YYYY format (portal convention) or None.
+
+        Search order:
+          1. JS Date string in onclick  ("Mon Feb 02 00:00:00 CET 2026")
+          2. ISO-like date in onclick   ("2026-02-02")
+          3. German DD.MM.YYYY anywhere in the row text
+          4. ISO YYYY-MM-DD in the row text
+          5. fallback (typically the search's date_from)
+        """
+        if onclick:
+            m = re.search(r"'(\w+ \w+ \d+ \d+:\d+:\d+ \w+ \d+)'", onclick)
+            if m:
+                try:
+                    dt = datetime.strptime(m.group(1), "%a %b %d %H:%M:%S %Z %Y")
+                    return dt.strftime("%d.%m.%Y")
+                except Exception:  # noqa: BLE001
+                    pass
+            m = re.search(r"(\d{4}-\d{2}-\d{2})", onclick)
+            if m:
+                try:
+                    return datetime.strptime(m.group(1), "%Y-%m-%d").strftime("%d.%m.%Y")
+                except Exception:  # noqa: BLE001
+                    return m.group(1)
+
+        if text:
+            m = re.search(r"\b(\d{2}\.\d{2}\.\d{4})\b", text)
+            if m:
+                return m.group(1)
+            m = re.search(r"\b(\d{4}-\d{2}-\d{2})\b", text)
+            if m:
+                try:
+                    return datetime.strptime(m.group(1), "%Y-%m-%d").strftime("%d.%m.%Y")
+                except Exception:  # noqa: BLE001
+                    return m.group(1)
+
+        return fallback
+
+    @staticmethod
     def _extract_purpose(text: str) -> Optional[str]:
         """
         Extract business purpose (Gegenstand) from announcement text.
@@ -1257,8 +1376,12 @@ class BundesAPISource:
                 },
             )
 
-            # Parse results
-            announcements = self._parse_bekanntmachungen_results(search_response.text)
+            # Parse results — pass the search's date range so we can fall
+            # back to it when per-row date extraction fails.
+            announcements = self._parse_bekanntmachungen_results(
+                search_response.text,
+                date_from=date_from,
+            )
             print(f"Found {len(announcements)} announcements")
 
             for i, ann in enumerate(announcements):
@@ -1270,7 +1393,11 @@ class BundesAPISource:
             print(f"Announcement search error: {e}")
             return
 
-    def _parse_bekanntmachungen_results(self, html: str) -> List[Announcement]:
+    def _parse_bekanntmachungen_results(
+        self,
+        html: str,
+        date_from: Optional[str] = None,
+    ) -> List[Announcement]:
         """
         Parse announcements from the Registerbekanntmachungen results page.
 
@@ -1278,6 +1405,10 @@ class BundesAPISource:
         - Category (e.g., "Löschungsankündigung")
         - State and court (e.g., "Bayern Amtsgericht München HRB 12345")
         - Company name and city
+
+        date_from is used as a fallback when per-row date extraction fails —
+        better a search-window lower bound than NULL (the old behaviour
+        produced 0 dated rows across 31k announcements on production).
         """
         soup = BeautifulSoup(html, "lxml")
         announcements = []
@@ -1327,17 +1458,14 @@ class BundesAPISource:
             # Build native company number
             native_number = f"{registry_type} {registry_number}".strip()
 
-            # Extract date from onclick if available
+            # Extract date with a chain of fallbacks — the portal has
+            # historically changed this field several times.
             onclick = item.get("onclick", "")
-            date_match = re.search(r"'(\w+ \w+ \d+ \d+:\d+:\d+ \w+ \d+)'", onclick)
-            announcement_date = None
-            if date_match:
-                # Parse date like "Mon Feb 02 00:00:00 CET 2026"
-                try:
-                    dt = datetime.strptime(date_match.group(1), "%a %b %d %H:%M:%S %Z %Y")
-                    announcement_date = dt.strftime("%d.%m.%Y")
-                except:
-                    pass
+            announcement_date = self._extract_announcement_date(
+                onclick=onclick,
+                text=text,
+                fallback=date_from,
+            )
 
             # Map category to our standard types
             announcement_type = self._classify_announcement_type(category)

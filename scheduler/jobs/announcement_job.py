@@ -47,6 +47,8 @@ class AnnouncementMonitoringJob:
         rate_limiter: Optional[PersistentRateLimiter] = None,
         max_requests: int = 10,
         lookback_days: int = 7,
+        inline_website_lookup: bool = False,
+        inline_website_min_score: int = 3,
     ):
         """
         Initialize announcement monitoring job.
@@ -56,16 +58,24 @@ class AnnouncementMonitoringJob:
             rate_limiter: Optional rate limiter (creates internal one if not provided)
             max_requests: Maximum requests per job run
             lookback_days: Number of days to look back for announcements
+            inline_website_lookup: If True, attempt a fast domain-guess
+                website lookup for each newly inserted high-signal company.
+                Leaves full scrape to WebsiteScrapeJob.
+            inline_website_min_score: Minimum ai_robotics_score to trigger
+                the inline lookup (default 3)
         """
         self.db = db
         self.rate_limiter = rate_limiter
         self.max_requests = max_requests
         self.lookback_days = lookback_days
+        self.inline_website_lookup = inline_website_lookup
+        self.inline_website_min_score = inline_website_min_score
 
         self.filter = AIRoboticsFilter()
         self.startup_scorer = StartupScorer()
         self.brand_scorer = BrandNameScorer()
         self.source = None
+        self._website_finder = None
 
     def _get_date_range(self) -> tuple:
         """Get date range for announcement search."""
@@ -142,6 +152,13 @@ class AnnouncementMonitoringJob:
                 updates["purpose"] = ann.purpose
             if ann.announcement_date and not existing.get("registration_date"):
                 updates["registration_date"] = ann.announcement_date
+            # Only Neueintragung announcements carry the true HR registration date.
+            if (
+                ann.announcement_type == "neueintragung"
+                and ann.announcement_date
+                and not existing.get("first_registered_date")
+            ):
+                updates["first_registered_date"] = ann.announcement_date
             if ann.capital_new and not existing.get("capital_amount"):
                 updates["capital_amount"] = ann.capital_new
             if ann.postal_code and not existing.get("postal_code"):
@@ -198,6 +215,9 @@ class AnnouncementMonitoringJob:
             postal_code=ann.postal_code,
             street=ann.street,
             registration_date=ann.announcement_date,
+            first_registered_date=(
+                ann.announcement_date if ann.announcement_type == "neueintragung" else None
+            ),
             representation_rules=getattr(ann, "representation_rules", None),
             ai_robotics_score=filter_result.relevance_score,
             climate_score=filter_result.climate_score,
@@ -210,6 +230,15 @@ class AnnouncementMonitoringJob:
 
         # Add to enrichment queue for detailed lookup
         self.db.add_to_enrichment_queue(company_id, priority=1, reason="new_from_announcement")
+
+        # Optional inline website lookup for high-signal companies. The full
+        # scrape stays on WebsiteScrapeJob; we only try cheap domain guesses
+        # here so the announcement run stays fast.
+        if (
+            self.inline_website_lookup
+            and filter_result.relevance_score >= self.inline_website_min_score
+        ):
+            self._try_inline_website_lookup(company_id, ann)
 
         stats["new_companies"] += 1
         logger.info(
@@ -302,6 +331,41 @@ class AnnouncementMonitoringJob:
         )
 
         return True
+
+    def _try_inline_website_lookup(self, company_id: int, ann: Announcement) -> None:
+        """
+        Best-effort website lookup for a freshly inserted company.
+
+        Uses domain-guessing only (enable_search=False) to keep latency low:
+        scraping and DDG fallback remain on the batch job.
+        """
+        try:
+            if self._website_finder is None:
+                from sources.website_finder import WebsiteFinder
+
+                self._website_finder = WebsiteFinder(
+                    min_confidence=0.6,
+                    enable_search=False,
+                )
+            result = self._website_finder.find(
+                ann.company_name,
+                native_company_number=ann.native_company_number,
+            )
+            if result and result.url:
+                self.db.update_company(
+                    company_id,
+                    website=result.url,
+                    website_confidence=result.confidence,
+                    website_lookup_at=datetime.now().isoformat(),
+                )
+                logger.info(
+                    "Inline website lookup hit: %s -> %s (conf=%.2f)",
+                    ann.company_name,
+                    result.url,
+                    result.confidence,
+                )
+        except Exception as e:
+            logger.debug("Inline website lookup failed for %s: %s", ann.company_name, e)
 
     OFFICER_TYPES = {"geschaeftsfuehrer", "neueintragung", "prokura"}
 

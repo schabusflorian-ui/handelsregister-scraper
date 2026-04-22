@@ -533,6 +533,10 @@ class Database:
                 ("github_url", "TEXT"),
                 ("job_count", "INTEGER DEFAULT 0"),
                 ("representation_rules", "TEXT"),
+                # Canonical actual Handelsregister registration date (from Neueintragung
+                # announcements). Distinct from first_seen_date (when we first saw the
+                # company) and registration_date (legacy, historically overloaded).
+                ("first_registered_date", "TEXT"),
             ]:
                 if col not in columns and columns:
                     cursor.execute(f"ALTER TABLE companies ADD COLUMN {col} {col_type}")
@@ -627,6 +631,7 @@ class Database:
         startup_classification: Optional[str] = None,
         brand_name_score: int = 0,
         representation_rules: Optional[str] = None,
+        first_registered_date: Optional[str] = None,
     ) -> int:
         """
         Insert a new company record.
@@ -645,9 +650,9 @@ class Database:
                 street, postal_code, city, state, purpose, website,
                 capital_amount, capital_currency, ai_robotics_score, climate_score,
                 matched_keywords, tech_categories, startup_score, startup_classification,
-                brand_name_score, representation_rules,
+                brand_name_score, representation_rules, first_registered_date,
                 source, first_seen_date, last_updated, enrichment_status
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
             (
                 company_number,
@@ -674,6 +679,7 @@ class Database:
                 startup_classification,
                 brand_name_score,
                 representation_rules,
+                first_registered_date,
                 source,
                 now,
                 now,

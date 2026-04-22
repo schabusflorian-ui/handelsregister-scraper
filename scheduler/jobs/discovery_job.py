@@ -307,6 +307,19 @@ class DiscoveryJob:
         priority = 0 if brand_result.is_likely_tech_startup else 1
         self.db.add_to_enrichment_queue(company_id, priority=priority, reason="new_from_bundesapi")
 
+        # Capture the Neueintragung VÖ for this fresh company (1 extra
+        # request), so first_registered_date + officers + purpose land at
+        # discovery time. Silent-fails if rate limiter has no budget.
+        try:
+            from processing.vo_capture import capture_neueintragung
+
+            if capture_neueintragung(
+                self.db, self.source, company_id, result, self.rate_limiter
+            ):
+                self._state.requests_used += 1
+        except Exception as e:  # noqa: BLE001
+            logger.debug("VÖ capture error for %s: %s", result.name, e)
+
         self._state.companies_new += 1
         logger.info(
             "New company: %s (AI score: %d, startup: %s)", result.name, filter_result.relevance_score, classification

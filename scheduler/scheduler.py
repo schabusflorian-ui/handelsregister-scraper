@@ -195,6 +195,11 @@ class HandelsregisterScheduler:
                 db=db,
                 rate_limiter=self.rate_limiter,
                 lookback_days=7,  # Check last 7 days
+                # Fast domain-guess lookup for high-signal new companies so the
+                # UI shows a site within minutes; full scrape stays on the
+                # daily WebsiteScrapeJob.
+                inline_website_lookup=True,
+                inline_website_min_score=3,
             )
             stats = job.run()
 
@@ -551,10 +556,12 @@ class HandelsregisterScheduler:
             replace_existing=True,
         )
 
-        # Website finder job: daily at 9 AM UTC
+        # Website finder job: every 3 hours. High-signal new companies get a
+        # best-effort inline lookup in announcement_job; this run covers the
+        # long tail and re-checks companies where the earlier guess failed.
         self.scheduler.add_job(
             self._run_website_finder_job,
-            trigger=CronTrigger(hour=9, minute=0),
+            trigger=CronTrigger(hour="*/3", minute=0),
             id="website_finder_job",
             name="Website Finder Job",
             replace_existing=True,

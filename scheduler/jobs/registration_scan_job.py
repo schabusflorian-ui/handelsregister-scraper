@@ -399,6 +399,17 @@ class RegistrationScanJob:
             reason="new_from_registration_scan",
         )
 
+        # Capture Neueintragung VÖ (1 extra request) to land
+        # first_registered_date + officers + purpose at discovery time.
+        try:
+            from processing.vo_capture import capture_neueintragung
+
+            capture_neueintragung(
+                self.db, self.source, company_id, result, self.rate_limiter
+            )
+        except Exception as e:  # noqa: BLE001
+            logger.debug("VÖ capture error for %s: %s", result.name, e)
+
         logger.info(
             "  NEW [%s] %s (brand=%d, AI=%d, startup=%s)",
             method.upper(),
