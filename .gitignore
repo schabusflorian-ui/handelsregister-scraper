@@ -41,6 +41,11 @@ exports/
 
 # Logs
 *.log
+*.err
+logs/
+
+# Claude Code local state
+.claude/scheduled_tasks.lock
 
 # OS
 .DS_Store

@@ -15,6 +15,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
+# Install Chromium + its system deps for the playwright_ddg engine and
+# sources/playwright_scraper.py. Adds ~400MB but required for browser-driven
+# DDG bypass (html.duckduckgo.com TLS-blocks cloud IPs).
+RUN playwright install --with-deps chromium
+
 # Copy application code
 COPY . .
 

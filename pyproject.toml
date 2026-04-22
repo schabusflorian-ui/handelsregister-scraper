@@ -23,6 +23,8 @@ dependencies = [
     "cloudscraper>=1.2.71",
     "curl_cffi>=0.7.0",
     "brotli>=1.1.0",
+    "playwright>=1.57.0",
+    "playwright-stealth>=2.0.0",
 ]
 
 [project.optional-dependencies]

@@ -119,6 +119,34 @@ STEALTH_QUERIES = [
     'site:linkedin.com/in "web3" founder switzerland',
     'site:linkedin.com/in "exploring opportunities" founder switzerland',  # top query pattern
     'site:linkedin.com/in "next venture" founder zurich',
+    # === PROGRAMS — talent-first accelerators / fellowships (ADDED, not replacing) ===
+    # Being in one of these is itself a founder signal: vetted, actively building,
+    # on a finite runway — even higher precision than generic "stealth" keywords.
+    # EWOR — €500k pre-idea fellowship, Berlin-focused
+    'site:linkedin.com/in "EWOR" founder',
+    'site:linkedin.com/in "EWOR Fellow"',
+    'site:linkedin.com/in "EWOR Fellowship"',
+    'site:linkedin.com/in "EWOR" germany',
+    # Entrepreneur First — talent-first accelerator (Berlin, London, Paris)
+    'site:linkedin.com/in "entrepreneur first" berlin',
+    'site:linkedin.com/in "entrepreneur first" germany',
+    'site:linkedin.com/in "entrepreneur first" founder',
+    'site:linkedin.com/in "@joinEF" founder',
+    'site:linkedin.com/in "EF Berlin" founder',
+    'site:linkedin.com/in "EF London" founder',
+    # EF cohort naming: city-code + 2-digit year (LD25 = London 2025 start, etc)
+    'site:linkedin.com/in "LD25" OR "LD24" founder',
+    'site:linkedin.com/in "BE25" OR "BE24" founder',
+    # SCHUB by UnternehmerTUM — Munich deep-tech accelerator
+    'site:linkedin.com/in "SCHUB" "UnternehmerTUM"',
+    'site:linkedin.com/in "SCHUB Fellowship"',
+    'site:linkedin.com/in "SCHUB" TUM founder',
+    'site:linkedin.com/in "SCHUB" munich gründer',
+    # UnternehmerTUM XPLORE — Munich deep-tech / corporate-innovation program
+    'site:linkedin.com/in "UnternehmerTUM XPLORE"',
+    'site:linkedin.com/in "XPLORE" "UnternehmerTUM"',
+    'site:linkedin.com/in "XPLORE" founder munich',
+    'site:linkedin.com/in "XPLORE" TUM gründer',
 ]
 
 
@@ -338,35 +366,84 @@ class SlowStealthScraper:
 
         return name, headline
 
-    def _calculate_snippet_confidence(self, title: str, snippet: str, search_query: str = None) -> tuple:
+    def _calculate_snippet_confidence(
+        self,
+        title: str,
+        snippet: str,
+        search_query: str = None,
+        headline: str = None,
+    ) -> tuple:
         """
         Calculate confidence score from search snippet without scraping LinkedIn.
 
-        Scoring strategy:
-        - Stealth keywords: +0.15 each, capped at 0.25 total (prevents triple-count of stealth/stealth mode/stealth startup)
-        - Founder keywords: +0.10 each, capped at 0.20 total (prevents founder+co-founder+ceo+entrepreneur stacking)
-        - Ex-FAANG/unicorn: +0.15 each (high-value signal)
-        - DACH location: +0.05 (one-time, query-aware — ignores terms echoed from query)
-        - Combo bonus: +0.10 if BOTH stealth AND founder signals present
+        Core principle: the "stealth" / "working on something new" redaction pattern
+        is THE primary signal. Someone whose LinkedIn headline is literally just
+        "Stealth" or "Stealth Startup" in a DACH city is the exact profile we're
+        hunting — they've stripped their role title because they can't share it.
+        Score them as top-tier, not as noise.
+
+        Scoring:
+          - Stealth keywords:        +0.15 each, cap = 0.45 if DACH else 0.25
+          - Founder keywords:        +0.10 each, cap = 0.20
+          - Combo (stealth+founder): +0.10
+          - Headline = pure stealth: +0.25  (redaction pattern — very specific)
+          - Implicit founder credit: +0.25 total if stealth+DACH but no founder keyword
+                                     (treats redacted headlines as implicit founders)
+          - Ex-FAANG/unicorn:        +0.15 each
+          - DACH location:           +0.05 (one-time, query-aware)
+          - Anti-signals:            −0.25 each (ex-stealth, investor/advisor-only)
 
         Args:
-            title: Search result title
-            snippet: Search result snippet
-            search_query: The search query used (to strip echoed DACH terms from scoring)
+            title: Search result title from DDG
+            snippet: Search result snippet from DDG
+            search_query: The search query used (to strip echoed DACH terms)
+            headline: Already-parsed headline from _parse_search_title (optional).
+                     When provided, enables exact-headline redaction-pattern bonus.
 
         Returns: (confidence_score, detected_signals)
         """
         import re
 
-        text = f"{title} {snippet}".lower()
+        # Build the text buffer from all available fields. Including the headline
+        # is essential: for re-scores of existing DB rows, `title` is just the
+        # person's name (no keywords), so the stealth/founder words only appear
+        # in headline + snippet. Skipping headline here is what caused conf 0.5
+        # "Founder @Stealth" rows to drop to 0.25 on rescore.
+        text = " ".join(filter(None, [title, headline, snippet])).lower()
         signals = []
         score = 0.0
 
-        # Stealth keywords (strong signal, capped)
+        # ==================== ANTI-SIGNALS ====================
+        # Block false positives where "stealth" appears but person isn't a founder.
+        # Apply as penalties so a borderline case can still pass threshold on merit.
+        anti_patterns = [
+            # Past stealth: "ex-stealth", "formerly stealth", "previously stealth"
+            (r"\bex[- ]stealth\b", "anti:ex-stealth"),
+            (r"\bformerly\s+(at\s+)?stealth\b", "anti:formerly-stealth"),
+            (r"\bpreviously\s+(at\s+)?stealth\b", "anti:previously-stealth"),
+            (r"\bworked\s+(at|in)\s+stealth\b", "anti:worked-at-stealth"),
+            # Employee-language around stealth (not founder)
+            (r"\b(developer|engineer|designer|pm|product manager|recruiter|hr|hiring)\s+at\s+stealth\b", "anti:employee-at-stealth"),
+            # Investor/advisor/consultant-only roles with no founder keyword nearby
+            (r"\b(angel investor|venture partner|vc partner|general partner|managing partner)\b", "anti:investor-only"),
+            (r"\b(advisor|consultant|coach)\b(?!.*founder)(?!.*stealth)", "anti:advisor-only"),
+        ]
+        for pattern, label in anti_patterns:
+            if re.search(pattern, text):
+                signals.append(label)
+                score -= 0.25
+
+        # ==================== STEALTH KEYWORDS ====================
+        # Primary signal — the redaction pattern. Cap is raised when DACH location
+        # is also present (computed below), so stealth-heavy DACH profiles score
+        # what they deserve instead of being capped at 0.25.
         stealth_words = [
+            # Literal stealth
             "stealth",
             "stealth mode",
             "stealth startup",
+            "stealth company",
+            # "Building / working on something X" — the other redaction pattern
             "building something",
             "something new",
             "something exciting",
@@ -376,6 +453,7 @@ class SlowStealthScraper:
             "my next company",
             "my next thing",
             "next company",
+            # Pre-launch signals
             "pre-launch",
             "pre-seed",
             "unannounced",
@@ -383,6 +461,7 @@ class SlowStealthScraper:
             "coming soon",
             "launching soon",
             "secret project",
+            # Transition phrases (weaker but still relevant)
             "next chapter",
             "next adventure",
             "next venture",
@@ -393,17 +472,19 @@ class SlowStealthScraper:
             "figuring out",
             "what's next",
             "exploring opportunities",
+            # German
             "im aufbau",
-            "neugründung",  # German
+            "neugründung",
         ]
         stealth_score = 0.0
         for word in stealth_words:
             if word in text:
                 signals.append(word)
                 stealth_score += 0.15
-        score += min(stealth_score, 0.25)  # Cap stealth contribution
 
-        # Founder keywords (capped)
+        # ==================== FOUNDER KEYWORDS ====================
+        # Note: "angel investor" and "venture partner" moved to anti-signals above
+        # (they're not founder signals).
         founder_words = [
             "founder",
             "co-founder",
@@ -419,8 +500,6 @@ class SlowStealthScraper:
             "2x founder",
             "3x founder",
             "4x founder",
-            "angel investor",
-            "venture partner",
             "eir",
             "entrepreneur in residence",
         ]
@@ -429,42 +508,200 @@ class SlowStealthScraper:
             if word in text:
                 signals.append(word)
                 founder_score += 0.1
-        score += min(founder_score, 0.20)  # Cap founder contribution
 
-        # Combo bonus: stealth + founder together = strong signal
-        if stealth_score > 0 and founder_score > 0:
+        # ==================== PROGRAM AFFILIATIONS ====================
+        # Named talent-first accelerators / fellowships. Being in one of these
+        # is itself a strong founder signal — participants are vetted, actively
+        # building, and on a finite runway.
+        #
+        # Patterns are regex to avoid false positives:
+        #  - "ef" alone matches too many things, so we require "entrepreneur first",
+        #    "@joinEF", or "EF <city>"
+        #  - "schub" alone is German for "push" — require UnternehmerTUM/TUM/Munich
+        #    context within 80 chars in either direction
+        #  - "xplore" is also generic — same context guard as schub
+        program_patterns = [
+            # EWOR — distinctive 4-letter acronym, safe to match directly
+            (r"\bewor\b",                           "prog:ewor",              0.30),
+            # Entrepreneur First variants
+            (r"\bentrepreneur first\b",             "prog:entrepreneur-first", 0.30),
+            (r"@joinef\b",                          "prog:ef-handle",          0.30),
+            (r"\bef\s+(berlin|london|paris|bangalore|singapore|toronto|nyc|new york)\b",
+                                                    "prog:ef-city",            0.25),
+            # EF cohort naming: city-code + 2-digit year (LD25, BE24, PA23, etc).
+            # Gated on EF context within 100 chars either side to avoid matching
+            # unrelated "LD25" strings (e.g., NJ legislative district 25).
+            (r"\b(?:ld|be|pa|sf|sg|bl|to|ny|ba|tor)\d{2}\b.{0,100}(entrepreneur first|@joinef|\bef\s+(?:berlin|london))",
+                                                    "prog:ef-cohort",          0.15),
+            (r"(entrepreneur first|@joinef|\bef\s+(?:berlin|london)).{0,100}\b(?:ld|be|pa|sf|sg|bl|to|ny|ba|tor)\d{2}\b",
+                                                    "prog:ef-cohort",          0.15),
+            # SCHUB by UnternehmerTUM — "schub" alone is German for "push",
+            # so we require explicit TUM/UnternehmerTUM context, OR the exact
+            # phrase "SCHUB Fellowship" which is unambiguous.
+            (r"\bschub\s+fellowship\b",             "prog:schub",              0.30),
+            (r"\bschub\b.{0,100}\b(unternehmertum|tum)\b",
+                                                    "prog:schub",              0.30),
+            (r"\b(unternehmertum|tum)\b.{0,100}\bschub\b",
+                                                    "prog:schub",              0.30),
+            # UnternehmerTUM XPLORE — same story: "xplore" is too generic alone.
+            # Require TUM/UnternehmerTUM context.
+            (r"\bunternehmertum\s+xplore\b",        "prog:xplore",             0.30),
+            (r"\bxplore\b.{0,100}\b(unternehmertum|tum)\b",
+                                                    "prog:xplore",             0.25),
+            (r"\b(unternehmertum|tum)\b.{0,100}\bxplore\b",
+                                                    "prog:xplore",             0.25),
+        ]
+        program_score = 0.0
+        program_hits = set()  # dedupe by label — prevents double-counting EF + EF-city
+        for pattern, label, weight in program_patterns:
+            if label in program_hits:
+                continue
+            if re.search(pattern, text):
+                signals.append(label)
+                program_score += weight
+                program_hits.add(label)
+
+        # Program staff (event/community/program managers, interns) are NOT founders —
+        # they work FOR the program. Revoke program credit when employee roles are detected
+        # alongside program keywords.
+        if program_hits:
+            staff_roles = (
+                r"\b("
+                r"program(me)?\s+manager|"
+                r"event\s+manager|"
+                r"community\s+manager|"
+                r"operations\s+manager|"
+                r"office\s+manager|"
+                r"communications?\s+manager|"
+                r"program(me)?\s+coordinator|"
+                r"recruiter|"
+                r"intern\b|"
+                r"program(me)?\s+(and|&)\s+event|"
+                r"venture\s+partner|"
+                r"head\s+of\s+(programs?|community|events|marketing)|"
+                r"(bd|business\s+development)\s+at"
+                r")"
+            )
+            if re.search(staff_roles, text):
+                signals.append("anti:program-staff")
+                program_score = 0.0
+                program_hits = set()
+
+        # ==================== DACH LOCATION ====================
+        # Extended city list — the old list missed Düsseldorf, Stuttgart, Chur, etc.
+        # and was dropping good leads because their location didn't match.
+        dach_indicators = [
+            # DE — countries + top 20 cities
+            "germany", "deutschland",
+            "berlin", "munich", "münchen", "hamburg", "frankfurt",
+            "cologne", "köln", "stuttgart", "düsseldorf", "dusseldorf",
+            "dortmund", "essen", "leipzig", "bremen", "dresden",
+            "hannover", "nürnberg", "nuremberg", "bonn", "münster", "muenster",
+            "karlsruhe", "mannheim", "augsburg", "wiesbaden", "heidelberg",
+            "freiburg", "mainz", "kiel", "aachen", "regensburg", "potsdam",
+            # AT — country + top 7 cities
+            "austria", "österreich", "oesterreich",
+            "vienna", "wien", "graz", "linz", "salzburg", "innsbruck", "klagenfurt",
+            # CH — country + top cities
+            "switzerland", "schweiz", "suisse",
+            "zurich", "zürich", "geneva", "genf", "basel", "zug", "bern",
+            "lausanne", "luzern", "lucerne", "winterthur", "chur", "st. gallen",
+            "st.gallen", "sankt gallen",
+        ]
+
+        # Strip DACH terms that came from the search query (DDG echoes them back)
+        if search_query:
+            from sources.linkedin_scraper import _extract_dach_terms_from_query
+
+            query_dach_terms = _extract_dach_terms_from_query(search_query)
+            if query_dach_terms:
+                dach_check_text = text
+                for term in sorted(query_dach_terms, key=len, reverse=True):
+                    dach_check_text = re.sub(r"\b" + re.escape(term) + r"\b", "", dach_check_text)
+            else:
+                dach_check_text = text
+        else:
+            dach_check_text = text
+
+        has_dach = False
+        for loc in dach_indicators:
+            if loc in dach_check_text:
+                signals.append(f"loc:{loc}")
+                score += 0.05
+                has_dach = True
+                break
+
+        # ==================== APPLY CAPS (conditional on DACH) ====================
+        # When DACH is confirmed, lift the stealth cap — we've already filtered to
+        # the right geography, so stacking stealth keywords isn't noise.
+        stealth_cap = 0.45 if has_dach else 0.25
+        score += min(stealth_score, stealth_cap)
+        score += min(founder_score, 0.20)
+
+        # Programs cap — prevents stacking (EF + EF-city + EF-cohort → only 0.35 total)
+        score += min(program_score, 0.35)
+
+        # ==================== COMBO BONUS ====================
+        # Stealth OR program signal combined with a founder keyword → combo.
+        if (stealth_score > 0 or program_score > 0) and founder_score > 0:
             score += 0.10
 
-        # High-value background (ex-FAANG and European unicorns)
+        # ==================== IMPLICIT FOUNDER (redaction pattern OR program) ====================
+        # Someone whose LinkedIn headline is redacted to "Stealth" in a DACH city,
+        # OR who's in a vetted founder program like EWOR / EF / SCHUB, is almost
+        # certainly a founder. Without this, they score like job-seekers because
+        # the literal word "founder" may be absent from their bio.
+        if founder_score == 0 and (
+            (stealth_score > 0 and has_dach) or program_score > 0
+        ):
+            if program_score > 0:
+                signals.append("implicit:founder_from_program")
+            else:
+                signals.append("implicit:founder_from_stealth")
+            score += 0.15  # implicit founder credit
+            score += 0.10  # implicit combo bonus
+
+        # ==================== HEADLINE REDACTION BONUS ====================
+        # Exact-match bonus: headline is _just_ the redaction phrase, nothing else.
+        # This is the cleanest positive signal — an intentionally-minimal headline
+        # that says "I'm a stealth founder but I can't tell you more yet".
+        if headline:
+            hl = re.sub(r"[|·•\-/,\s]+", " ", headline.lower()).strip()
+            redaction_headlines = {
+                "stealth",
+                "stealth mode",
+                "stealth startup",
+                "stealth company",
+                "stealth ai startup",
+                "stealth ai",
+                "startup in stealth mode",
+                "startup in stealth",
+                "working on something new",
+                "working on something exciting",
+                "building something new",
+                "building something exciting",
+                "building my next company",
+                "working on my next",
+                "im aufbau",
+                "neugründung",
+            }
+            # Exact match or redaction phrase bounded by word edges
+            if hl in redaction_headlines or any(
+                hl.startswith(p + " ") or hl.endswith(" " + p) or p in hl.split("  ")
+                for p in redaction_headlines
+                if len(p) > 4  # avoid matching just "stealth" in any context
+            ):
+                signals.append(f"redaction:{hl[:40]}")
+                score += 0.25
+
+        # ==================== EX-FAANG / UNICORN BACKGROUND ====================
         companies = [
-            "google",
-            "meta",
-            "facebook",
-            "amazon",
-            "stripe",
-            "microsoft",
-            "apple",
-            "uber",
-            "airbnb",
-            "netflix",
-            "twitter",
-            "linkedin",
+            "google", "meta", "facebook", "amazon", "stripe", "microsoft",
+            "apple", "uber", "airbnb", "netflix", "twitter", "linkedin",
             "salesforce",
-            "n26",
-            "zalando",
-            "delivery hero",
-            "celonis",
-            "personio",
-            "flixbus",
-            "trade republic",
-            "contentful",
-            "mambu",
-            "sennder",
-            "gorillas",
-            "bitpanda",
-            "refurbed",
-            "wefox",
-            "scalable capital",
+            "n26", "zalando", "delivery hero", "celonis", "personio",
+            "flixbus", "trade republic", "contentful", "mambu", "sennder",
+            "gorillas", "bitpanda", "refurbed", "wefox", "scalable capital",
         ]
         for company in companies:
             if (
@@ -476,55 +713,8 @@ class SlowStealthScraper:
                 signals.append(f"ex-{company}")
                 score += 0.15
 
-        # DACH location indicators (query-aware: strip terms from search query)
-        dach_indicators = [
-            "germany",
-            "deutschland",
-            "berlin",
-            "munich",
-            "münchen",
-            "hamburg",
-            "frankfurt",
-            "cologne",
-            "köln",
-            "austria",
-            "österreich",
-            "vienna",
-            "wien",
-            "graz",
-            "salzburg",
-            "switzerland",
-            "schweiz",
-            "zurich",
-            "zürich",
-            "geneva",
-            "genf",
-            "basel",
-            "zug",
-        ]
-
-        # Strip DACH terms that came from the search query before checking
-        if search_query:
-            from sources.linkedin_scraper import _extract_dach_terms_from_query
-
-            query_dach_terms = _extract_dach_terms_from_query(search_query)
-            if query_dach_terms:
-                # Build text with query DACH terms stripped
-                dach_check_text = text
-                for term in sorted(query_dach_terms, key=len, reverse=True):
-                    dach_check_text = re.sub(r"\b" + re.escape(term) + r"\b", "", dach_check_text)
-            else:
-                dach_check_text = text
-        else:
-            dach_check_text = text
-
-        for loc in dach_indicators:
-            if loc in dach_check_text:
-                signals.append(f"loc:{loc}")
-                score += 0.05
-                break  # Only count location once
-
-        return min(score, 1.0), signals
+        # Clamp to [0, 1]
+        return max(0.0, min(score, 1.0)), signals
 
     def cleanup_existing_founders(self):
         """
@@ -659,10 +849,14 @@ class SlowStealthScraper:
                 changed = True
 
             # 4. Recalculate confidence with new query-aware scoring
+            # Pass headline so the redaction-pattern bonus can fire.
             search_text_title = original_name or ""
             search_text_snippet = summary or ""
             new_confidence, new_signals = self._calculate_snippet_confidence(
-                search_text_title, search_text_snippet, search_query=search_query
+                search_text_title,
+                search_text_snippet,
+                search_query=search_query,
+                headline=new_headline or headline,
             )
 
             # Update entry (low-confidence entries are kept for manual review)
@@ -712,7 +906,7 @@ class SlowStealthScraper:
 
         name, headline = self._parse_search_title(result.title, result.url, result.snippet)
         confidence, signals = self._calculate_snippet_confidence(
-            result.title, result.snippet, search_query=search_query
+            result.title, result.snippet, search_query=search_query, headline=headline
         )
 
         # Check if genuinely DACH (query-aware: strips echoed terms)
@@ -1030,7 +1224,7 @@ class SlowStealthScraper:
 
         name, headline = self._parse_search_title(result.title, result.url, result.snippet)
         confidence, signals = self._calculate_snippet_confidence(
-            result.title, result.snippet, search_query=search_query
+            result.title, result.snippet, search_query=search_query, headline=headline
         )
 
         # Boost confidence for officer cross-ref (these are high-value leads)
@@ -1135,6 +1329,15 @@ class SlowStealthScraper:
             elif self.search_engine == "ddg":
                 scraper = DuckDuckGoSearchScraper(delay_range=(2, 5), use_cloudscraper=True)
                 results = scraper.search_query(query, max_pages=max_pages)
+            elif self.search_engine == "playwright_ddg":
+                # Browser-driven DDG — bypasses TLS/fingerprint blocks that
+                # hit html.duckduckgo.com. See sources/playwright_ddg_scraper.py.
+                # Each call spins up a Chromium — tolerable at ~1 query/min
+                # pace but expensive if run per-query rapidly.
+                from sources.playwright_ddg_scraper import PlaywrightDdgScraper
+
+                with PlaywrightDdgScraper(delay_range=(2, 5)) as scraper:
+                    results = scraper.search_query(query, max_pages=max_pages)
             else:  # rotate
                 scraper = MultiSearchScraper(delay_range=(2, 5))
                 results = scraper.search_query(query, max_pages=max_pages)

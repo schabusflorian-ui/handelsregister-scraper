@@ -62,6 +62,22 @@ def main():
     parser.add_argument("--iterations", type=int, default=None, help="Max iterations (default: unlimited)")
     parser.add_argument("--verbose", "-v", action="store_true", help="Verbose logging")
     parser.add_argument("--stats", action="store_true", help="Show current stats and exit")
+    parser.add_argument(
+        "--search-engine",
+        default="brave",
+        choices=["brave", "ddgs", "serper", "curl", "ddg", "playwright_ddg", "rotate"],
+        help=(
+            "Search engine for DDG/Bing/Brave queries. "
+            "'playwright_ddg' uses headless Chromium + playwright-stealth against "
+            "duckduckgo.com — bypasses html.duckduckgo.com TLS/fingerprint blocks. "
+            "(default: brave)"
+        ),
+    )
+    parser.add_argument(
+        "--fresh",
+        action="store_true",
+        help="Fresh mode: only search results indexed in past month",
+    )
     args = parser.parse_args()
 
     # Ensure data directory exists
@@ -86,6 +102,8 @@ def main():
             db=db,
             search_delay=search_delay,
             scrape_delay=scrape_delay,
+            search_engine=args.search_engine,
+            fresh_mode=args.fresh,
         )
 
         # Show stats only
