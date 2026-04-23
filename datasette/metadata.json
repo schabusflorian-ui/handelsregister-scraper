@@ -1,0 +1,185 @@
+{
+  "title": "Idea Discovery",
+  "description_html": "Accelerator / fund / microbusiness scrape, clustered and tagged for finding SaaS + service microbusiness ideas.<br/><b>Full-text search:</b> add <code>?_search=...</code> to any of the searchable tables below.",
+  "plugins": {
+    "datasette-json-html": {}
+  },
+  "databases": {
+    "handelsregister": {
+      "tables": {
+        "company_ideas": {
+          "title": "company_ideas — all scraped startup ideas (26K rows)",
+          "description": "One row per (program, source_url). Full-text searchable over company, one_liner, long_description.",
+          "facets": ["program", "country", "status", "cluster_id"],
+          "sort_desc": "id",
+          "fts_table": "company_ideas_fts",
+          "fts_pk": "id"
+        },
+        "idea_extraction": {
+          "title": "idea_extraction — LLM-extracted launch flags + tags (7.2K rows)",
+          "description": "Full-text searchable over problem_statement, reasoning, and both tag axes.",
+          "facets": ["customer_size", "business_model", "solo_buildable", "ai_first_advantage", "moat_type", "niche_specificity"],
+          "fts_table": "idea_extraction_fts",
+          "fts_pk": "company_idea_id"
+        },
+        "idea_clusters": {
+          "title": "idea_clusters — HDBSCAN clusters + sub-clusters (1.6K)",
+          "description": "Hierarchical clustering. parent_cluster_id IS NULL = top-level. era_class flags hot / steady / rebuild_candidate / legacy.",
+          "facets": ["era_class", "parent_cluster_id"],
+          "sort_desc": "size"
+        },
+        "website_enrichment": {
+          "title": "website_enrichment — homepage copy per unique domain (2.7K)",
+          "description": "Full-text searchable over title, meta_description, hero_h1, hero_text.",
+          "facets": ["http_status", "error", "lang"],
+          "fts_table": "website_enrichment_fts"
+        },
+        "idea_extraction_tag_backup": {
+          "title": "idea_extraction_tag_backup (audit)",
+          "description": "Pre-canonicalization snapshot of tag arrays. Roll-back source if needed."
+        },
+        "companies": {
+          "title": "companies — Handelsregister entities (2.2K)",
+          "description": "Target of the DACH match (not yet built)."
+        },
+
+        "company_ideas_fts":     {"hidden": true},
+        "idea_extraction_fts":   {"hidden": true},
+        "website_enrichment_fts":{"hidden": true},
+        "stealth_founders":      {"hidden": true},
+        "founder_history":       {"hidden": true},
+        "announcements":         {"hidden": true},
+        "news_articles":         {"hidden": true},
+        "news_alerts":           {"hidden": true},
+        "capital_events":        {"hidden": true},
+        "change_log":            {"hidden": true},
+        "enrichment_queue":      {"hidden": true},
+        "filter_presets":        {"hidden": true},
+        "investments":           {"hidden": true},
+        "investor_aliases":      {"hidden": true},
+        "investor_legal_entities": {"hidden": true},
+        "investors":             {"hidden": true},
+        "job_runs":              {"hidden": true},
+        "officers":              {"hidden": true},
+        "rate_limiter_state":    {"hidden": true},
+        "scan_state":            {"hidden": true},
+        "scrape_runs":           {"hidden": true},
+        "sqlite_sequence":       {"hidden": true}
+      },
+
+      "queries": {
+        "stats": {
+          "title": "▸ Pipeline stats",
+          "sql": "SELECT 'company_ideas' AS t, COUNT(*) AS n FROM company_ideas UNION ALL SELECT 'website_enrichment', COUNT(*) FROM website_enrichment UNION ALL SELECT 'idea_clusters', COUNT(*) FROM idea_clusters UNION ALL SELECT 'idea_extraction (ok)', COUNT(*) FROM idea_extraction WHERE error IS NULL UNION ALL SELECT 'idea_extraction (err)', COUNT(*) FROM idea_extraction WHERE error IS NOT NULL UNION ALL SELECT 'distinct mechanisms', COUNT(DISTINCT mechanism) FROM v_mechanism_sector_cells UNION ALL SELECT 'distinct sectors', COUNT(DISTINCT sector) FROM v_mechanism_sector_cells UNION ALL SELECT 'populated cells', COUNT(*) FROM v_matrix UNION ALL SELECT 'launch candidates (loose)', COUNT(*) FROM v_launch_candidates_loose UNION ALL SELECT 'launch candidates (strict)', COUNT(*) FROM v_launch_candidates_strict"
+        },
+
+        "extraction_coverage": {
+          "title": "▸ Extraction coverage by program",
+          "description": "What's extracted vs. what's still waiting for LLM processing.",
+          "sql": "SELECT ci.program, COUNT(*) AS total, SUM(CASE WHEN ie.company_idea_id IS NOT NULL THEN 1 ELSE 0 END) AS extracted, ROUND(100.0 * SUM(CASE WHEN ie.company_idea_id IS NOT NULL THEN 1 ELSE 0 END) / COUNT(*), 0) AS pct FROM company_ideas ci LEFT JOIN idea_extraction ie ON ie.company_idea_id = ci.id AND ie.error IS NULL GROUP BY ci.program ORDER BY total DESC"
+        },
+
+        "launch_candidates": {
+          "title": "LAUNCH: solo + ai-first + non-disqualifying moat (1,998)",
+          "description": "Main output. Moat filter rules out 'regulatory' and 'capital' — everything else is a microbusiness candidate. Sort by year_founded, filter via facets on the page.",
+          "sql": "SELECT ci.program, ci.company, ci.year_founded, ci.company_website, ie.problem_statement, ie.mechanism_tags, ie.sector_tags, ie.customer_size, ie.business_model, ie.moat_type, ie.niche_specificity, c.label AS cluster_label, c.era_class FROM idea_extraction ie JOIN company_ideas ci ON ci.id = ie.company_idea_id LEFT JOIN idea_clusters c ON c.cluster_id = ci.cluster_id WHERE ie.error IS NULL AND ie.solo_buildable = 1 AND ie.ai_first_advantage = 1 AND ie.moat_type NOT IN ('regulatory','capital') ORDER BY ci.year_founded DESC"
+        },
+
+        "launch_candidates_strict": {
+          "title": "LAUNCH: strict — solo + ai-first + no moat at all (1,198)",
+          "sql": "SELECT * FROM v_launch_candidates_strict ORDER BY year_founded DESC"
+        },
+
+        "launch_candidates_narrow": {
+          "title": "LAUNCH: narrow-niche-only (tightest filter)",
+          "description": "Launch candidates where niche_specificity='narrow' — the most defensibly-scoped ideas.",
+          "sql": "SELECT ci.program, ci.company, ci.year_founded, ci.company_website, ie.problem_statement, ie.customer_verticals, ie.mechanism_tags, ie.sector_tags, ie.moat_type FROM idea_extraction ie JOIN company_ideas ci ON ci.id = ie.company_idea_id WHERE ie.error IS NULL AND ie.solo_buildable = 1 AND ie.ai_first_advantage = 1 AND ie.moat_type NOT IN ('regulatory','capital') AND ie.niche_specificity = 'narrow' ORDER BY ci.year_founded DESC"
+        },
+
+        "launch_candidates_by_program": {
+          "title": "LAUNCH: counts per program",
+          "sql": "SELECT ci.program, COUNT(*) AS n FROM idea_extraction ie JOIN company_ideas ci ON ci.id = ie.company_idea_id WHERE ie.solo_buildable=1 AND ie.ai_first_advantage=1 AND ie.moat_type NOT IN ('regulatory','capital') GROUP BY ci.program ORDER BY n DESC"
+        },
+
+        "recent_launches": {
+          "title": "LAUNCH: only 2025-2026",
+          "description": "Newest crop of solo + ai-first ideas.",
+          "sql": "SELECT ci.program, ci.company, ci.year_founded, ci.batch, ie.problem_statement, ie.mechanism_tags, ie.sector_tags FROM idea_extraction ie JOIN company_ideas ci ON ci.id = ie.company_idea_id WHERE ie.error IS NULL AND ie.solo_buildable = 1 AND ie.ai_first_advantage = 1 AND ie.moat_type NOT IN ('regulatory','capital') AND ci.year_founded >= 2025 ORDER BY ci.year_founded DESC, ci.id DESC"
+        },
+
+        "rebuild_candidates": {
+          "title": "CLUSTER: rebuild-candidate clusters",
+          "description": "Established spaces with median founding year ≤ 2018 and few recent entries — AI-first rewrite territory.",
+          "sql": "SELECT cluster_id, label, size, median_year, count_2023_plus, CASE WHEN parent_cluster_id IS NULL THEN 'parent' ELSE 'sub' END AS level, parent_cluster_id FROM idea_clusters WHERE era_class = 'rebuild_candidate' ORDER BY size DESC"
+        },
+
+        "hot_subclusters": {
+          "title": "CLUSTER: hot sub-clusters (2023+)",
+          "sql": "SELECT cluster_id, label, size, median_year, count_2023_plus, parent_cluster_id, (SELECT label FROM idea_clusters WHERE cluster_id = c.parent_cluster_id) AS parent_label FROM idea_clusters c WHERE era_class='hot' AND parent_cluster_id IS NOT NULL ORDER BY size DESC LIMIT 100"
+        },
+
+        "cluster_members": {
+          "title": "CLUSTER: drill — all members of :cluster_id",
+          "description": "Pass a cluster_id as URL param.",
+          "sql": "SELECT ci.company, ci.program, ci.batch, ci.year_founded, ci.one_liner, ci.company_website, ie.problem_statement, ie.mechanism_tags, ie.sector_tags, ie.solo_buildable, ie.ai_first_advantage FROM company_ideas ci LEFT JOIN idea_extraction ie ON ie.company_idea_id = ci.id WHERE ci.cluster_id = :cluster_id ORDER BY ci.year_founded DESC"
+        },
+
+        "cluster_siblings": {
+          "title": "CLUSTER: parent + all sub-clusters for :parent_id",
+          "description": "Pass a parent cluster id. Shows the parent + all its children in one table.",
+          "sql": "SELECT cluster_id, label, size, era_class, median_year, count_2023_plus, CASE WHEN cluster_id = :parent_id THEN 'parent' ELSE 'sub' END AS level FROM idea_clusters WHERE cluster_id = :parent_id OR parent_cluster_id = :parent_id ORDER BY (cluster_id = :parent_id) DESC, size DESC"
+        },
+
+        "mechanism_sector_matrix": {
+          "title": "MATRIX: full mechanism × sector",
+          "description": "Every (mechanism, sector) cell with at least one company. Sort/filter by column.",
+          "sql": "SELECT mechanism, sector, n, substr(example_companies, 1, 120) AS example_companies FROM v_matrix ORDER BY n DESC"
+        },
+
+        "mechanism_sector_drill": {
+          "title": "MATRIX: drill — companies in (:mechanism, :sector)",
+          "sql": "SELECT company, program, year_founded, customer_size, business_model, moat_type FROM v_mechanism_sector_cells WHERE mechanism = :mechanism AND sector = :sector ORDER BY year_founded DESC"
+        },
+
+        "empty_cells": {
+          "title": "MATRIX: empty cells (gaps)",
+          "description": "Mechanisms used ≥30× AND sectors with ≥30 companies that never co-occur. Whitespace for recombination.",
+          "sql": "WITH big_mechs AS (SELECT mechanism FROM v_mechanism_totals WHERE n >= 30), big_sectors AS (SELECT sector FROM v_sector_totals WHERE n >= 30), all_pairs AS (SELECT m.mechanism, s.sector FROM big_mechs m, big_sectors s), filled AS (SELECT DISTINCT mechanism, sector FROM v_matrix) SELECT ap.mechanism, ap.sector, (SELECT n FROM v_mechanism_totals WHERE mechanism = ap.mechanism) AS mech_total, (SELECT n FROM v_sector_totals WHERE sector = ap.sector) AS sector_total FROM all_pairs ap LEFT JOIN filled f ON f.mechanism = ap.mechanism AND f.sector = ap.sector WHERE f.mechanism IS NULL ORDER BY mech_total DESC, sector_total DESC"
+        },
+
+        "sparse_cells": {
+          "title": "MATRIX: sparse cells (n≤3)",
+          "description": "Populated but thin — potential underexploited niches.",
+          "sql": "SELECT mechanism, sector, n, example_companies FROM v_matrix WHERE n <= 3 AND mechanism IN (SELECT mechanism FROM v_mechanism_totals WHERE n >= 50) AND sector IN (SELECT sector FROM v_sector_totals WHERE n >= 30) ORDER BY n, mechanism, sector"
+        },
+
+        "top_mechanisms": {
+          "title": "MATRIX: top mechanisms",
+          "sql": "SELECT mechanism, n FROM v_mechanism_totals ORDER BY n DESC LIMIT 80"
+        },
+
+        "top_sectors": {
+          "title": "MATRIX: top sectors",
+          "sql": "SELECT sector, n FROM v_sector_totals ORDER BY n DESC LIMIT 80"
+        },
+
+        "company_profile": {
+          "title": "DRILL: full profile of :company_id",
+          "description": "Everything we have for one company_ideas.id, across scrape + enrichment + extraction + cluster.",
+          "sql": "SELECT ci.id, ci.program, ci.company, ci.batch, ci.year_founded, ci.country, ci.company_website, ci.one_liner, ci.long_description, ci.tags_json, ie.problem_statement, ie.customer_verticals, ie.mechanism_tags, ie.sector_tags, ie.customer_size, ie.business_model, ie.solo_buildable, ie.solo_buildable_reasoning, ie.ai_first_advantage, ie.ai_first_reasoning, ie.moat_type, ie.niche_specificity, we.title AS web_title, we.meta_description AS web_meta, we.hero_h1 AS web_h1, substr(we.hero_text, 1, 1000) AS web_hero_text_preview, c.label AS cluster_label, c.era_class, c.size AS cluster_size, (SELECT label FROM idea_clusters WHERE cluster_id = c.parent_cluster_id) AS parent_cluster_label FROM company_ideas ci LEFT JOIN idea_extraction ie ON ie.company_idea_id = ci.id LEFT JOIN website_enrichment we ON we.normalized_website = ci.normalized_website LEFT JOIN idea_clusters c ON c.cluster_id = ci.cluster_id WHERE ci.id = :company_id"
+        },
+
+        "missing_extraction_by_program": {
+          "title": "DEBUG: rows awaiting LLM extraction",
+          "description": "Mostly Show HN right now — blocked on API credits.",
+          "sql": "SELECT ci.program, COUNT(*) AS waiting FROM company_ideas ci LEFT JOIN idea_extraction ie ON ie.company_idea_id = ci.id WHERE ie.company_idea_id IS NULL GROUP BY ci.program ORDER BY waiting DESC"
+        },
+
+        "show_hn_by_month": {
+          "title": "PROGRAM: Show HN posts by month",
+          "sql": "SELECT batch AS year_month, COUNT(*) AS n FROM company_ideas WHERE program = 'Show HN' GROUP BY batch ORDER BY batch DESC"
+        }
+      }
+    }
+  }
+}

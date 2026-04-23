@@ -1,0 +1,339 @@
+{% extends "base.html" %}
+
+{% block title %}Ideas — StartupRadar{% endblock %}
+
+{% block head %}
+<!-- Apache ECharts (via CDN) for heatmap + future visualizations.
+     No build step, matches the existing Tailwind + HTMX + Alpine.js pattern. -->
+<script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
+{% endblock %}
+
+{% block header %}
+<div class="bg-white shadow-sm border-b">
+  <div class="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8 flex items-start justify-between gap-4">
+    <div>
+      <h1 class="text-2xl font-bold text-gray-900">Ideas</h1>
+      <p class="text-sm text-gray-500 mt-1">
+        Idea discovery across accelerator cohorts, VC portfolios and microbusiness communities.
+        Tagged by mechanism × sector for gap-finding.
+      </p>
+    </div>
+    <div class="flex items-center gap-2 text-xs text-gray-500">
+      <span class="inline-flex items-center gap-1 px-2 py-1 rounded bg-gray-100">
+        Model: <code class="font-mono">claude-haiku-4-5</code>
+      </span>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block content %}
+
+{% if stats.ideas == 0 %}
+<div class="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-6 text-sm text-amber-900">
+  <div class="font-semibold mb-1">Idea-pipeline tables are empty on this deployment.</div>
+  <div>
+    This page is wired up, but the DB at <code class="font-mono">{{ request.app.extra.db_path if request.app.extra.db_path else '/data/handelsregister.db' }}</code>
+    doesn't yet contain <code>company_ideas</code> / <code>idea_extraction</code> / <code>idea_clusters</code>.
+    Either seed it from a local dump, or run the scrapers + loader + clustering jobs under <code>scheduler/jobs/</code>.
+  </div>
+</div>
+{% endif %}
+
+{# ---------------- Stats cards ---------------- #}
+<div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+  <div class="bg-white p-4 rounded-lg shadow-sm border">
+    <div class="text-xs uppercase tracking-wide text-gray-500">Total ideas</div>
+    <div class="text-2xl font-bold text-gray-900">{{ "{:,}".format(stats.ideas) }}</div>
+    <div class="text-xs text-gray-400 mt-1">{{ "{:,}".format(stats.extracted) }} extracted</div>
+  </div>
+
+  <div class="bg-white p-4 rounded-lg shadow-sm border">
+    <div class="text-xs uppercase tracking-wide text-gray-500">Launch candidates</div>
+    <div class="text-2xl font-bold text-green-700">{{ "{:,}".format(stats.launch_candidates) }}</div>
+    <div class="text-xs text-gray-400 mt-1">{{ stats.launch_strict }} strict (moat=none)</div>
+  </div>
+
+  <div class="bg-white p-4 rounded-lg shadow-sm border">
+    <div class="text-xs uppercase tracking-wide text-gray-500">Rebuild candidates</div>
+    <div class="text-2xl font-bold text-amber-700">{{ stats.rebuild_candidates }}</div>
+    <div class="text-xs text-gray-400 mt-1">{{ stats.hot_clusters }} hot clusters</div>
+  </div>
+
+  <div class="bg-white p-4 rounded-lg shadow-sm border">
+    <div class="text-xs uppercase tracking-wide text-gray-500">Matrix</div>
+    <div class="text-2xl font-bold text-gray-900">
+      {{ stats.mechanisms }}<span class="text-gray-400">&times;</span>{{ stats.sectors }}
+    </div>
+    <div class="text-xs text-gray-400 mt-1">{{ "{:,}".format(stats.populated_cells) }} populated cells</div>
+  </div>
+</div>
+
+{# ---------------- Mechanism × Sector heatmap ---------------- #}
+<div class="bg-white p-5 rounded-lg shadow-sm border mb-6">
+  <div class="flex items-center justify-between mb-3">
+    <div>
+      <h2 class="text-lg font-semibold text-gray-900">Mechanism × Sector heatmap</h2>
+      <p class="text-xs text-gray-500">
+        Top mechanisms (y) × top sectors (x). Dense cells = herd. Blank cells = potential whitespace.
+      </p>
+    </div>
+    <div class="flex items-center gap-2">
+      <label class="text-xs text-gray-500">Top N mechanisms:</label>
+      <select id="n-mech" class="text-xs border-gray-300 rounded">
+        <option value="15">15</option><option value="25" selected>25</option><option value="40">40</option>
+      </select>
+      <label class="text-xs text-gray-500 ml-2">Top N sectors:</label>
+      <select id="n-sector" class="text-xs border-gray-300 rounded">
+        <option value="12">12</option><option value="20" selected>20</option><option value="30">30</option>
+      </select>
+    </div>
+  </div>
+  <div id="heatmap" style="width: 100%; height: 560px;"></div>
+  <div id="heatmap-loading" class="text-xs text-gray-400 mt-2">Loading heatmap…</div>
+</div>
+
+{# ---------------- Split: Launch candidates + Rebuild candidates ---------------- #}
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
+
+  {# Launch candidates #}
+  <div class="bg-white rounded-lg shadow-sm border">
+    <div class="px-5 py-3 border-b flex items-center justify-between">
+      <h2 class="text-lg font-semibold text-gray-900">Launch candidates</h2>
+      <a href="/ideas/launch-candidates"
+         class="text-xs text-indigo-600 hover:text-indigo-800">View all {{ stats.launch_candidates }} →</a>
+    </div>
+    <div class="divide-y">
+      {% for c in launch_candidates %}
+      <div class="px-5 py-3 hover:bg-gray-50">
+        <div class="flex items-baseline justify-between gap-3">
+          <div class="flex-1 min-w-0">
+            <div class="flex items-center gap-2">
+              <span class="font-medium text-gray-900 truncate">
+                {{ c.company or '(untitled)' }}
+              </span>
+              <span class="text-xs text-gray-400">{{ c.year_founded or '-' }}</span>
+              <span class="text-xs px-1.5 py-0.5 rounded bg-gray-100 text-gray-600">
+                {{ c.program }}
+              </span>
+              {% if c.niche_specificity == 'narrow' %}
+              <span class="text-[10px] px-1.5 py-0.5 rounded bg-green-100 text-green-700">narrow</span>
+              {% endif %}
+            </div>
+            <p class="text-xs text-gray-500 mt-1 line-clamp-2">
+              {{ c.problem_statement }}
+            </p>
+            <div class="flex flex-wrap gap-1 mt-2">
+              {% for tag in (c.mechanism_tags | from_json)[:3] %}
+              <span class="text-[10px] px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-700 font-mono">{{ tag }}</span>
+              {% endfor %}
+              {% for tag in (c.sector_tags | from_json)[:2] %}
+              <span class="text-[10px] px-1.5 py-0.5 rounded bg-amber-50 text-amber-800 font-mono">{{ tag }}</span>
+              {% endfor %}
+            </div>
+          </div>
+          {% if c.company_website %}
+          <a href="{{ c.company_website }}" target="_blank"
+             class="text-xs text-indigo-600 hover:text-indigo-800 whitespace-nowrap">↗</a>
+          {% endif %}
+        </div>
+      </div>
+      {% else %}
+      <div class="px-5 py-6 text-sm text-gray-500">
+        No launch candidates yet. Run the LLM extraction job.
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+
+  {# Rebuild candidates #}
+  <div class="bg-white rounded-lg shadow-sm border">
+    <div class="px-5 py-3 border-b flex items-center justify-between">
+      <div>
+        <h2 class="text-lg font-semibold text-gray-900">Rebuild candidates</h2>
+        <p class="text-xs text-gray-500">Old-skewed clusters — AI-first rewrite territory</p>
+      </div>
+    </div>
+    <div class="divide-y">
+      {% for r in rebuild_candidates %}
+      <div class="px-5 py-3 hover:bg-gray-50 flex items-center justify-between gap-3">
+        <div class="flex-1 min-w-0">
+          <div class="flex items-center gap-2">
+            <span class="font-medium text-gray-900 truncate">{{ r.label }}</span>
+            <span class="text-xs text-gray-400">n={{ r.size }}</span>
+            <span class="text-[10px] px-1.5 py-0.5 rounded {{ 'bg-gray-100 text-gray-600' if r.level == 'sub' else 'bg-slate-100 text-slate-700' }}">
+              {{ r.level }}
+            </span>
+          </div>
+          <div class="text-xs text-gray-500 mt-1">
+            median {{ r.median_year or '—' }}
+            · <span class="text-amber-700">{{ r.count_pre_2015 }}</span> pre-2015
+            · <span>{{ r.count_2015_2022 }}</span> 2015-22
+            · <span class="text-green-700">{{ r.count_2023_plus }}</span> 2023+
+          </div>
+        </div>
+        <a href="/ideas/clusters/{{ r.cluster_id }}"
+           class="text-xs text-indigo-600 hover:text-indigo-800 whitespace-nowrap">drill →</a>
+      </div>
+      {% else %}
+      <div class="px-5 py-6 text-sm text-gray-500">
+        No rebuild candidates yet (clusters need year data first).
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+
+{# ---------------- Bottom: era distribution + solo × ai-first matrix ---------------- #}
+<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+  <div class="bg-white p-5 rounded-lg shadow-sm border">
+    <h2 class="text-lg font-semibold text-gray-900 mb-3">Era distribution</h2>
+    <div class="space-y-2">
+      {% for e in era_distribution %}
+      {% set pct = (e.companies / stats.ideas * 100) if stats.ideas else 0 %}
+      {% set color = {
+        'hot': 'bg-red-400',
+        'steady': 'bg-blue-400',
+        'rebuild_candidate': 'bg-amber-400',
+        'legacy': 'bg-gray-400',
+        'unknown': 'bg-gray-300',
+      }.get(e.era_class, 'bg-gray-300') %}
+      <div class="flex items-center gap-3">
+        <div class="w-36 text-xs text-gray-700">{{ e.era_class | humanize }}</div>
+        <div class="flex-1 bg-gray-100 h-3 rounded overflow-hidden">
+          <div class="{{ color }} h-full" style="width: {{ pct }}%;"></div>
+        </div>
+        <div class="w-20 text-right text-xs text-gray-600">
+          <span class="font-medium">{{ e.n }}</span>
+          <span class="text-gray-400">/ {{ "{:,}".format(e.companies or 0) }} co.</span>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+
+  <div class="bg-white p-5 rounded-lg shadow-sm border">
+    <h2 class="text-lg font-semibold text-gray-900 mb-3">Solo × AI-first matrix</h2>
+    <p class="text-xs text-gray-500 mb-3">
+      The 2×2 of extraction flags. Top-right is the microbusiness shortlist.
+    </p>
+    {% set cells = {} %}
+    {% for m in solo_ai_matrix %}
+    {% set _ = cells.update({(m.solo, m.ai_first): m.n}) %}
+    {% endfor %}
+    <div class="grid grid-cols-3 gap-1 text-xs">
+      <div></div>
+      <div class="text-center text-gray-500">ai_first=0</div>
+      <div class="text-center text-gray-500">ai_first=1</div>
+
+      <div class="text-right text-gray-500 self-center pr-2">solo=0</div>
+      <div class="bg-gray-100 rounded p-3 text-center">
+        <div class="text-xl font-semibold text-gray-600">{{ cells.get((0, 0), 0) }}</div>
+        <div class="text-[10px] text-gray-400 mt-1">traditional VC-scale</div>
+      </div>
+      <div class="bg-blue-50 rounded p-3 text-center">
+        <div class="text-xl font-semibold text-blue-700">{{ cells.get((0, 1), 0) }}</div>
+        <div class="text-[10px] text-gray-500 mt-1">AI but big-team</div>
+      </div>
+
+      <div class="text-right text-gray-500 self-center pr-2">solo=1</div>
+      <div class="bg-yellow-50 rounded p-3 text-center">
+        <div class="text-xl font-semibold text-yellow-700">{{ cells.get((1, 0), 0) }}</div>
+        <div class="text-[10px] text-gray-500 mt-1">solo, not AI-first</div>
+      </div>
+      <div class="bg-green-100 rounded p-3 text-center ring-2 ring-green-300">
+        <div class="text-2xl font-bold text-green-800">{{ cells.get((1, 1), 0) }}</div>
+        <div class="text-[10px] text-green-700 mt-1">SHORTLIST</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+  const chart = echarts.init(document.getElementById('heatmap'));
+  const loadingEl = document.getElementById('heatmap-loading');
+
+  function renderOption(data) {
+    const { mechanisms, sectors, cells, max_n } = data;
+    return {
+      tooltip: {
+        position: 'top',
+        formatter: (p) =>
+          `<b>${mechanisms[p.data[1]]}</b> × <b>${sectors[p.data[0]]}</b><br>` +
+          `${p.data[2]} companies`,
+      },
+      grid: { left: 180, right: 20, top: 30, bottom: 120 },
+      xAxis: {
+        type: 'category',
+        data: sectors,
+        splitArea: { show: true },
+        axisLabel: { interval: 0, rotate: 45, fontSize: 11 },
+      },
+      yAxis: {
+        type: 'category',
+        data: mechanisms,
+        splitArea: { show: true },
+        axisLabel: { fontSize: 11 },
+      },
+      visualMap: {
+        min: 0,
+        max: Math.max(1, max_n),
+        calculable: true,
+        orient: 'horizontal',
+        left: 'center',
+        bottom: 20,
+        inRange: { color: ['#f6f7fa', '#a7d8ff', '#3a82f6', '#1e40af'] },
+      },
+      series: [{
+        name: 'companies',
+        type: 'heatmap',
+        data: cells,
+        label: { show: false },
+        emphasis: { itemStyle: { shadowBlur: 8, shadowColor: 'rgba(0,0,0,0.3)' } },
+      }],
+    };
+  }
+
+  async function load() {
+    loadingEl.textContent = 'Loading heatmap…';
+    const nMech = document.getElementById('n-mech').value;
+    const nSect = document.getElementById('n-sector').value;
+    const res = await fetch(`/ideas/api/heatmap.json?n_mechanisms=${nMech}&n_sectors=${nSect}`);
+    const data = await res.json();
+    chart.setOption(renderOption(data), { notMerge: true });
+    loadingEl.textContent = `${data.cells.length} cells · max ${data.max_n} companies`;
+  }
+
+  // Click a cell → drill to Datasette page with mechanism/sector pre-filled
+  chart.on('click', function (params) {
+    const sector = params.data && params.data[0] !== undefined
+      ? chart.getOption().xAxis[0].data[params.data[0]] : null;
+    const mech = params.data && params.data[1] !== undefined
+      ? chart.getOption().yAxis[0].data[params.data[1]] : null;
+    if (mech && sector) {
+      // Drill via Datasette if available on :8001, else noop
+      const url = `http://127.0.0.1:8001/handelsregister/mechanism_sector_drill?mechanism=${encodeURIComponent(mech)}&sector=${encodeURIComponent(sector)}`;
+      window.open(url, '_blank');
+    }
+  });
+
+  document.getElementById('n-mech').addEventListener('change', load);
+  document.getElementById('n-sector').addEventListener('change', load);
+  window.addEventListener('resize', () => chart.resize());
+  load();
+})();
+</script>
+
+<style>
+  .line-clamp-2 {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+</style>
+{% endblock %}

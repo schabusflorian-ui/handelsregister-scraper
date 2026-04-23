@@ -40,6 +40,7 @@
                             <div class="ml-10 flex items-baseline space-x-4">
                                 <a href="/" class="{% if request.url.path == '/' %}bg-indigo-700 text-white{% else %}text-indigo-100 hover:bg-indigo-500{% endif %} rounded-md px-3 py-2 text-sm font-medium">Dashboard</a>
                                 <a href="/companies" class="{% if '/companies' in request.url.path %}bg-indigo-700 text-white{% else %}text-indigo-100 hover:bg-indigo-500{% endif %} rounded-md px-3 py-2 text-sm font-medium">Companies</a>
+                                <a href="/ideas" class="{% if request.url.path == '/ideas' or request.url.path.startswith('/ideas/') %}bg-indigo-700 text-white{% else %}text-indigo-100 hover:bg-indigo-500{% endif %} rounded-md px-3 py-2 text-sm font-medium">Ideas</a>
                                 <a href="/investors" class="{% if '/investors' in request.url.path %}bg-indigo-700 text-white{% else %}text-indigo-100 hover:bg-indigo-500{% endif %} rounded-md px-3 py-2 text-sm font-medium">Investors</a>
                                 <a href="/capital-events" class="{% if '/capital-events' in request.url.path %}bg-indigo-700 text-white{% else %}text-indigo-100 hover:bg-indigo-500{% endif %} rounded-md px-3 py-2 text-sm font-medium">Capital Events</a>
                                 <a href="/news" class="{% if '/news' in request.url.path %}bg-indigo-700 text-white{% else %}text-indigo-100 hover:bg-indigo-500{% endif %} rounded-md px-3 py-2 text-sm font-medium">News</a>
@@ -84,6 +85,7 @@
                 <div class="space-y-1 px-2 pb-3 pt-2">
                     <a href="/" class="{% if request.url.path == '/' %}bg-indigo-700 text-white{% else %}text-indigo-100 hover:bg-indigo-500{% endif %} block rounded-md px-3 py-2 text-base font-medium">Dashboard</a>
                     <a href="/companies" class="{% if '/companies' in request.url.path %}bg-indigo-700 text-white{% else %}text-indigo-100 hover:bg-indigo-500{% endif %} block rounded-md px-3 py-2 text-base font-medium">Companies</a>
+                    <a href="/ideas" class="{% if request.url.path == '/ideas' or request.url.path.startswith('/ideas/') %}bg-indigo-700 text-white{% else %}text-indigo-100 hover:bg-indigo-500{% endif %} block rounded-md px-3 py-2 text-base font-medium">Ideas</a>
                     <a href="/investors" class="{% if '/investors' in request.url.path %}bg-indigo-700 text-white{% else %}text-indigo-100 hover:bg-indigo-500{% endif %} block rounded-md px-3 py-2 text-base font-medium">Investors</a>
                     <a href="/capital-events" class="{% if '/capital-events' in request.url.path %}bg-indigo-700 text-white{% else %}text-indigo-100 hover:bg-indigo-500{% endif %} block rounded-md px-3 py-2 text-base font-medium">Capital Events</a>
                     <a href="/news" class="{% if '/news' in request.url.path %}bg-indigo-700 text-white{% else %}text-indigo-100 hover:bg-indigo-500{% endif %} block rounded-md px-3 py-2 text-base font-medium">News</a>
