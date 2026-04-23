@@ -184,6 +184,89 @@
   </div>
 </div>
 
+{# ---------------- Ranked recombination gaps ---------------- #}
+<div class="bg-white rounded-lg shadow-sm border mb-4">
+  <div class="px-5 py-3 border-b flex items-center justify-between">
+    <div>
+      <h2 class="text-lg font-semibold text-gray-900">Top recombination gaps</h2>
+      <p class="text-xs text-gray-500">
+        Mechanism × sector pairs the dataset under-fills vs. what's expected
+        if they were applied independently. Higher score = bigger gap
+        weighted by mechanism proof, sector demand, and solo-buildability.
+        Rebuild with <code class="font-mono bg-gray-50 px-1">python3 -m scripts.idea_gap_rank</code>.
+      </p>
+    </div>
+  </div>
+  <div class="overflow-x-auto">
+    {% if top_gaps %}
+    <table class="min-w-full text-sm">
+      <thead class="bg-gray-50 text-gray-600">
+        <tr>
+          <th class="px-3 py-2 text-right w-10">#</th>
+          <th class="px-3 py-2 text-left">Mechanism × Sector</th>
+          <th class="px-3 py-2 text-left">Proven by (examples)</th>
+          <th class="px-3 py-2 text-right">Actual / Expected</th>
+          <th class="px-3 py-2 text-right">Solo%</th>
+          <th class="px-3 py-2 text-right">Score</th>
+          <th class="px-3 py-2 text-center w-28">Interest</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y">
+        {% for g in top_gaps %}
+        <tr class="hover:bg-gray-50"
+            x-data="gapVote('{{ g.mechanism | e }}', '{{ g.sector | e }}', {{ g.votes.up }}, {{ g.votes.down }})">
+          <td class="px-3 py-2 text-right text-gray-400">{{ g.rank }}</td>
+          <td class="px-3 py-2">
+            <div class="flex items-center gap-2 flex-wrap">
+              <span class="font-mono text-xs px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-700">{{ g.mechanism }}</span>
+              <span class="text-gray-400">×</span>
+              <span class="font-mono text-xs px-1.5 py-0.5 rounded bg-amber-50 text-amber-800">{{ g.sector }}</span>
+            </div>
+            <div class="text-[11px] text-gray-400 mt-1">
+              mech used {{ g.mech_uses }}× · sector used {{ g.sector_uses }}×
+            </div>
+          </td>
+          <td class="px-3 py-2 text-xs text-gray-600 max-w-xs truncate" title="{{ g.mech_examples }}">
+            {{ g.mech_examples or '—' }}
+          </td>
+          <td class="px-3 py-2 text-right text-xs text-gray-700 font-mono whitespace-nowrap">
+            {{ g.actual_count }} / {{ "%.1f"|format(g.expected_count) }}
+          </td>
+          <td class="px-3 py-2 text-right text-xs">
+            {% set solo_pct = (g.solo_fraction * 100) | int %}
+            <span class="{% if solo_pct >= 60 %}text-green-700{% elif solo_pct >= 40 %}text-gray-700{% else %}text-gray-400{% endif %}">
+              {{ solo_pct }}%
+            </span>
+          </td>
+          <td class="px-3 py-2 text-right text-sm font-semibold text-gray-900">
+            {{ "%.0f"|format(g.score) }}
+          </td>
+          <td class="px-3 py-2 text-center whitespace-nowrap">
+            <button @click="vote(1)"
+                    :class="lastVote === 1 ? 'bg-green-100 text-green-700 ring-1 ring-green-300' : 'text-gray-400 hover:text-green-600'"
+                    class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs">
+              <span>👍</span><span x-text="up"></span>
+            </button>
+            <button @click="vote(-1)"
+                    :class="lastVote === -1 ? 'bg-red-100 text-red-700 ring-1 ring-red-300' : 'text-gray-400 hover:text-red-600'"
+                    class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs ml-1">
+              <span>👎</span><span x-text="down"></span>
+            </button>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <div class="px-5 py-6 text-sm text-gray-500">
+      Ranking table is empty. Run
+      <code class="font-mono bg-gray-50 px-1">python3 -m scripts.idea_gap_rank</code>
+      after the LLM extraction step.
+    </div>
+    {% endif %}
+  </div>
+</div>
+
 {# ---------------- Bottom: era distribution + solo × ai-first matrix ---------------- #}
 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
   <div class="bg-white p-5 rounded-lg shadow-sm border">
@@ -326,6 +409,39 @@
   window.addEventListener('resize', () => chart.resize());
   load();
 })();
+</script>
+
+<script>
+  // Alpine component for the gap thumbs up/down. Posts to the feedback
+  // endpoint and updates the local vote tallies in-place.
+  function gapVote(mechanism, sector, initialUp, initialDown) {
+    return {
+      mechanism, sector,
+      up: initialUp, down: initialDown,
+      lastVote: 0,
+      async vote(v) {
+        // Clicking the same vote again un-votes (sends 0, server clears).
+        const next = this.lastVote === v ? 0 : v;
+        try {
+          const res = await fetch('/ideas/api/gap-feedback', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              mechanism: this.mechanism,
+              sector:    this.sector,
+              vote:      next,
+            }),
+          });
+          const data = await res.json();
+          if (data.ok) {
+            this.up = data.up;
+            this.down = data.down;
+            this.lastVote = next;
+          }
+        } catch (e) { console.warn('vote failed', e); }
+      },
+    };
+  }
 </script>
 
 <style>
