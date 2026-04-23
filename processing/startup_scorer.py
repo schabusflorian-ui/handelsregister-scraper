@@ -85,7 +85,10 @@ STARTUP_NAME_PATTERNS = [
     (r"\bApps\b", 1, "Apps"),
     (r"\bPlatform\b", 2, "Platform"),
     (r"\bAnalytics\b", 2, "Analytics"),
-    (r"\bVentures?\b", 2, "Ventures"),
+    # "Ventures" is weakly positive — often VC-adjacent tech names, but
+    # German registry also has many "<Firstname> Ventures UG" family-office
+    # shells. Keep at +1 (not +2) to avoid pulling those into "startup".
+    (r"\bVentures?\b", 1, "Ventures"),
     (r"\bAPI\b", 2, "API"),
     (r"\bSaaS\b", 3, "SaaS"),
     (r"\bFintech\b", 3, "Fintech"),
@@ -459,35 +462,57 @@ class StartupScorer:
             'scaleup' - tech-adjacent company with growth signals
             'established' - traditional SME or mature company
 
-        Classification logic:
-        - 'startup': strong structural + domain signals. Either:
-          (a) total >= 5 and has some domain relevance (AI, climate, or tech category)
-          (b) total >= 3 and has strong domain relevance (score >= 3) AND tech categories
-        - 'scaleup': moderate signals — has tech/growth signals but not enough
-          for full startup classification.
+        Classification logic (ordered by precedence):
+        - 'startup' requires either:
+          (A) Path A: total >= 5 AND some domain relevance (AI, climate, or tech category)
+          (B) Path B: total >= 3 AND strong domain relevance (>=2) AND tech categories
+          (C) Path C: high domain relevance (>=4) alone, with structural hints
+          (D) Path D: total >= 7 AND positive tech-leaning name pattern (>=2)
+              — catches brand-name UG/GmbH with suffixes like "Labs", "AI",
+              "Fintech", ".ai", "Ventures" in startup hubs that don't happen to
+              have keyword matches in the name alone (NEW).
+          (E) Path E: purpose text has strong tech indicators (purpose_score >= 3)
+              AND total >= 4 — uses Geschäftszweck text when available,
+              independent of name-level AI keywords (NEW).
+        - 'scaleup': moderate signals, not enough for full startup.
         - 'established': low score — traditional SME patterns dominate.
         """
         combined_relevance = ai_relevance_score + climate_score
         has_tech_categories = bool(tech_categories)
 
-        # --- Startup: strong structural + domain signals ---
-        #
+        # --- Startup paths ---
+
         # Path A: strong structural signals + some domain relevance
         if score.total_score >= 5 and (combined_relevance >= 1 or has_tech_categories):
             return "startup"
 
         # Path B: moderate structural but strong domain signals with tech categories
-        # Catches climate/fintech/healthtech startups in non-hub cities
         if score.total_score >= 3 and combined_relevance >= 2 and has_tech_categories:
             return "startup"
 
         # Path C: strong domain relevance alone (score >= 4) with structural hints
-        # Catches companies with strong keyword matches even if not in hub cities
         if combined_relevance >= 4 and score.total_score >= 2:
             return "startup"
 
-        # --- Scaleup: has tech/growth signals but not full startup ---
-        #
+        # Path D (NEW): very strong structural score + STRONG tech-leaning name.
+        # Requires a dominant tech-suffix like "Labs" (+3), "AI" (+3), "SaaS"
+        # (+3), "Fintech" (+3), ".ai" (+3) — a single such hit gets us to 3.
+        # Two weaker hits (e.g., "Tech" +2 + CamelCase +1) also qualifies.
+        # Prevents family-office UGs like "<Name> Ventures UG" (Ventures +1 +
+        # ShortName +1 = 2) from being promoted.
+        if score.total_score >= 7 and score.name_pattern_score >= 3:
+            return "startup"
+
+        # Path E (NEW): purpose text has strong tech indicators.
+        # When Geschäftszweck is populated and mentions multiple tech terms
+        # (software, KI, Plattform, API, etc.), that's a rich signal the name
+        # alone doesn't carry. purpose_score is already capped at 5 so the gate
+        # at >= 3 means "at least one strong or two medium matches".
+        if score.purpose_score >= 3 and score.total_score >= 4:
+            return "startup"
+
+        # --- Scaleup paths ---
+
         # Must have EITHER domain relevance OR tech categories to be scaleup
         # (prevents traditional companies with English names from being scaleup)
         if score.total_score >= 3 and (combined_relevance >= 1 or has_tech_categories):
@@ -499,6 +524,13 @@ class StartupScorer:
 
         # Has some domain relevance but no structural signals
         if combined_relevance >= 1 and score.total_score >= 1:
+            return "scaleup"
+
+        # Structural signal is strong but no domain hints found — call these
+        # scaleup rather than established so they land on the human-review
+        # radar. Previously they fell through to "established" and got lost.
+        # (NEW) Catches brand-name UGs without tech keywords.
+        if score.total_score >= 6 and score.name_pattern_score >= 1:
             return "scaleup"
 
         # --- Established: traditional SME ---
