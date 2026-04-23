@@ -399,8 +399,23 @@ class RegistrationScanJob:
             reason="new_from_registration_scan",
         )
 
-        # Capture Neueintragung VÖ (1 extra request) to land
-        # first_registered_date + officers + purpose at discovery time.
+        # Capture AD (Abdruck) PDF to land the real register data —
+        # Stammkapital, Gegenstand, Geschäftsanschrift, first_registered_date.
+        # This is the ONLY path that gets Stammkapital from the portal: VÖ
+        # (Veröffentlichungen) listings contain only date/court/name, not the
+        # full register excerpt. Cost: 1 extra request per new company.
+        try:
+            from processing.ad_capture import capture_ad_for_company
+
+            capture_ad_for_company(
+                self.db, self.source, company_id, result, self.rate_limiter
+            )
+        except Exception as e:  # noqa: BLE001
+            logger.debug("AD capture error for %s: %s", result.name, e)
+
+        # Also fetch VÖ announcements (officers, emergence signals). Cheap
+        # after AD because the search session is still warm. Best-effort —
+        # VÖ is sparse for most companies and the parser was recently fixed.
         try:
             from processing.vo_capture import capture_neueintragung
 

@@ -307,9 +307,21 @@ class DiscoveryJob:
         priority = 0 if brand_result.is_likely_tech_startup else 1
         self.db.add_to_enrichment_queue(company_id, priority=priority, reason="new_from_bundesapi")
 
-        # Capture the Neueintragung VÖ for this fresh company (1 extra
-        # request), so first_registered_date + officers + purpose land at
-        # discovery time. Silent-fails if rate limiter has no budget.
+        # Capture AD (Abdruck) PDF — the register excerpt — to backfill
+        # Stammkapital, Gegenstand, Geschäftsanschrift, first_registered_date.
+        # See processing/ad_capture.py for why VÖ alone isn't sufficient.
+        # Cost: 1 extra request, silent-fail if rate limiter is empty.
+        try:
+            from processing.ad_capture import capture_ad_for_company
+
+            if capture_ad_for_company(
+                self.db, self.source, company_id, result, self.rate_limiter
+            ):
+                self._state.requests_used += 1
+        except Exception as e:  # noqa: BLE001
+            logger.debug("AD capture error for %s: %s", result.name, e)
+
+        # Also fetch VÖ announcements (officers, emergence signals).
         try:
             from processing.vo_capture import capture_neueintragung
 

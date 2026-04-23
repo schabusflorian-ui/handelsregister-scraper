@@ -969,63 +969,195 @@ class BundesAPISource:
         """
         Parse announcements from the VÖ (Veröffentlichungen) page.
 
-        The page structure:
-        - Main container: div.ui-datalist with header "Veröffentlichungen"
-        - List items: li.ui-datalist-item containing announcement text
-        - Empty state: div.ui-datalist-empty-message
+        Current DOM structure (observed 2026-04):
+            <div class="ui-datalist">
+              <div class="ui-datalist-header">Veröffentlichungen</div>
+              <div class="ui-datalist-content">
+                <dl class="ui-datalist-data">
+                  <dt class="ui-datalist-item">Einreichung neuer Dokumente</dt>  ← category
+                  <dd>
+                    <a onclick='PrimeFaces.ab({s:"form:j_idt…"})'>
+                      12.03.2024 | Berlin Amtsgericht Charlottenburg HRB 12345 | ACME GmbH - Berlin
+                    </a>                                                       ← one entry (brief text)
+                  </dd>
+                </dl>
+              </div>
+            </div>
+
+        The previous parser expected `<li class="ui-datalist-item">` with full
+        announcement text inline — that worked in an older portal version; the
+        current portal stores category on `<dt>` and entries as `<a>` inside
+        `<dd>`. This made the old parser silently return 0 announcements for
+        every company, which is why no `neueintragung` rows existed in
+        production despite 30k+ announcements being scraped through the
+        date-range `search_announcements()` feed.
+
+        Important: Stammkapital / Gegenstand are NOT visible in VÖ — Neueintragung
+        entries rarely show up here, and when they do the `<a>` body only
+        carries date + court + company name. Full register data (capital,
+        purpose, address, representation rules) lives in the AD (Abdruck)
+        endpoint, which returns a PDF. See processing/ad_capture.py.
         """
         soup = BeautifulSoup(html, "lxml")
-        announcements = []
+        announcements: List[Announcement] = []
 
-        # Find all list items
-        list_items = soup.find_all("li", class_="ui-datalist-item")
+        # Locate the primary Veröffentlichungen datalist (there can be others
+        # on the page — generic sidebars — so filter by header text).
+        vo_datalist = None
+        for dl in soup.find_all(class_="ui-datalist"):
+            header = dl.find(class_="ui-datalist-header")
+            if header and "Veröffentlichungen" in header.get_text():
+                vo_datalist = dl
+                break
 
-        if not list_items:
-            # Check for empty message
-            empty_msg = soup.find("div", class_="ui-datalist-empty-message")
-            if empty_msg:
-                return []  # No announcements
+        if vo_datalist is None:
+            return announcements
 
-        for item in list_items:
-            text = item.get_text(separator="\n", strip=True)
+        data = vo_datalist.find(class_="ui-datalist-data")
+        if data is None:
+            # Legacy empty-state marker, or plain empty list
+            return []
 
-            # Try to extract date from text
-            # Common patterns: "12.03.2024", "2024-03-12"
-            date_match = re.search(r"(\d{2}\.\d{2}\.\d{4}|\d{4}-\d{2}-\d{2})", text)
-            announcement_date = date_match.group(1) if date_match else None
+        # Iterate <dt>/<dd> pairs. Each <dt> gives the category for the
+        # following <dd>'s announcements.
+        for dt in data.find_all("dt"):
+            category_raw = dt.get_text(" ", strip=True)
+            dd = dt.find_next_sibling("dd")
+            if dd is None:
+                continue
 
-            # Try to determine announcement type
-            announcement_type = self._classify_announcement_type(text)
+            # Anchors inside <dd> are individual announcements
+            anchors = dd.find_all("a", class_=re.compile(r"ui-commandlink"))
+            if not anchors:
+                # Some categories render as a single non-anchor block
+                anchors = [dd]
 
-            # Try to extract capital amounts
-            capital_old, capital_new = self._extract_capital_amounts(text)
+            for anchor in anchors:
+                brief_text = anchor.get_text(" ", strip=True)
+                # Brief text format:
+                #   "12.03.2024 | Bayern Amtsgericht München HRB 123 | Example GmbH - München"
+                date_match = re.search(r"(\d{2}\.\d{2}\.\d{4})", brief_text)
+                announcement_date = date_match.group(1) if date_match else None
 
-            # Extract purpose (Gegenstand) — present in neueintragung and some amendments
-            purpose = self._extract_purpose(text)
+                # <dt> category label is authoritative when we recognise it;
+                # fall back to the existing text-based classifier otherwise.
+                announcement_type = self._map_category_to_type(category_raw) or \
+                    self._classify_announcement_type(brief_text)
 
-            # Extract address
-            postal_code, street = self._extract_address(text)
-
-            # Extract representation rules (Vertretungsregelung)
-            representation_rules = self._extract_representation_rules(text)
-
-            announcements.append(
-                Announcement(
-                    company_name=company_name,
-                    native_company_number=native_company_number,
-                    announcement_date=announcement_date,
-                    announcement_type=announcement_type,
-                    text=text,
-                    capital_old=capital_old,
-                    capital_new=capital_new,
-                    purpose=purpose,
-                    postal_code=postal_code,
-                    street=street,
-                    representation_rules=representation_rules,
+                announcements.append(
+                    Announcement(
+                        company_name=company_name,
+                        native_company_number=native_company_number,
+                        announcement_date=announcement_date,
+                        announcement_type=announcement_type,
+                        text=brief_text,
+                        capital_old=None,  # not available from VÖ listing — see ad_capture
+                        capital_new=None,
+                        purpose=None,
+                        postal_code=None,
+                        street=None,
+                        representation_rules=None,
+                    )
                 )
-            )
 
         return announcements
+
+    # Map Handelsregister UI category label to our internal announcement_type.
+    # Keeps _classify_announcement_type (text-based heuristic) as a fallback.
+    _CATEGORY_TYPE_MAP = {
+        "neueintragung": "neueintragung",
+        "einreichung neuer dokumente": "einreichung",
+        "löschung": "loeschung",
+        "löschungsankündigung": "loeschung",
+        "umwandlung": "umwandlung",
+        "umwandlungsgesetz": "umwandlung",
+        "kapitalerhöhung": "kapitalerhoehung",
+        "kapitalherabsetzung": "kapitalherabsetzung",
+        "sitzverlegung": "sitzverlegung",
+        "auflösung": "aufloesung",
+        "prokura": "prokura",
+        "sonstige": "sonstiges",
+        "sonderregisterbekanntmachung": "sonderregister",
+    }
+
+    def _map_category_to_type(self, category: str) -> Optional[str]:
+        """Map the visible VÖ <dt> category label to our announcement_type enum."""
+        if not category:
+            return None
+        key = category.strip().lower()
+        if key in self._CATEGORY_TYPE_MAP:
+            return self._CATEGORY_TYPE_MAP[key]
+        for prefix, typ in self._CATEGORY_TYPE_MAP.items():
+            if key.startswith(prefix):
+                return typ
+        return None
+
+    def fetch_ad_pdf(self, search_result: "SearchResult") -> Optional[bytes]:
+        """
+        Fetch the AD (Abdruck) PDF for a company from active search results.
+
+        AD is the structured register excerpt — contains Firma, Sitz, Geschäfts-
+        anschrift, Gegenstand, Stammkapital, Vertretungsregelung, and officers.
+        This is the primary source of Stammkapital / Gegenstand, NOT VÖ.
+
+        Returns the raw PDF bytes, or None if the fetch fails (rate limit,
+        session expired, network error, or the portal refused the download).
+
+        IMPORTANT: must be called while the search results page is still
+        active (same constraint as fetch_announcements).
+        """
+        if not hasattr(self, "_search_results_response") or not self._search_results_response:
+            return None
+        if search_result.row_index is None or search_result.row_index < 0:
+            return None
+
+        soup = BeautifulSoup(self._search_results_response.text, "lxml")
+        viewstate = soup.find("input", {"name": "javax.faces.ViewState"})
+        viewstate_value = viewstate.get("value", "") if viewstate else ""
+
+        row_idx = search_result.row_index
+        # AD button in column 0 of the row actions
+        ad_link = soup.find(
+            "a", id=re.compile(f"ergebnissForm:selectedSuchErgebnisFormTable:{row_idx}:j_idt\\d+:0:fade")
+        )
+        if not ad_link:
+            return None
+
+        link_id = ad_link.get("id")
+        form_data = {
+            "ergebnissForm": "ergebnissForm",
+            "property2": "",
+            "property": "Global.Dokumentart.AD",
+            link_id: link_id,
+            "javax.faces.ViewState": viewstate_value,
+        }
+
+        if not self.rate_limiter.acquire(timeout=30):
+            return None
+
+        try:
+            resp = self._make_request(
+                "post",
+                self._search_results_response.url,
+                data=form_data,
+                headers={
+                    "Content-Type": "application/x-www-form-urlencoded",
+                    "Origin": self.config.base_url,
+                    "Referer": self._search_results_response.url,
+                },
+            )
+        except requests.RequestException as e:
+            logger.debug("AD PDF HTTP error: %s", e)
+            return None
+
+        if resp.status_code != 200:
+            return None
+
+        # Recognise PDF content — portal returns application/octet-stream
+        content = resp.content
+        if not content or not content.startswith(b"%PDF"):
+            return None
+        return content
 
     def _classify_announcement_type(self, text: str) -> Optional[str]:
         """
