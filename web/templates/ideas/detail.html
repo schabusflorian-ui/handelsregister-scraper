@@ -1,0 +1,215 @@
+{% extends "base.html" %}
+
+{% block title %}{{ r.company or 'Idea '+r.id|string }} — Idea{% endblock %}
+
+{% block header %}
+<div class="bg-white shadow-sm border-b">
+  <div class="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+    <div class="flex items-start justify-between gap-4">
+      <div class="flex-1 min-w-0">
+        <div class="flex items-center gap-2 text-xs text-gray-500 mb-2">
+          <a href="/ideas" class="hover:text-indigo-700">Ideas</a>
+          <span>/</span>
+          <a href="/ideas/search" class="hover:text-indigo-700">Search</a>
+          <span>/</span>
+          <span class="text-gray-700">#{{ r.id }}</span>
+        </div>
+        <h1 class="text-2xl font-bold text-gray-900">
+          {{ r.company or '(untitled idea)' }}
+        </h1>
+        <div class="mt-2 flex flex-wrap items-center gap-2 text-sm">
+          <span class="px-2 py-0.5 rounded bg-gray-100 text-gray-700">{{ r.program }}</span>
+          {% if r.batch %}<span class="text-xs text-gray-500">{{ r.batch }}</span>{% endif %}
+          {% if r.year_founded %}<span class="text-xs text-gray-500">· founded {{ r.year_founded }}</span>{% endif %}
+          {% if r.solo_buildable == 1 %}
+          <span class="text-[11px] px-1.5 py-0.5 rounded bg-green-100 text-green-700">solo-buildable</span>
+          {% elif r.solo_buildable == 0 %}
+          <span class="text-[11px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-600">not solo</span>
+          {% endif %}
+          {% if r.ai_first_advantage == 1 %}
+          <span class="text-[11px] px-1.5 py-0.5 rounded bg-blue-100 text-blue-700">ai-first</span>
+          {% endif %}
+          {% if r.business_model %}
+          <span class="text-[11px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-700">{{ r.business_model }}</span>
+          {% endif %}
+          {% if r.moat_type %}
+          <span class="text-[11px] px-1.5 py-0.5 rounded bg-purple-50 text-purple-700">moat: {{ r.moat_type }}</span>
+          {% endif %}
+          {% if r.niche_specificity %}
+          <span class="text-[11px] px-1.5 py-0.5 rounded bg-amber-50 text-amber-700">{{ r.niche_specificity }}</span>
+          {% endif %}
+        </div>
+      </div>
+      <div class="flex-shrink-0 text-right">
+        {% if r.company_website %}
+        <a href="{{ r.company_website }}" target="_blank"
+           class="inline-block text-sm text-indigo-600 hover:text-indigo-800">
+          {{ r.company_website|replace('https://','')|replace('http://','')|replace('www.','')|truncate(40) }} ↗
+        </a>
+        {% endif %}
+        {% if r.source_url %}
+        <div class="mt-1">
+          <a href="{{ r.source_url }}" target="_blank"
+             class="text-xs text-gray-500 hover:text-gray-800">source ↗</a>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="grid grid-cols-1 lg:grid-cols-[1fr_280px] gap-4">
+  <div class="space-y-4">
+    {# Problem / pitch #}
+    {% if r.problem_statement or r.one_liner %}
+    <div class="bg-white p-5 rounded-lg shadow-sm border">
+      {% if r.one_liner %}
+      <div class="text-xs uppercase tracking-wide text-gray-500 mb-1">One-liner</div>
+      <p class="text-sm text-gray-900 mb-3">{{ r.one_liner }}</p>
+      {% endif %}
+      {% if r.problem_statement %}
+      <div class="text-xs uppercase tracking-wide text-gray-500 mb-1">Problem</div>
+      <p class="text-sm text-gray-900">{{ r.problem_statement }}</p>
+      {% endif %}
+    </div>
+    {% endif %}
+
+    {# Long description #}
+    {% if r.long_description %}
+    <div class="bg-white p-5 rounded-lg shadow-sm border">
+      <div class="text-xs uppercase tracking-wide text-gray-500 mb-2">Description</div>
+      <p class="text-sm text-gray-800 whitespace-pre-wrap">{{ r.long_description }}</p>
+    </div>
+    {% endif %}
+
+    {# Reasoning #}
+    {% if r.solo_buildable_reasoning or r.ai_first_reasoning %}
+    <div class="bg-white p-5 rounded-lg shadow-sm border space-y-3">
+      {% if r.solo_buildable_reasoning %}
+      <div>
+        <div class="text-xs uppercase tracking-wide text-gray-500 mb-1">Solo-buildable?</div>
+        <p class="text-sm text-gray-800">{{ r.solo_buildable_reasoning }}</p>
+      </div>
+      {% endif %}
+      {% if r.ai_first_reasoning %}
+      <div>
+        <div class="text-xs uppercase tracking-wide text-gray-500 mb-1">AI-first advantage?</div>
+        <p class="text-sm text-gray-800">{{ r.ai_first_reasoning }}</p>
+      </div>
+      {% endif %}
+    </div>
+    {% endif %}
+
+    {# Website enrichment snapshot #}
+    {% if r.web_meta or r.web_h1 or r.web_hero %}
+    <div class="bg-white p-5 rounded-lg shadow-sm border">
+      <div class="text-xs uppercase tracking-wide text-gray-500 mb-2">
+        From the product website{% if r.web_final_url %}
+        <span class="text-gray-400">·</span>
+        <a href="{{ r.web_final_url }}" target="_blank" class="text-indigo-600 hover:text-indigo-800 font-mono normal-case">{{ r.web_final_url|truncate(60) }}</a>
+        {% endif %}
+      </div>
+      {% if r.web_h1 %}
+      <div class="text-sm font-semibold text-gray-900 mb-1">{{ r.web_h1 }}</div>
+      {% endif %}
+      {% if r.web_meta %}
+      <p class="text-sm text-gray-700 mb-2 italic">{{ r.web_meta }}</p>
+      {% endif %}
+      {% if r.web_hero %}
+      <p class="text-xs text-gray-600 line-clamp-6">{{ r.web_hero }}</p>
+      {% endif %}
+    </div>
+    {% endif %}
+  </div>
+
+  {# -------- Right sidebar -------- #}
+  <aside class="space-y-4">
+    {# Tags #}
+    {% if r.mechanism_tags or r.sector_tags or r.customer_verticals %}
+    <div class="bg-white p-4 rounded-lg shadow-sm border">
+      {% if r.mechanism_tags %}
+      <div class="text-xs uppercase tracking-wide text-gray-500 mb-1">Mechanism</div>
+      <div class="flex flex-wrap gap-1 mb-3">
+        {% for tag in (r.mechanism_tags | from_json) %}
+        <a href="/ideas/search?q={{ tag | urlencode }}"
+           class="text-[11px] px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-700 font-mono hover:bg-indigo-100">{{ tag }}</a>
+        {% endfor %}
+      </div>
+      {% endif %}
+      {% if r.sector_tags %}
+      <div class="text-xs uppercase tracking-wide text-gray-500 mb-1">Sector</div>
+      <div class="flex flex-wrap gap-1 mb-3">
+        {% for tag in (r.sector_tags | from_json) %}
+        <a href="/ideas/search?q={{ tag | urlencode }}"
+           class="text-[11px] px-1.5 py-0.5 rounded bg-amber-50 text-amber-800 font-mono hover:bg-amber-100">{{ tag }}</a>
+        {% endfor %}
+      </div>
+      {% endif %}
+      {% if r.customer_verticals %}
+      <div class="text-xs uppercase tracking-wide text-gray-500 mb-1">Customer</div>
+      <div class="flex flex-wrap gap-1">
+        {% for c in (r.customer_verticals | from_json) %}
+        <span class="text-[11px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-700">{{ c }}</span>
+        {% endfor %}
+      </div>
+      {% endif %}
+      {% if r.customer_size %}
+      <div class="text-xs text-gray-500 mt-3">
+        Customer size: <span class="text-gray-800 font-medium">{{ r.customer_size }}</span>
+      </div>
+      {% endif %}
+    </div>
+    {% endif %}
+
+    {# Cluster + location #}
+    <div class="bg-white p-4 rounded-lg shadow-sm border text-sm space-y-2">
+      {% if r.cluster_id is not none and r.cluster_id != -1 %}
+      <div>
+        <div class="text-xs uppercase tracking-wide text-gray-500 mb-1">Cluster</div>
+        <a href="/ideas/clusters/{{ r.cluster_id }}"
+           class="text-indigo-700 hover:text-indigo-900">
+          {{ r.cluster_label or ('Cluster ' ~ r.cluster_id) }}
+        </a>
+        {% if r.cluster_era %}
+        <span class="text-xs text-gray-500">({{ r.cluster_era }})</span>
+        {% endif %}
+      </div>
+      {% endif %}
+      {% if r.country or r.city or r.team_size %}
+      <div class="text-xs text-gray-500">
+        {% if r.city %}{{ r.city }}, {% endif %}
+        {% if r.country %}{{ r.country }}{% endif %}
+        {% if r.team_size %}· team of {{ r.team_size }}{% endif %}
+      </div>
+      {% endif %}
+    </div>
+
+    {# Similar ideas (cluster neighbors) #}
+    {% if neighbors %}
+    <div class="bg-white p-4 rounded-lg shadow-sm border">
+      <div class="text-xs uppercase tracking-wide text-gray-500 mb-2">Similar (same cluster)</div>
+      <ul class="space-y-2 text-xs">
+        {% for n in neighbors %}
+        <li>
+          <a href="/ideas/{{ n.id }}"
+             class="font-medium text-gray-900 hover:text-indigo-700">
+            {{ n.company or '(untitled)' }}
+          </a>
+          <span class="text-gray-400">· {{ n.program }} · {{ n.year_founded or '—' }}</span>
+          {% if n.one_liner %}<div class="text-gray-500 mt-0.5 line-clamp-2">{{ n.one_liner }}</div>{% endif %}
+        </li>
+        {% endfor %}
+      </ul>
+    </div>
+    {% endif %}
+
+    {% if r.ie_error %}
+    <div class="bg-red-50 border border-red-200 rounded-lg p-3 text-xs text-red-700">
+      Extraction error: <code class="font-mono">{{ r.ie_error }}</code>
+    </div>
+    {% endif %}
+  </aside>
+</div>
+{% endblock %}

@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+
+{% block title %}Search — Ideas{% endblock %}
+
+{% block header %}
+<div class="bg-white shadow-sm border-b">
+  <div class="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+    <div class="flex items-center gap-3 mb-3">
+      <h1 class="text-2xl font-bold text-gray-900">Search ideas</h1>
+      <a href="/ideas" class="text-sm text-indigo-600 hover:text-indigo-800 ml-auto">← overview</a>
+    </div>
+    <form method="GET" action="/ideas/search"
+          class="flex items-center gap-2 max-w-3xl">
+      <input type="text" name="q" value="{{ q }}" autofocus
+             placeholder='full-text search across 26k ideas — try "voice agent healthcare" or "solo fintech"'
+             class="flex-1 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm">
+      <button type="submit"
+              class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-500">
+        Search
+      </button>
+    </form>
+    {% if q %}
+    <p class="text-xs text-gray-500 mt-2">
+      {{ "{:,}".format(total) }} ideas match "<span class="font-mono">{{ q }}</span>"
+    </p>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}
+
+{% block content %}
+{% if not q %}
+<div class="bg-white rounded-lg shadow-sm border p-6 text-sm text-gray-600">
+  <p>Searches across company names, one-liners, long descriptions, problem statements, reasoning fields, and tags using SQLite FTS5 (prefix-matching enabled).</p>
+  <p class="mt-3 text-xs text-gray-500">Tip: use lowercase words; the query <code class="font-mono bg-gray-50 px-1">voice agent</code> matches any row containing both terms (or prefixes like "agentic").</p>
+</div>
+{% elif rows %}
+<div class="bg-white rounded-lg shadow-sm border">
+  <div class="divide-y">
+    {% for r in rows %}
+    <div class="px-5 py-3 hover:bg-gray-50">
+      <div class="flex items-start justify-between gap-3">
+        <div class="flex-1 min-w-0">
+          <div class="flex items-center gap-2 flex-wrap">
+            <a href="/ideas/{{ r.id }}"
+               class="font-medium text-gray-900 hover:text-indigo-700">
+              {{ r.company or (r.one_liner[:60] ~ '…' if r.one_liner and r.one_liner|length > 60 else r.one_liner) or '(untitled)' }}
+            </a>
+            <span class="text-xs text-gray-400">{{ r.year_founded or '' }}</span>
+            <span class="text-xs px-1.5 py-0.5 rounded bg-gray-100 text-gray-600">
+              {{ r.program }}
+            </span>
+            {% if r.solo_buildable == 1 %}
+            <span class="text-[10px] px-1.5 py-0.5 rounded bg-green-100 text-green-700">solo</span>
+            {% endif %}
+            {% if r.ai_first_advantage == 1 %}
+            <span class="text-[10px] px-1.5 py-0.5 rounded bg-blue-100 text-blue-700">ai-first</span>
+            {% endif %}
+            {% if r.business_model %}
+            <span class="text-[10px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-700">{{ r.business_model }}</span>
+            {% endif %}
+          </div>
+          {% if r.problem_statement or r.one_liner %}
+          <p class="text-xs text-gray-600 mt-1 line-clamp-2">
+            {{ r.problem_statement or r.one_liner }}
+          </p>
+          {% endif %}
+          <div class="flex flex-wrap gap-1 mt-2">
+            {% for tag in (r.mechanism_tags | from_json)[:4] %}
+            <span class="text-[10px] px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-700 font-mono">{{ tag }}</span>
+            {% endfor %}
+            {% for tag in (r.sector_tags | from_json)[:3] %}
+            <span class="text-[10px] px-1.5 py-0.5 rounded bg-amber-50 text-amber-800 font-mono">{{ tag }}</span>
+            {% endfor %}
+          </div>
+        </div>
+        <div class="flex-shrink-0 text-right text-xs space-y-1">
+          {% if r.company_website %}
+          <a href="{{ r.company_website }}" target="_blank"
+             class="text-indigo-600 hover:text-indigo-800">site ↗</a><br>
+          {% endif %}
+          {% if r.cluster_id is not none and r.cluster_id != -1 %}
+          <a href="/ideas/clusters/{{ r.cluster_id }}"
+             class="text-gray-500 hover:text-gray-800">cluster {{ r.cluster_id }}</a>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% include 'partials/pagination.html' %}
+</div>
+{% else %}
+<div class="bg-white rounded-lg shadow-sm border p-6 text-sm text-gray-500">
+  No ideas match "{{ q }}".
+</div>
+{% endif %}
+{% endblock %}

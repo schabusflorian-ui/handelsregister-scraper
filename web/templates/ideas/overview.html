@@ -10,18 +10,44 @@
 
 {% block header %}
 <div class="bg-white shadow-sm border-b">
-  <div class="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8 flex items-start justify-between gap-4">
-    <div>
-      <h1 class="text-2xl font-bold text-gray-900">Ideas</h1>
-      <p class="text-sm text-gray-500 mt-1">
-        Idea discovery across accelerator cohorts, VC portfolios and microbusiness communities.
-        Tagged by mechanism × sector for gap-finding.
-      </p>
+  <div class="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+    <div class="flex items-start justify-between gap-4">
+      <div>
+        <h1 class="text-2xl font-bold text-gray-900">Ideas</h1>
+        <p class="text-sm text-gray-500 mt-1">
+          Idea discovery across accelerator cohorts, VC portfolios and microbusiness communities.
+          Tagged by mechanism × sector for gap-finding.
+        </p>
+      </div>
+      <div class="flex items-center gap-2 text-xs text-gray-500">
+        <span class="inline-flex items-center gap-1 px-2 py-1 rounded bg-gray-100">
+          Model: <code class="font-mono">claude-haiku-4-5</code>
+        </span>
+      </div>
     </div>
-    <div class="flex items-center gap-2 text-xs text-gray-500">
-      <span class="inline-flex items-center gap-1 px-2 py-1 rounded bg-gray-100">
-        Model: <code class="font-mono">claude-haiku-4-5</code>
-      </span>
+    {# Search box — routes to /ideas/search for global FTS5 #}
+    <form method="GET" action="/ideas/search"
+          class="mt-4 flex items-center gap-2 max-w-3xl">
+      <input type="text" name="q" placeholder='Search all ideas — "voice agent healthcare", "indie fintech", etc.'
+             class="flex-1 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm">
+      <button type="submit"
+              class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-500">
+        Search
+      </button>
+    </form>
+    <div class="mt-3 flex flex-wrap items-center gap-4 text-xs text-gray-500">
+      <a href="/ideas/launch-candidates" class="hover:text-indigo-700">
+        {{ "{:,}".format(stats.launch_candidates) }} launch candidates →
+      </a>
+      <a href="/ideas/map" class="hover:text-indigo-700">
+        2-D idea map →
+      </a>
+      <a href="/ideas/search" class="hover:text-indigo-700">
+        full search →
+      </a>
+      <a href="/openapi.json" class="hover:text-indigo-700 ml-auto font-mono">
+        /openapi.json
+      </a>
     </div>
   </div>
 </div>
@@ -67,6 +93,33 @@
     </div>
     <div class="text-xs text-gray-400 mt-1">{{ "{:,}".format(stats.populated_cells) }} populated cells</div>
   </div>
+</div>
+
+{# ---------------- UMAP "map of idea space" scatter ---------------- #}
+<div class="bg-white p-5 rounded-lg shadow-sm border mb-6">
+  <div class="flex items-center justify-between mb-3">
+    <div>
+      <h2 class="text-lg font-semibold text-gray-900">Map of idea space</h2>
+      <p class="text-xs text-gray-500">
+        Every row in <code>company_ideas</code>, projected from a 384-dim MiniLM embedding to 2D via UMAP.
+        Hover a dot; click to drill into that company's cluster.
+      </p>
+    </div>
+    <div class="flex items-center gap-2" id="scatter-controls">
+      <label class="text-xs text-gray-500">Colour by:</label>
+      <select id="color-by" class="text-xs border-gray-300 rounded">
+        <option value="era" selected>era</option>
+        <option value="program">program</option>
+        <option value="cluster">cluster (top 30)</option>
+      </select>
+      <button id="scatter-reset" type="button"
+              class="text-xs px-2 py-1 border border-gray-300 rounded hover:bg-gray-50">
+        Reset zoom
+      </button>
+    </div>
+  </div>
+  <div id="umap-scatter" style="width: 100%; height: 620px;"></div>
+  <div id="umap-loading" class="text-xs text-gray-400 mt-2">Loading 2D embedding…</div>
 </div>
 
 {# ---------------- Mechanism × Sector heatmap ---------------- #}
@@ -336,6 +389,200 @@
 
 {% block scripts %}
 <script>
+// =========================================================================
+//  UMAP "map of idea space" scatter
+// =========================================================================
+(function () {
+  const el = document.getElementById('umap-scatter');
+  if (!el) return;
+  const chart = echarts.init(el);
+  const loadingEl = document.getElementById('umap-loading');
+
+  // Palettes. Small categorical colour sets — enough distinct hues that
+  // hot/steady/rebuild_candidate/legacy all stay readable side by side.
+  const ERA_COLORS = {
+    'hot':               '#ef4444',  // red
+    'steady':            '#3b82f6',  // blue
+    'rebuild_candidate': '#f59e0b',  // amber
+    'legacy':            '#6b7280',  // gray
+    'unknown':           '#d1d5db',  // light gray
+  };
+  // Qualitative palette for programs + top clusters.
+  const QUAL = [
+    '#4f46e5', '#059669', '#dc2626', '#ea580c', '#ca8a04',
+    '#0891b2', '#c026d3', '#16a34a', '#e11d48', '#7c3aed',
+    '#0284c7', '#be123c', '#65a30d', '#b45309', '#0d9488',
+  ];
+
+  let raw = null;      // the full payload
+  let topClusters = null;  // [{id, label}] for top-30 by frequency
+
+  function buildSeries(colorBy) {
+    // Group rows by the colour key so ECharts can render each group as
+    // its own series — cheaper than per-point item styles and gives us
+    // a useful legend for free.
+    const groups = new Map();
+    const colors = {};
+
+    for (const row of raw.rows) {
+      const [x, y, cid, eraIdx, progIdx, id, company, desc] = row;
+      let key;
+      if (colorBy === 'era') {
+        key = raw.era_map[eraIdx] || 'unknown';
+        colors[key] = ERA_COLORS[key] || '#d1d5db';
+      } else if (colorBy === 'program') {
+        key = raw.program_map[progIdx] || '(other)';
+      } else {  // cluster
+        const topIdx = topClusters.findIndex(c => c.id === cid);
+        if (topIdx >= 0) {
+          key = topClusters[topIdx].label;
+        } else {
+          key = '(other)';
+        }
+      }
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push([x, y, cid, id, company, desc]);
+    }
+
+    // Qualitative color assignment for program / cluster
+    let i = 0;
+    const sortedKeys = Array.from(groups.keys()).sort((a, b) => {
+      // Put '(other)' last; rest by group size desc
+      if (a === '(other)') return 1;
+      if (b === '(other)') return -1;
+      return groups.get(b).length - groups.get(a).length;
+    });
+    for (const k of sortedKeys) {
+      if (!colors[k]) {
+        colors[k] = k === '(other)' ? '#d1d5db' : QUAL[i++ % QUAL.length];
+      }
+    }
+
+    return sortedKeys.map(k => ({
+      name: k,
+      type: 'scatter',
+      data: groups.get(k),
+      symbolSize: 6,
+      large: true,
+      largeThreshold: 2000,
+      progressive: 4000,
+      itemStyle: {
+        color: colors[k],
+        opacity: k === '(other)' ? 0.35 : 0.85,
+        borderColor: 'rgba(0,0,0,0.15)',
+        borderWidth: 0.4,
+      },
+      emphasis: {
+        focus: 'series',
+        itemStyle: { opacity: 1, borderColor: '#111', borderWidth: 1 },
+      },
+    }));
+  }
+
+  // Clip axis range to a percentile window so a handful of UMAP outliers
+  // don't squash the dense cluster into a corner. 1st / 99th with 4% pad
+  // is the sweet spot empirically — shows 99% of points cleanly.
+  function computeBounds() {
+    const xs = raw.rows.map(r => r[0]).sort((a, b) => a - b);
+    const ys = raw.rows.map(r => r[1]).sort((a, b) => a - b);
+    const q = (arr, p) => arr[Math.floor(arr.length * p)];
+    const pad = (lo, hi) => {
+      const span = hi - lo;
+      return { min: lo - span * 0.04, max: hi + span * 0.04 };
+    };
+    return {
+      x: pad(q(xs, 0.01), q(xs, 0.99)),
+      y: pad(q(ys, 0.01), q(ys, 0.99)),
+    };
+  }
+  let bounds = null;
+
+  function renderOption(colorBy) {
+    if (!bounds) bounds = computeBounds();
+    return {
+      tooltip: {
+        trigger: 'item',
+        confine: true,
+        formatter: (p) => {
+          const [, , cid, id, company, desc] = p.data;
+          const clusterLabel = raw.cluster_map[String(cid)] || `cluster ${cid}`;
+          return `<div style="max-width:320px"><b>${company}</b>`
+               + `<div style="color:#666;font-size:11px;margin-top:2px">${clusterLabel} &middot; ${p.seriesName}</div>`
+               + (desc ? `<div style="margin-top:6px;font-size:11px">${desc}</div>` : '')
+               + `</div>`;
+        },
+      },
+      legend: {
+        type: 'scroll',
+        top: 0,
+        left: 'center',
+        textStyle: { fontSize: 11 },
+      },
+      grid: { left: 30, right: 30, top: 40, bottom: 60 },
+      xAxis: { type: 'value', show: false, min: bounds.x.min, max: bounds.x.max },
+      yAxis: { type: 'value', show: false, min: bounds.y.min, max: bounds.y.max },
+      dataZoom: [
+        { type: 'inside', xAxisIndex: 0 },
+        { type: 'inside', yAxisIndex: 0 },
+      ],
+      series: buildSeries(colorBy),
+    };
+  }
+
+  function computeTopClusters() {
+    const counts = {};
+    for (const row of raw.rows) {
+      const cid = row[2];
+      if (cid === -1) continue;
+      counts[cid] = (counts[cid] || 0) + 1;
+    }
+    topClusters = Object.entries(counts)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 30)
+      .map(([cid]) => ({
+        id: parseInt(cid, 10),
+        label: raw.cluster_map[cid] || `cluster ${cid}`,
+      }));
+  }
+
+  async function load() {
+    loadingEl.textContent = 'Loading 2D embedding…';
+    chart.showLoading();
+    try {
+      const res = await fetch('/ideas/api/scatter.json');
+      raw = await res.json();
+      computeTopClusters();
+      chart.hideLoading();
+      const colorBy = document.getElementById('color-by').value;
+      chart.setOption(renderOption(colorBy), { notMerge: true });
+      loadingEl.textContent = `${raw.rows.length.toLocaleString()} points · `
+        + `${topClusters.length} top clusters · drag to pan, scroll to zoom`;
+    } catch (e) {
+      chart.hideLoading();
+      loadingEl.textContent = `Error: ${e.message || e}`;
+    }
+  }
+
+  // Interactions
+  chart.on('click', function (p) {
+    const cid = p.data && p.data[2];
+    if (cid !== undefined && cid !== -1) {
+      window.location.href = `/ideas/clusters/${cid}`;
+    }
+  });
+  document.getElementById('color-by').addEventListener('change', (e) => {
+    if (raw) chart.setOption(renderOption(e.target.value), { notMerge: true });
+  });
+  document.getElementById('scatter-reset').addEventListener('click', () => {
+    chart.dispatchAction({ type: 'restore' });
+  });
+  window.addEventListener('resize', () => chart.resize());
+  load();
+})();
+
+// =========================================================================
+//  Mechanism × Sector heatmap (existing)
+// =========================================================================
 (function () {
   const chart = echarts.init(document.getElementById('heatmap'));
   const loadingEl = document.getElementById('heatmap-loading');

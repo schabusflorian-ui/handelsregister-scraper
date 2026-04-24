@@ -1,0 +1,190 @@
+{% extends "base.html" %}
+
+{% block title %}Launch candidates — Ideas{% endblock %}
+
+{% block header %}
+<div class="bg-white shadow-sm border-b">
+  <div class="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+    <div class="flex items-baseline justify-between">
+      <div>
+        <h1 class="text-2xl font-bold text-gray-900">Launch candidates</h1>
+        <p class="text-sm text-gray-500 mt-1">
+          Solo-buildable, AI-first ideas without capital or regulatory moat.
+          {{ "{:,}".format(total) }} match your filters.
+        </p>
+      </div>
+      <a href="/ideas" class="text-sm text-indigo-600 hover:text-indigo-800">← back to overview</a>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="mb-4 flex flex-wrap items-center gap-3">
+  <form method="GET" action="/ideas/launch-candidates" class="flex-1 flex flex-wrap items-center gap-2 bg-white p-3 rounded-lg shadow-sm border">
+    {# Preserve facet filters on search submit #}
+    {% for k, v in filters.items() if k != 'q' and v %}
+    <input type="hidden" name="{{ k }}" value="{{ v }}">
+    {% endfor %}
+    <input type="text" name="q" value="{{ filters.q }}"
+           placeholder="Search name / problem / tags / reasoning…"
+           class="flex-1 min-w-48 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm">
+    <button type="submit"
+            class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-500">
+      Search
+    </button>
+    {% if filters.q %}
+    <a href="?{% for k, v in filters.items() if k != 'q' and v %}{{ k }}={{ v }}&{% endfor %}"
+       class="text-xs text-gray-500 hover:text-gray-800">clear search</a>
+    {% endif %}
+  </form>
+
+  {# Sort + strict toggle #}
+  <form method="GET" action="/ideas/launch-candidates" class="flex items-center gap-2 bg-white p-3 rounded-lg shadow-sm border text-sm">
+    {% for k, v in filters.items() if k not in ('sort', 'strict') and v %}
+    <input type="hidden" name="{{ k }}" value="{{ v }}">
+    {% endfor %}
+    <label class="text-gray-600">sort</label>
+    <select name="sort" onchange="this.form.submit()"
+            class="rounded-md border-gray-300 text-sm">
+      <option value="recent" {% if filters.sort == 'recent' %}selected{% endif %}>Recent</option>
+      <option value="name"   {% if filters.sort == 'name'   %}selected{% endif %}>Name</option>
+    </select>
+    <label class="flex items-center gap-1 ml-2 cursor-pointer">
+      <input type="checkbox" name="strict" value="1"
+             {% if filters.strict %}checked{% endif %}
+             onchange="this.form.submit()">
+      <span class="text-gray-600">strict (moat=none)</span>
+    </label>
+  </form>
+</div>
+
+<div class="grid grid-cols-1 lg:grid-cols-[240px_1fr] gap-4">
+  {# -------- Facet sidebar -------- #}
+  <aside class="bg-white p-4 rounded-lg shadow-sm border h-fit text-sm">
+    {% set facet_labels = {
+        'program':        'Source',
+        'customer_size':  'Customer size',
+        'business_model': 'Business model',
+        'moat_type':      'Moat',
+        'niche':          'Specificity',
+    } %}
+    {# Map facet keys to filter-query keys (mostly same, moat_type->moat, niche->niche) #}
+    {% set facet_to_filter = {
+        'program':        'program',
+        'customer_size':  'customer_size',
+        'business_model': 'business_model',
+        'moat_type':      'moat',
+        'niche':          'niche',
+    } %}
+    {% for fkey, label in facet_labels.items() %}
+      {% set fq = facet_to_filter[fkey] %}
+      {% if facets[fkey] %}
+      <div class="mb-5 last:mb-0">
+        <div class="text-xs uppercase tracking-wide text-gray-500 mb-2">{{ label }}</div>
+        <ul class="space-y-1">
+          {% for f in facets[fkey][:12] %}
+          <li class="flex items-center justify-between">
+            {% if filters[fq] == f.value %}
+            <a href="?{% for k, v in filters.items() if v and k != fq %}{{ k }}={{ v }}&{% endfor %}"
+               class="text-indigo-700 font-medium truncate flex-1" title="remove">
+              {{ f.value }}
+            </a>
+            {% else %}
+            <a href="?{% for k, v in filters.items() if v %}{{ k }}={{ v }}&{% endfor %}{{ fq }}={{ f.value }}"
+               class="text-gray-700 hover:text-indigo-700 truncate flex-1">
+              {{ f.value }}
+            </a>
+            {% endif %}
+            <span class="text-xs text-gray-400 ml-2">{{ f.count }}</span>
+          </li>
+          {% endfor %}
+        </ul>
+      </div>
+      {% endif %}
+    {% endfor %}
+
+    {% set any_filter = false %}
+    {% for k, v in filters.items() if k != 'sort' and v %}{% set any_filter = true %}{% endfor %}
+    {% if any_filter %}
+    <a href="/ideas/launch-candidates"
+       class="block mt-4 pt-4 border-t text-xs text-gray-500 hover:text-gray-800">
+      clear all filters
+    </a>
+    {% endif %}
+  </aside>
+
+  {# -------- Results -------- #}
+  <div class="bg-white rounded-lg shadow-sm border">
+    {% if rows %}
+    <div class="divide-y">
+      {% for r in rows %}
+      <div class="px-5 py-4 hover:bg-gray-50">
+        <div class="flex items-start justify-between gap-4">
+          <div class="flex-1 min-w-0">
+            <div class="flex items-center gap-2 flex-wrap">
+              <a href="/ideas/{{ r.id }}"
+                 class="font-semibold text-gray-900 hover:text-indigo-700">
+                {{ r.company or '(untitled)' }}
+              </a>
+              <span class="text-xs text-gray-400">{{ r.year_founded or '' }}</span>
+              <span class="text-xs px-1.5 py-0.5 rounded bg-gray-100 text-gray-600">
+                {{ r.program }}
+              </span>
+              {% if r.customer_size %}
+              <span class="text-[10px] px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 uppercase">
+                {{ r.customer_size }}
+              </span>
+              {% endif %}
+              {% if r.business_model %}
+              <span class="text-[10px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-700">
+                {{ r.business_model }}
+              </span>
+              {% endif %}
+              {% if r.niche_specificity == 'narrow' %}
+              <span class="text-[10px] px-1.5 py-0.5 rounded bg-green-100 text-green-700">narrow</span>
+              {% elif r.niche_specificity == 'broad' %}
+              <span class="text-[10px] px-1.5 py-0.5 rounded bg-amber-50 text-amber-700">broad</span>
+              {% endif %}
+              {% if r.moat_type and r.moat_type != 'none' %}
+              <span class="text-[10px] px-1.5 py-0.5 rounded bg-purple-50 text-purple-700">moat: {{ r.moat_type }}</span>
+              {% endif %}
+            </div>
+            {% if r.problem_statement %}
+            <p class="text-sm text-gray-700 mt-2">{{ r.problem_statement }}</p>
+            {% endif %}
+            <div class="flex flex-wrap gap-1 mt-2">
+              {% for tag in (r.mechanism_tags | from_json)[:5] %}
+              <a href="?{% for k, v in filters.items() if v %}{{ k }}={{ v }}&{% endfor %}q={{ tag | urlencode }}"
+                 class="text-[10px] px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-700 font-mono hover:bg-indigo-100">{{ tag }}</a>
+              {% endfor %}
+              {% for tag in (r.sector_tags | from_json)[:4] %}
+              <a href="?{% for k, v in filters.items() if v %}{{ k }}={{ v }}&{% endfor %}q={{ tag | urlencode }}"
+                 class="text-[10px] px-1.5 py-0.5 rounded bg-amber-50 text-amber-800 font-mono hover:bg-amber-100">{{ tag }}</a>
+              {% endfor %}
+            </div>
+          </div>
+          <div class="flex-shrink-0 text-right text-xs space-y-1">
+            {% if r.company_website %}
+            <a href="{{ r.company_website }}" target="_blank"
+               class="text-indigo-600 hover:text-indigo-800">site ↗</a><br>
+            {% endif %}
+            {% if r.cluster_id is not none and r.cluster_id != -1 %}
+            <a href="/ideas/clusters/{{ r.cluster_id }}"
+               class="text-gray-500 hover:text-gray-800">cluster {{ r.cluster_id }}</a>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    {% include 'partials/pagination.html' %}
+    {% else %}
+    <div class="px-5 py-12 text-center text-sm text-gray-500">
+      No candidates match these filters.
+      <a href="/ideas/launch-candidates" class="text-indigo-600 hover:text-indigo-800">Reset</a>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

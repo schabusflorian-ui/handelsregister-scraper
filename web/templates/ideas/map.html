@@ -1,0 +1,263 @@
+{% extends "base.html" %}
+
+{% block title %}Idea map — {{ n_coords }} points{% endblock %}
+
+{% block head %}
+<script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
+{% endblock %}
+
+{% block header %}
+<div class="bg-white shadow-sm border-b">
+  <div class="mx-auto max-w-7xl px-4 py-4 sm:px-6 lg:px-8 flex items-start justify-between gap-4">
+    <div>
+      <h1 class="text-2xl font-bold text-gray-900">Idea map</h1>
+      <p class="text-sm text-gray-500 mt-1">
+        2-D UMAP projection of {{ "{:,}".format(n_coords) }} ideas over the
+        all-MiniLM-L6-v2 embedding space. Dense regions = herd territory.
+        Empty regions = candidate whitespace.
+      </p>
+    </div>
+    <a href="/ideas" class="text-sm text-indigo-600 hover:text-indigo-800">← overview</a>
+  </div>
+</div>
+{% endblock %}
+
+{% block content %}
+{% if n_coords == 0 %}
+<div class="bg-amber-50 border border-amber-200 rounded-lg p-4 text-sm text-amber-900">
+  <div class="font-semibold mb-1">No coordinates yet.</div>
+  <div>Run <code class="font-mono bg-white px-1">python3 -m scripts.compute_idea_map</code>
+  to embed + UMAP → 2D (~3 min for 20k rows). The map will render once the
+  <code class="font-mono bg-white px-1">umap_x/umap_y</code> columns are populated.</div>
+</div>
+{% else %}
+<div class="bg-white rounded-lg shadow-sm border">
+  {# Filter bar #}
+  <div class="px-4 py-3 border-b flex flex-wrap items-center gap-3 text-sm">
+    <label class="flex items-center gap-1">
+      <span class="text-gray-600">program</span>
+      <select id="filter-program" class="rounded border-gray-300 text-sm">
+        <option value="">any</option>
+      </select>
+    </label>
+    <label class="flex items-center gap-1">
+      <span class="text-gray-600">solo</span>
+      <select id="filter-solo" class="rounded border-gray-300 text-sm">
+        <option value="">any</option>
+        <option value="1">yes</option>
+        <option value="0">no</option>
+      </select>
+    </label>
+    <label class="flex items-center gap-1">
+      <span class="text-gray-600">ai-first</span>
+      <select id="filter-ai" class="rounded border-gray-300 text-sm">
+        <option value="">any</option>
+        <option value="1">yes</option>
+        <option value="0">no</option>
+      </select>
+    </label>
+    <label class="flex items-center gap-1">
+      <span class="text-gray-600">mechanism</span>
+      <input id="filter-mech" type="text" placeholder="e.g. llm-copilot"
+             class="rounded border-gray-300 text-sm w-40">
+    </label>
+    <label class="flex items-center gap-1">
+      <span class="text-gray-600">sector</span>
+      <input id="filter-sector" type="text" placeholder="e.g. healthcare"
+             class="rounded border-gray-300 text-sm w-40">
+    </label>
+    <label class="flex items-center gap-1 ml-auto">
+      <span class="text-gray-600">color by</span>
+      <select id="color-by" class="rounded border-gray-300 text-sm">
+        <option value="cluster" selected>cluster</option>
+        <option value="program">program</option>
+      </select>
+    </label>
+    <button id="reset-btn" class="text-xs text-gray-500 hover:text-gray-900">reset</button>
+  </div>
+
+  <div class="relative">
+    <div id="map" style="height: 72vh; min-height: 520px;"></div>
+    <div id="map-loading"
+         class="absolute top-2 left-2 text-xs text-gray-500 bg-white/80 rounded px-2 py-1">
+      Loading…
+    </div>
+  </div>
+</div>
+
+{# Floating idea card for hover / click — data lazy-loaded from /ideas/api/idea-card/{id} #}
+<div id="idea-card-host"
+     class="fixed bottom-4 right-4 z-30 hidden max-w-sm w-full bg-white rounded-lg shadow-xl border p-4 text-sm">
+  <button id="idea-card-close"
+          class="absolute top-2 right-2 text-gray-400 hover:text-gray-800 text-xs">✕</button>
+  <div id="idea-card-body"></div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+{% if n_coords > 0 %}
+<script>
+(function () {
+  const chart = echarts.init(document.getElementById('map'));
+  const loadingEl = document.getElementById('map-loading');
+  const programSel = document.getElementById('filter-program');
+  const soloSel = document.getElementById('filter-solo');
+  const aiSel = document.getElementById('filter-ai');
+  const mechIn = document.getElementById('filter-mech');
+  const sectorIn = document.getElementById('filter-sector');
+  const colorSel = document.getElementById('color-by');
+  const resetBtn = document.getElementById('reset-btn');
+  const cardHost = document.getElementById('idea-card-host');
+  const cardBody = document.getElementById('idea-card-body');
+  const cardClose = document.getElementById('idea-card-close');
+
+  cardClose.onclick = () => cardHost.classList.add('hidden');
+
+  const COLOR_POOL = [
+    '#6366f1','#10b981','#f59e0b','#ef4444','#8b5cf6','#14b8a6',
+    '#f97316','#84cc16','#06b6d4','#ec4899','#a855f7','#eab308',
+    '#3b82f6','#22c55e','#e11d48','#0891b2','#d946ef','#f43f5e',
+  ];
+  function colorFor(key, map) {
+    if (!map.has(key)) map.set(key, COLOR_POOL[map.size % COLOR_POOL.length]);
+    return map.get(key);
+  }
+
+  // Cluster id -1 or very large = noise → muted grey
+  function clusterColor(cid, map) {
+    if (cid === -1 || cid === -9999) return '#d1d5db';
+    return colorFor(cid, map);
+  }
+
+  async function load() {
+    loadingEl.textContent = 'Loading…';
+    loadingEl.classList.remove('hidden');
+    const params = new URLSearchParams();
+    if (programSel.value) params.set('program', programSel.value);
+    if (soloSel.value)    params.set('solo', soloSel.value);
+    if (aiSel.value)      params.set('ai_first', aiSel.value);
+    if (mechIn.value)     params.set('mechanism', mechIn.value.trim());
+    if (sectorIn.value)   params.set('sector', sectorIn.value.trim());
+
+    const res = await fetch('/ideas/api/map.json?' + params.toString());
+    const data = await res.json();
+    loadingEl.textContent = data.count.toLocaleString() + ' points';
+
+    // Populate program select once
+    if (programSel.options.length <= 1) {
+      for (const p of data.programs) {
+        const o = document.createElement('option');
+        o.value = p; o.textContent = p;
+        programSel.appendChild(o);
+      }
+    }
+
+    // Group points by color key so each group becomes its own series.
+    // ECharts `large: true` only honors series-level color, so color
+    // variety requires per-group series.
+    const mode = colorSel.value;
+    const groups = new Map();  // key -> { color, points: [...] }
+    const colorMap = new Map();
+    for (const p of data.points) {
+      const [x, y, cid, id, prog, co] = p;
+      const key = mode === 'program' ? prog : cid;
+      const color = mode === 'program'
+        ? colorFor(prog, colorMap)
+        : clusterColor(cid, colorMap);
+      if (!groups.has(key)) groups.set(key, { color, label: key, points: [] });
+      groups.get(key).points.push([x, y, id, co, prog, cid]);
+    }
+    // Render noise (cid -1) first so real clusters sit on top.
+    const keys = [...groups.keys()].sort((a, b) => {
+      if (a === -1 || a === -9999) return -1;
+      if (b === -1 || b === -9999) return 1;
+      return 0;
+    });
+
+    const series = keys.map(k => {
+      const g = groups.get(k);
+      return {
+        type: 'scatter',
+        name: mode === 'cluster' && (k === -1 || k === -9999)
+          ? 'noise'
+          : (mode === 'cluster' ? 'cluster ' + k : String(k)),
+        data: g.points,
+        symbolSize: (k === -1 || k === -9999) ? 3 : 4,
+        large: g.points.length > 2000,
+        itemStyle: { color: g.color, opacity: (k === -1 || k === -9999) ? 0.35 : 0.85 },
+        emphasis: { focus: 'series', scale: 2.5 },
+      };
+    });
+
+    chart.setOption({
+      tooltip: {
+        formatter: (p) => {
+          const [, , id, co, prog, cid] = p.data;
+          return `<b>${co || '(untitled)'}</b><br>` +
+                 `<span style="color:#888">${prog}</span><br>` +
+                 (cid === -1 || cid === -9999 ? 'noise' : 'cluster ' + cid);
+        },
+      },
+      xAxis: { show: false, type: 'value' },
+      yAxis: { show: false, type: 'value' },
+      grid: { left: 8, right: 8, top: 8, bottom: 8, containLabel: false },
+      animation: false,
+      dataZoom: [
+        { type: 'inside', xAxisIndex: 0 },
+        { type: 'inside', yAxisIndex: 0 },
+      ],
+      series: series,
+    }, { notMerge: true });
+  }
+
+  chart.on('click', async function (params) {
+    const [, , id] = params.value || [];
+    if (!id) return;
+    cardHost.classList.remove('hidden');
+    cardBody.innerHTML = '<div class="text-gray-400">Loading…</div>';
+    const res = await fetch('/ideas/api/idea-card/' + id);
+    if (!res.ok) { cardBody.textContent = 'Not found'; return; }
+    const d = await res.json();
+    cardBody.innerHTML = `
+      <div class="text-xs text-gray-500 mb-1">${d.program}${d.year_founded ? ' · ' + d.year_founded : ''}</div>
+      <div class="font-semibold text-gray-900 mb-2">
+        <a href="/ideas/${d.id}" class="hover:text-indigo-700">${d.company || '(untitled)'}</a>
+      </div>
+      ${d.one_liner ? `<p class="text-xs text-gray-700 mb-2">${d.one_liner}</p>` : ''}
+      ${d.problem_statement ? `<p class="text-xs text-gray-600 mb-2">${d.problem_statement}</p>` : ''}
+      <div class="flex flex-wrap gap-1 mb-2">
+        ${(d.mechanism_tags || []).slice(0, 4).map(t =>
+          `<span class="text-[10px] px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-700 font-mono">${t}</span>`).join('')}
+        ${(d.sector_tags || []).slice(0, 3).map(t =>
+          `<span class="text-[10px] px-1.5 py-0.5 rounded bg-amber-50 text-amber-800 font-mono">${t}</span>`).join('')}
+      </div>
+      <div class="flex items-center justify-between text-xs">
+        <a href="/ideas/${d.id}" class="text-indigo-600 hover:text-indigo-800">open detail →</a>
+        ${d.cluster_id != null && d.cluster_id !== -1 ? `<a href="/ideas/clusters/${d.cluster_id}" class="text-gray-500 hover:text-gray-800">cluster ${d.cluster_id}</a>` : ''}
+      </div>
+    `;
+  });
+
+  resetBtn.onclick = () => {
+    programSel.value = ''; soloSel.value = ''; aiSel.value = '';
+    mechIn.value = ''; sectorIn.value = '';
+    load();
+  };
+  programSel.onchange = load;
+  soloSel.onchange = load;
+  aiSel.onchange = load;
+  colorSel.onchange = load;
+  let dbTimer;
+  const debouncedLoad = () => {
+    clearTimeout(dbTimer);
+    dbTimer = setTimeout(load, 300);
+  };
+  mechIn.oninput = debouncedLoad;
+  sectorIn.oninput = debouncedLoad;
+  window.addEventListener('resize', () => chart.resize());
+  load();
+})();
+</script>
+{% endif %}
+{% endblock %}

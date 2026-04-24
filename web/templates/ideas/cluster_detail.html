@@ -1,0 +1,227 @@
+{% extends "base.html" %}
+
+{% block title %}{{ cluster.label or 'Cluster '+cluster.cluster_id|string }} — Cluster{% endblock %}
+
+{% block header %}
+<div class="bg-white shadow-sm border-b">
+  <div class="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+    <div class="flex items-start justify-between gap-4">
+      <div class="flex-1 min-w-0">
+        <div class="flex items-center gap-2 text-xs text-gray-500 mb-2">
+          <a href="/ideas" class="hover:text-indigo-700">Ideas</a>
+          <span>/</span>
+          {% if parent %}
+          <a href="/ideas/clusters/{{ parent.cluster_id }}" class="hover:text-indigo-700">
+            {{ parent.label or ('Cluster ' ~ parent.cluster_id) }}
+          </a>
+          <span>/</span>
+          {% endif %}
+          <span class="text-gray-700">Cluster {{ cluster.cluster_id }}</span>
+        </div>
+        <h1 class="text-2xl font-bold text-gray-900">
+          {{ cluster.label or ('Cluster ' ~ cluster.cluster_id) }}
+        </h1>
+        <div class="mt-2 flex flex-wrap items-center gap-2 text-sm">
+          <span class="px-2 py-0.5 rounded bg-gray-100 text-gray-700">
+            {{ "{:,}".format(cluster.size) }} ideas
+          </span>
+          {% set era_cls = {
+            'hot': 'bg-red-100 text-red-700',
+            'steady': 'bg-blue-100 text-blue-700',
+            'rebuild_candidate': 'bg-amber-100 text-amber-700',
+            'legacy': 'bg-gray-200 text-gray-700',
+          } %}
+          <span class="px-2 py-0.5 rounded text-xs {{ era_cls.get(cluster.era_class, 'bg-gray-100 text-gray-700') }}">
+            {{ cluster.era_class or 'unknown era' }}
+          </span>
+          <span class="text-xs text-gray-500">
+            years {{ cluster.min_year or '?' }}–{{ cluster.max_year or '?' }} (median {{ cluster.median_year or '—' }})
+          </span>
+          <span class="text-xs text-gray-500">
+            · <span class="text-amber-700">{{ cluster.count_pre_2015 or 0 }}</span> pre-2015
+            · {{ cluster.count_2015_2022 or 0 }} 2015-22
+            · <span class="text-green-700">{{ cluster.count_2023_plus or 0 }}</span> 2023+
+          </span>
+          {% if cluster.parent_cluster_id is none and subclusters %}
+          <span class="text-xs text-gray-500">· {{ subclusters|length }} sub-clusters</span>
+          {% endif %}
+        </div>
+      </div>
+      <a href="/ideas" class="text-sm text-indigo-600 hover:text-indigo-800 flex-shrink-0">← overview</a>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="grid grid-cols-1 lg:grid-cols-[300px_1fr] gap-4">
+  {# -------- Left sidebar: terms, tags, programs, reps, sub-clusters -------- #}
+  <aside class="space-y-4">
+    {% if cluster.top_terms %}
+    <div class="bg-white p-4 rounded-lg shadow-sm border">
+      <div class="text-xs uppercase tracking-wide text-gray-500 mb-2">Top terms</div>
+      <div class="flex flex-wrap gap-1">
+        {% for term in cluster.top_terms[:12] %}
+        <span class="text-xs px-2 py-0.5 rounded bg-slate-100 text-slate-700">
+          {{ term[0] if term is iterable and term is not string else term }}
+        </span>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+
+    {% if cluster.top_tags %}
+    <div class="bg-white p-4 rounded-lg shadow-sm border">
+      <div class="text-xs uppercase tracking-wide text-gray-500 mb-2">Top tags</div>
+      <div class="flex flex-wrap gap-1">
+        {% for tag in cluster.top_tags[:14] %}
+        <span class="text-[11px] px-2 py-0.5 rounded bg-indigo-50 text-indigo-700 font-mono">
+          {{ tag[0] if tag is iterable and tag is not string else tag }}
+          {% if tag is iterable and tag is not string and tag|length > 1 %}
+          <span class="text-indigo-400">{{ tag[1] }}</span>
+          {% endif %}
+        </span>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+
+    {% if cluster.top_programs %}
+    <div class="bg-white p-4 rounded-lg shadow-sm border">
+      <div class="text-xs uppercase tracking-wide text-gray-500 mb-2">By source</div>
+      <div class="space-y-1">
+        {% for prog, n in cluster.top_programs.items() %}
+        {% if loop.index0 < 10 %}
+        <div class="flex items-center gap-2 text-xs">
+          <div class="flex-1 truncate">{{ prog }}</div>
+          <div class="w-20 bg-gray-100 h-2 rounded overflow-hidden">
+            <div class="bg-indigo-400 h-full"
+                 style="width: {{ (n / cluster.size * 100)|round(0, 'floor')|int }}%"></div>
+          </div>
+          <div class="w-10 text-right text-gray-500">{{ n }}</div>
+        </div>
+        {% endif %}
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+
+    {% if representatives %}
+    <div class="bg-white p-4 rounded-lg shadow-sm border">
+      <div class="text-xs uppercase tracking-wide text-gray-500 mb-2">Representative ideas</div>
+      <ul class="space-y-2 text-xs">
+        {% for r in representatives %}
+        <li>
+          <a href="/ideas/{{ r.id }}"
+             class="font-medium text-gray-900 hover:text-indigo-700">
+            {{ r.company or '(untitled)' }}
+          </a>
+          <span class="text-gray-400">· {{ r.program }}</span>
+          {% if r.one_liner %}<div class="text-gray-500 mt-0.5 line-clamp-2">{{ r.one_liner }}</div>{% endif %}
+        </li>
+        {% endfor %}
+      </ul>
+    </div>
+    {% endif %}
+
+    {% if subclusters %}
+    <div class="bg-white p-4 rounded-lg shadow-sm border">
+      <div class="text-xs uppercase tracking-wide text-gray-500 mb-2">Sub-clusters ({{ subclusters|length }})</div>
+      <ul class="space-y-1 text-xs">
+        {% for s in subclusters[:12] %}
+        <li class="flex items-center justify-between gap-2">
+          <a href="/ideas/clusters/{{ s.cluster_id }}"
+             class="truncate text-gray-700 hover:text-indigo-700 flex-1">
+            {{ s.label or ('Cluster ' ~ s.cluster_id) }}
+          </a>
+          <span class="text-gray-400">{{ s.size }}</span>
+        </li>
+        {% endfor %}
+        {% if subclusters|length > 12 %}
+        <li class="text-gray-400">+ {{ subclusters|length - 12 }} more</li>
+        {% endif %}
+      </ul>
+    </div>
+    {% endif %}
+  </aside>
+
+  {# -------- Right: member list -------- #}
+  <div>
+    <div class="mb-3">
+      <form method="GET" action="/ideas/clusters/{{ cluster.cluster_id }}"
+            class="flex items-center gap-2 bg-white p-3 rounded-lg shadow-sm border">
+        <input type="text" name="q" value="{{ q }}"
+               placeholder="Search within cluster…"
+               class="flex-1 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm">
+        <button type="submit"
+                class="rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white hover:bg-indigo-500">
+          Search
+        </button>
+        {% if q %}
+        <a href="/ideas/clusters/{{ cluster.cluster_id }}"
+           class="text-xs text-gray-500 hover:text-gray-800">clear</a>
+        {% endif %}
+      </form>
+    </div>
+
+    <div class="bg-white rounded-lg shadow-sm border">
+      <div class="px-5 py-3 border-b flex items-center justify-between">
+        <h2 class="text-sm font-semibold text-gray-900">
+          {{ "{:,}".format(total) }} members{% if q %} matching "{{ q }}"{% endif %}
+        </h2>
+      </div>
+      {% if members %}
+      <div class="divide-y">
+        {% for r in members %}
+        <div class="px-5 py-3 hover:bg-gray-50">
+          <div class="flex items-start justify-between gap-3">
+            <div class="flex-1 min-w-0">
+              <div class="flex items-center gap-2 flex-wrap">
+                <a href="/ideas/{{ r.id }}"
+                   class="font-medium text-gray-900 hover:text-indigo-700">
+                  {{ r.company or (r.one_liner[:60] ~ '…' if r.one_liner and r.one_liner|length > 60 else r.one_liner) or '(untitled)' }}
+                </a>
+                <span class="text-xs text-gray-400">{{ r.year_founded or '' }}</span>
+                <span class="text-xs px-1.5 py-0.5 rounded bg-gray-100 text-gray-600">
+                  {{ r.program }}
+                </span>
+                {% if r.solo_buildable == 1 %}
+                <span class="text-[10px] px-1.5 py-0.5 rounded bg-green-100 text-green-700">solo</span>
+                {% endif %}
+                {% if r.ai_first_advantage == 1 %}
+                <span class="text-[10px] px-1.5 py-0.5 rounded bg-blue-100 text-blue-700">ai-first</span>
+                {% endif %}
+                {% if r.business_model %}
+                <span class="text-[10px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-700">{{ r.business_model }}</span>
+                {% endif %}
+              </div>
+              {% if r.problem_statement or r.one_liner %}
+              <p class="text-xs text-gray-600 mt-1 line-clamp-2">
+                {{ r.problem_statement or r.one_liner }}
+              </p>
+              {% endif %}
+              <div class="flex flex-wrap gap-1 mt-2">
+                {% for tag in (r.mechanism_tags | from_json)[:4] %}
+                <span class="text-[10px] px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-700 font-mono">{{ tag }}</span>
+                {% endfor %}
+                {% for tag in (r.sector_tags | from_json)[:3] %}
+                <span class="text-[10px] px-1.5 py-0.5 rounded bg-amber-50 text-amber-800 font-mono">{{ tag }}</span>
+                {% endfor %}
+              </div>
+            </div>
+            {% if r.company_website %}
+            <a href="{{ r.company_website }}" target="_blank"
+               class="text-xs text-indigo-600 hover:text-indigo-800 flex-shrink-0">↗</a>
+            {% endif %}
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+      {% include 'partials/pagination.html' %}
+      {% else %}
+      <div class="px-5 py-6 text-sm text-gray-500">No members match.</div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}

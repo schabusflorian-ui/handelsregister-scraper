@@ -448,6 +448,137 @@ def run_remote_checks(report: Report, base_url: str) -> None:
         return f"seed endpoint lists {len(data['tables'])} tables"
     report.run("10 http", f"{base_url} /admin/ideas/seed GET", _seed_info)
 
+    # ------------------------------------------------------------------
+    # 11 exploration UI + agent JSON API (routes added post-seed)
+    # ------------------------------------------------------------------
+    # These only exist if the ideas-exploration surfaces are deployed.
+    # A 404 on any of them is a genuine regression, not a missing feature.
+
+    def _launch_candidates_page():
+        code, body = _fetch("/ideas/launch-candidates?per_page=5")
+        assert code == 200, f"returned {code}"
+        body_s = body.decode("utf-8", errors="replace")
+        assert "Launch candidates" in body_s, "missing h1"
+        assert "match your filters" in body_s, "missing count line"
+        return f"{len(body)/1024:.0f} KB HTML, renders filters + results"
+    report.run("11 exploration", f"{base_url} /ideas/launch-candidates",
+               _launch_candidates_page)
+
+    def _global_search_page():
+        code, body = _fetch("/ideas/search?q=voice")
+        assert code == 200, f"returned {code}"
+        body_s = body.decode("utf-8", errors="replace")
+        assert "Search ideas" in body_s
+        return "renders search page"
+    report.run("11 exploration", f"{base_url} /ideas/search", _global_search_page)
+
+    def _map_page():
+        code, body = _fetch("/ideas/map")
+        assert code == 200, f"returned {code}"
+        body_s = body.decode("utf-8", errors="replace")
+        assert "Idea map" in body_s, "missing h1"
+        return "renders (coordinates banner handled inline)"
+    report.run("11 exploration", f"{base_url} /ideas/map", _map_page)
+
+    def _cluster_drill():
+        # Find a real cluster id from /ideas/api/cluster pattern — 30 is a
+        # stable anchor that exists in the seeded DB (healthcare cluster).
+        code, body = _fetch("/ideas/clusters/30")
+        assert code == 200, f"returned {code}"
+        body_s = body.decode("utf-8", errors="replace")
+        assert "members" in body_s or "Cluster" in body_s
+        return "cluster 30 drill renders"
+    report.run("11 exploration", f"{base_url} /ideas/clusters/{{id}}",
+               _cluster_drill)
+
+    def _idea_detail():
+        # Pick any real id via the JSON API to avoid hard-coding one.
+        _, jbody = _fetch("/ideas/api/search.json?q=agent&limit=1")
+        j = json.loads(jbody)
+        assert j["results"], "search returned no rows to sample"
+        idea_id = j["results"][0]["id"]
+        code, body = _fetch(f"/ideas/{idea_id}")
+        assert code == 200, f"returned {code}"
+        return f"detail page for id={idea_id} renders"
+    report.run("11 exploration", f"{base_url} /ideas/{{id}}", _idea_detail)
+
+    # --- agent JSON API ---
+
+    def _api_search():
+        _, body = _fetch("/ideas/api/search.json?q=voice&limit=5")
+        data = json.loads(body)
+        for k in ("query", "total", "offset", "results"):
+            assert k in data, f"missing key {k}"
+        assert data["total"] > 0, "no search hits"
+        return f"'voice' → {data['total']:,} hits"
+    report.run("11 agent-api", f"{base_url} /ideas/api/search.json", _api_search)
+
+    def _api_gaps():
+        _, body = _fetch("/ideas/api/gaps.json?limit=3")
+        data = json.loads(body)
+        assert data["count"] >= 1, "no gap rows"
+        r0 = data["results"][0]
+        for k in ("rank", "mechanism", "sector", "score"):
+            assert k in r0, f"missing field {k}"
+        return f"top={r0['mechanism']} × {r0['sector']} (score={r0['score']:.0f})"
+    report.run("11 agent-api", f"{base_url} /ideas/api/gaps.json", _api_gaps)
+
+    def _api_gap_detail():
+        # Pick the top-ranked gap dynamically so this doesn't break if the
+        # ranking shifts.
+        _, body = _fetch("/ideas/api/gaps.json?limit=1")
+        top = json.loads(body)["results"][0]
+        _, body = _fetch(
+            f"/ideas/api/gap/{top['mechanism']}/{top['sector']}.json?limit=5"
+        )
+        data = json.loads(body)
+        for k in ("mechanism", "sector", "ranking",
+                  "mechanism_proven_elsewhere", "sector_active_with_other_mechanisms"):
+            assert k in data, f"missing key {k}"
+        assert data["mechanism_proven_elsewhere"], "no mechanism-proof rows"
+        return (f"{top['mechanism']} × {top['sector']}: "
+                f"{len(data['mechanism_proven_elsewhere'])} proof rows")
+    report.run("11 agent-api", f"{base_url} /ideas/api/gap/{{m}}/{{s}}.json",
+               _api_gap_detail)
+
+    def _api_cluster():
+        _, body = _fetch("/ideas/api/cluster/30.json?limit=3")
+        data = json.loads(body)
+        assert "cluster" in data and "members" in data
+        assert data["cluster"]["cluster_id"] == 30
+        return f"cluster 30: {len(data['members'])} members returned"
+    report.run("11 agent-api", f"{base_url} /ideas/api/cluster/{{id}}.json",
+               _api_cluster)
+
+    def _api_idea():
+        _, body = _fetch("/ideas/api/search.json?q=agent&limit=1")
+        idea_id = json.loads(body)["results"][0]["id"]
+        code, body = _fetch(f"/ideas/api/idea/{idea_id}.json")
+        assert code == 200
+        data = json.loads(body)
+        assert data["id"] == idea_id
+        return f"idea/{idea_id}.json returns full row"
+    report.run("11 agent-api", f"{base_url} /ideas/api/idea/{{id}}.json",
+               _api_idea)
+
+    def _api_map():
+        _, body = _fetch("/ideas/api/map.json?limit=100")
+        data = json.loads(body)
+        for k in ("count", "programs", "points"):
+            assert k in data, f"missing {k}"
+        return f"map {data['count']:,} points ({len(data['programs'])} programs)"
+    report.run("11 agent-api", f"{base_url} /ideas/api/map.json", _api_map)
+
+    def _api_idea_card():
+        _, body = _fetch("/ideas/api/search.json?q=agent&limit=1")
+        idea_id = json.loads(body)["results"][0]["id"]
+        _, body = _fetch(f"/ideas/api/idea-card/{idea_id}")
+        data = json.loads(body)
+        assert data["id"] == idea_id
+        return f"idea-card/{idea_id} returns card payload"
+    report.run("11 agent-api", f"{base_url} /ideas/api/idea-card/{{id}}",
+               _api_idea_card)
+
 
 # ---------------------------------------------------------------------------
 # main
