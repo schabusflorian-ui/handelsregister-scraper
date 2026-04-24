@@ -349,6 +349,21 @@ def _extract_one(client, row: dict, max_retries: int = 4) -> Dict[str, object]:
 _LOCK = threading.Lock()
 
 
+def _as_list(v) -> list:
+    """Coerce LLM tool-call output into a list-of-strings.
+
+    Haiku sometimes returns a bare string instead of ["string"] when it
+    can't classify (we've seen "<UNKNOWN>" slip through the JSON schema).
+    This normalizer ensures the DB always stores a JSON array."""
+    if v is None:
+        return []
+    if isinstance(v, list):
+        return [str(x) for x in v if x is not None and str(x) != ""]
+    if isinstance(v, str):
+        return [v] if v else []
+    return [str(v)]
+
+
 def _ensure_schema(db: Database) -> None:
     cur = db.conn.cursor()
     for stmt in DDL.strip().split(";"):
@@ -429,9 +444,9 @@ def _save(db: Database, row_id: int, data: Dict[str, object]) -> None:
             """,
             (row_id,
              data.get("problem_statement"),
-             json.dumps(data.get("customer_verticals") or []),
-             json.dumps(data.get("mechanism_tags") or []),
-             json.dumps(data.get("sector_tags") or []),
+             json.dumps(_as_list(data.get("customer_verticals"))),
+             json.dumps(_as_list(data.get("mechanism_tags"))),
+             json.dumps(_as_list(data.get("sector_tags"))),
              data.get("customer_size"),
              data.get("business_model"),
              1 if data.get("solo_buildable") else (
