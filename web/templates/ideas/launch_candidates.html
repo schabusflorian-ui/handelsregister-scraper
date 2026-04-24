@@ -126,7 +126,14 @@
             <div class="flex items-center gap-2 flex-wrap">
               <a href="/ideas/{{ r.id }}"
                  class="font-semibold text-gray-900 hover:text-indigo-700">
-                {{ r.company or '(untitled)' }}
+                {# Many Reddit rows have company="" because the scraper
+                   couldn't parse a brand from the title. Fall back to
+                   one_liner / problem_statement so cards don't all read
+                   "(untitled)" on the default sort. #}
+                {% if r.company %}{{ r.company }}
+                {%- elif r.one_liner %}{{ r.one_liner[:70] }}{% if r.one_liner|length > 70 %}…{% endif %}
+                {%- elif r.problem_statement %}{{ r.problem_statement[:70] }}{% if r.problem_statement|length > 70 %}…{% endif %}
+                {%- else %}(untitled){% endif %}
               </a>
               {% if r.opportunity_score is not none %}
               {% set s = r.opportunity_score %}

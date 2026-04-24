@@ -646,7 +646,10 @@
       ? chart.getOption().yAxis[0].data[params.data[1]] : null;
     if (mech && sector) {
       // Drill via Datasette if available on :8001, else noop
-      const url = `http://127.0.0.1:8001/handelsregister/mechanism_sector_drill?mechanism=${encodeURIComponent(mech)}&sector=${encodeURIComponent(sector)}`;
+      // In-app drill: search for ideas that match BOTH axes. FTS5 AND's
+      // space-separated terms by default, so this narrows to the cell's
+      // actual members rather than opening the old external Datasette.
+      const url = `/ideas/search?q=${encodeURIComponent(mech + ' ' + sector)}`;
       window.open(url, '_blank');
     }
   });

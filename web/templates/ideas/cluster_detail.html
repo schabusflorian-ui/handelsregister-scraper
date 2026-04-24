@@ -2,6 +2,10 @@
 
 {% block title %}{{ cluster.label or 'Cluster '+cluster.cluster_id|string }} — Cluster{% endblock %}
 
+{% block head %}
+<script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
+{% endblock %}
+
 {% block header %}
 <div class="bg-white shadow-sm border-b">
   <div class="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
@@ -54,6 +58,97 @@
 {% endblock %}
 
 {% block content %}
+
+{# -------- 3-panel top row: year distribution + top mechanisms + top sectors -------- #}
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
+  <div class="bg-white p-5 rounded-lg shadow-sm border">
+    <h2 class="text-sm font-semibold text-gray-700 mb-3">Founding year distribution</h2>
+    {% set pre_15 = cluster.count_pre_2015 or 0 %}
+    {% set mid = cluster.count_2015_2022 or 0 %}
+    {% set recent = cluster.count_2023_plus or 0 %}
+    {% set covered = pre_15 + mid + recent %}
+    <div class="space-y-2 text-xs">
+      <div class="flex items-center gap-2">
+        <span class="w-20 text-right text-gray-500">pre-2015</span>
+        <div class="flex-1 bg-gray-100 rounded h-3 overflow-hidden">
+          <div class="bg-gray-400 h-full" style="width:{{ (pre_15/covered*100) if covered else 0 }}%"></div>
+        </div>
+        <span class="w-10 text-right">{{ pre_15 }}</span>
+      </div>
+      <div class="flex items-center gap-2">
+        <span class="w-20 text-right text-gray-500">2015-22</span>
+        <div class="flex-1 bg-gray-100 rounded h-3 overflow-hidden">
+          <div class="bg-blue-400 h-full" style="width:{{ (mid/covered*100) if covered else 0 }}%"></div>
+        </div>
+        <span class="w-10 text-right">{{ mid }}</span>
+      </div>
+      <div class="flex items-center gap-2">
+        <span class="w-20 text-right text-gray-500">2023+</span>
+        <div class="flex-1 bg-gray-100 rounded h-3 overflow-hidden">
+          <div class="bg-red-400 h-full" style="width:{{ (recent/covered*100) if covered else 0 }}%"></div>
+        </div>
+        <span class="w-10 text-right">{{ recent }}</span>
+      </div>
+    </div>
+    <div class="mt-3 text-[11px] text-gray-400">
+      range {{ cluster.min_year or '—' }} – {{ cluster.max_year or '—' }}
+      {% if cluster.year_coverage_pct is not none %}
+      · {{ ((cluster.year_coverage_pct or 0) * 100) | round(0) | int }}% of rows have a year
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="bg-white p-5 rounded-lg shadow-sm border">
+    <h2 class="text-sm font-semibold text-gray-700 mb-3">Top mechanisms in this cluster</h2>
+    <div class="space-y-1.5">
+      {% for m in (breakdown.mechanisms or []) %}
+      {% set pct = (m.n / breakdown.mechanisms[0].n * 100) if breakdown.mechanisms and breakdown.mechanisms[0].n else 0 %}
+      <div class="text-xs">
+        <div class="flex items-baseline justify-between">
+          <span class="font-mono text-indigo-700 truncate">{{ m.tag }}</span>
+          <span class="text-gray-400 ml-1">{{ m.n }}</span>
+        </div>
+        <div class="bg-gray-100 h-1 rounded mt-0.5">
+          <div class="bg-indigo-400 h-full rounded" style="width:{{ pct }}%"></div>
+        </div>
+      </div>
+      {% else %}
+      <p class="text-xs text-gray-400">No mechanism tags extracted for this cluster.</p>
+      {% endfor %}
+    </div>
+  </div>
+
+  <div class="bg-white p-5 rounded-lg shadow-sm border">
+    <h2 class="text-sm font-semibold text-gray-700 mb-3">Top sectors in this cluster</h2>
+    <div class="space-y-1.5">
+      {% for s in (breakdown.sectors or []) %}
+      {% set pct = (s.n / breakdown.sectors[0].n * 100) if breakdown.sectors and breakdown.sectors[0].n else 0 %}
+      <div class="text-xs">
+        <div class="flex items-baseline justify-between">
+          <span class="font-mono text-amber-700 truncate">{{ s.tag }}</span>
+          <span class="text-gray-400 ml-1">{{ s.n }}</span>
+        </div>
+        <div class="bg-gray-100 h-1 rounded mt-0.5">
+          <div class="bg-amber-400 h-full rounded" style="width:{{ pct }}%"></div>
+        </div>
+      </div>
+      {% else %}
+      <p class="text-xs text-gray-400">No sector tags extracted for this cluster.</p>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+
+{# -------- Sunburst: cluster hierarchy -------- #}
+<div class="bg-white p-5 rounded-lg shadow-sm border mb-4">
+  <h2 class="text-lg font-semibold text-gray-900">Cluster hierarchy</h2>
+  <p class="text-xs text-gray-500 mb-3">
+    The root cluster and its sub-niches. The current cluster is highlighted.
+    Click a slice to drill in.
+  </p>
+  <div id="sunburst" style="width: 100%; height: 420px;"></div>
+</div>
+
 <div class="grid grid-cols-1 lg:grid-cols-[300px_1fr] gap-4">
   {# -------- Left sidebar: terms, tags, programs, reps, sub-clusters -------- #}
   <aside class="space-y-4">
@@ -143,6 +238,25 @@
       </ul>
     </div>
     {% endif %}
+
+    {# Siblings appear only when the current cluster is a sub-cluster (i.e.
+       has a parent). Shared-parent suggestions for lateral navigation. #}
+    {% if siblings %}
+    <div class="bg-white p-4 rounded-lg shadow-sm border">
+      <div class="text-xs uppercase tracking-wide text-gray-500 mb-2">Siblings</div>
+      <ul class="space-y-1 text-xs">
+        {% for s in siblings[:10] %}
+        <li class="flex items-center justify-between gap-2">
+          <a href="/ideas/clusters/{{ s.cluster_id }}"
+             class="truncate text-gray-700 hover:text-indigo-700 flex-1">
+            {{ s.label or ('Cluster ' ~ s.cluster_id) }}
+          </a>
+          <span class="text-gray-400">{{ s.size }}</span>
+        </li>
+        {% endfor %}
+      </ul>
+    </div>
+    {% endif %}
   </aside>
 
   {# -------- Right: member list -------- #}
@@ -224,4 +338,79 @@
     </div>
   </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+  // Sunburst: root-level cluster at centre, current cluster highlighted.
+  // Data from /ideas/api/cluster/{id}/sunburst.json (ECharts-shaped nested
+  // {name, value, children?} with era/cluster_id on each node).
+  const el = document.getElementById('sunburst');
+  if (!el) return;
+  const chart = echarts.init(el);
+  const currentId = {{ cluster.cluster_id }};
+
+  const ERA_COLORS = {
+    'hot':               '#ef4444',
+    'steady':            '#3b82f6',
+    'rebuild_candidate': '#f59e0b',
+    'legacy':            '#6b7280',
+    'unknown':           '#d1d5db',
+  };
+
+  function colorFor(node) {
+    return ERA_COLORS[node.era] || '#a5b4fc';
+  }
+
+  function walkData(nodes) {
+    return nodes.map(n => ({
+      name: n.name,
+      value: n.value,
+      cluster_id: n.cluster_id,
+      itemStyle: {
+        color: colorFor(n),
+        borderColor: n.current ? '#111' : '#fff',
+        borderWidth: n.current ? 2.5 : 1,
+        opacity: n.current ? 1 : 0.85,
+      },
+      label: { fontWeight: n.current ? 'bold' : 'normal' },
+      children: n.children ? walkData(n.children) : undefined,
+    }));
+  }
+
+  async function load() {
+    const res = await fetch(`/ideas/api/cluster/${currentId}/sunburst.json`);
+    const { data } = await res.json();
+    chart.setOption({
+      tooltip: {
+        trigger: 'item',
+        formatter: (p) => `<b>${p.name}</b><br/>${p.value} companies`,
+      },
+      series: [{
+        type: 'sunburst',
+        data: walkData(data),
+        radius: ['15%', '95%'],
+        label: { rotate: 'radial', fontSize: 11 },
+        emphasis: { focus: 'ancestor' },
+        levels: [
+          {},
+          { r0: '15%', r: '45%', label: { align: 'right' } },
+          { r0: '45%', r: '95%', label: { align: 'right' } },
+        ],
+      }],
+    });
+  }
+
+  chart.on('click', function (p) {
+    const cid = p.data && p.data.cluster_id;
+    if (cid !== undefined && cid !== currentId) {
+      window.location.href = `/ideas/clusters/${cid}`;
+    }
+  });
+
+  window.addEventListener('resize', () => chart.resize());
+  load();
+})();
+</script>
 {% endblock %}
