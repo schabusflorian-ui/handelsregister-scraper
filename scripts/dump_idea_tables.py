@@ -23,10 +23,27 @@ Usage:
 import argparse
 import gzip
 import logging
+import re
 import shutil
 import subprocess
 import sys
 from pathlib import Path
+
+# SQLite 3.47+ CLI `.dump` wraps any string containing control characters
+# in `unistr('...\\uXXXX...')`. Older SQLite (incl. the version Railway
+# runs) doesn't know `unistr`. We rewrite every unistr(...) back into a
+# plain SQL string literal with the escapes decoded into actual chars
+# (newlines, CR, ETX etc. are valid inside SQL string literals).
+_UNISTR_RE = re.compile(r"unistr\('((?:''|[^'])*)'\)")
+_UHEX_RE = re.compile(r"\\u([0-9a-fA-F]{4})")
+
+
+def _decode_unistr(sql: bytes) -> bytes:
+    def _repl(m: re.Match) -> str:
+        body = m.group(1)
+        decoded = _UHEX_RE.sub(lambda x: chr(int(x.group(1), 16)), body)
+        return "'" + decoded + "'"
+    return _UNISTR_RE.sub(_repl, sql.decode("utf-8")).encode("utf-8")
 
 logger = logging.getLogger(__name__)
 
@@ -40,6 +57,17 @@ IDEA_TABLES = [
     # is intentionally NOT dumped — Railway owns user thumbs-up/down state.
     "tag_alias",
     "idea_gap_ranking",
+]
+
+# FTS virtual tables travel with their base tables via sqlite3 .dump (the
+# `.dump` command follows shadow-table dependencies). We DROP these up
+# front on the target so the dump's CREATE VIRTUAL TABLE statements
+# don't collide. Triggers attached to base tables are dropped
+# automatically when the base table is dropped.
+FTS_TABLES = [
+    "company_ideas_fts",
+    "idea_extraction_fts",
+    "website_enrichment_fts",
 ]
 
 
@@ -58,8 +86,18 @@ def dump(db_path: Path, out_path: Path) -> int:
     logger.info("dumping tables from %s: %s", db_path, ", ".join(IDEA_TABLES))
     sql = _sqlite_dump(db_path, IDEA_TABLES)
 
+    n_unistr = sql.count(b"unistr(")
+    if n_unistr:
+        sql = _decode_unistr(sql)
+        logger.info("unwrapped %d unistr() calls for SQLite-3.46 compatibility",
+                    n_unistr)
+
     preamble = (
         "PRAGMA foreign_keys=OFF;\n"
+        # Drop FTS virtual tables first — they have shadow tables that
+        # auto-clean up, and dropping them avoids CREATE VIRTUAL TABLE
+        # collisions in the dump.
+        + "".join(f"DROP TABLE IF EXISTS {t};\n" for t in FTS_TABLES)
         + "".join(f"DROP TABLE IF EXISTS {t};\n" for t in IDEA_TABLES)
         + "\n"
     ).encode()
