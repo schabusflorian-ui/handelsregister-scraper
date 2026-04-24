@@ -69,13 +69,51 @@ COURT_MAP = {
 
 
 def _load_state(path: str) -> dict:
+    """
+    Load backfill checkpoint.
+
+    `next_id_ceiling` is the exclusive upper bound for the next candidate
+    query — we fetch rows with `id < next_id_ceiling ORDER BY id DESC`, then
+    after processing each row set `next_id_ceiling = row.id`. That way the
+    cursor is strictly monotonically decreasing and we never re-select a
+    row we've already handled in THIS run. Rows whose capital still isn't
+    filled after this run will be picked up on the next run (they remain in
+    the `capital_amount IS NULL` candidate set, but below the new ceiling).
+
+    Note: this is a breaking change from the older `last_company_id` state
+    files — see `_migrate_state` below for the transition logic.
+    """
     if os.path.exists(path):
         try:
             with open(path) as f:
-                return json.load(f)
+                data = json.load(f)
+            return _migrate_state(data)
         except Exception:
             pass
-    return {"last_company_id": 0, "processed": 0, "succeeded": 0, "failed": 0}
+    return {
+        "next_id_ceiling": None,  # None = start from MAX(id)+1 (newest-first)
+        "processed": 0,
+        "succeeded": 0,
+        "failed": 0,
+    }
+
+
+def _migrate_state(state: dict) -> dict:
+    """Migrate older `last_company_id`-based state files to `next_id_ceiling`.
+
+    The old script used `WHERE id > last_company_id ORDER BY id DESC` which
+    re-selected the same batch every pass. Resetting `next_id_ceiling = None`
+    restarts the backfill from the top on next run; counters are preserved.
+    """
+    if "next_id_ceiling" in state:
+        return state
+    logger.warning("Migrating old state file — resetting ceiling to MAX(id)+1")
+    return {
+        "next_id_ceiling": None,
+        "processed": state.get("processed", 0),
+        "succeeded": state.get("succeeded", 0),
+        "failed": state.get("failed", 0),
+    }
 
 
 def _save_state(path: str, state: dict) -> None:
@@ -85,12 +123,18 @@ def _save_state(path: str, state: dict) -> None:
 
 
 def _select_candidates(
-    db: Database, source_filter: str | None, limit: int, last_id: int
+    db: Database, source_filter: str | None, limit: int, id_ceiling: int
 ) -> list[dict]:
     """
-    Select companies missing capital_amount, ordered by newest-first (most
-    recently discovered rows are the most valuable — they're likely still
-    active and their AD data hasn't been otherwise backfilled).
+    Select companies missing capital_amount, newest-first.
+
+    Uses `id < id_ceiling` (exclusive). Callers update id_ceiling to the
+    LOWEST id they processed so far, which ensures monotonic descent through
+    the keyspace — we never re-select a row we've already handled.
+
+    Previous version used `id > last_id ORDER BY id DESC`, which re-selected
+    the entire batch after processing because `last_id` got set to the min of
+    a DESC-ordered batch.
     """
     q = """
         SELECT id, name, native_company_number, registry_court, city, source
@@ -98,9 +142,9 @@ def _select_candidates(
         WHERE capital_amount IS NULL
           AND native_company_number IS NOT NULL
           AND native_company_number != ''
-          AND id > ?
+          AND id < ?
     """
-    args: list = [last_id]
+    args: list = [id_ceiling]
     if source_filter:
         q += " AND source = ?"
         args.append(source_filter)
@@ -208,8 +252,15 @@ def main() -> None:
     source = BundesAPISource()
     state = _load_state(args.state_file)
 
-    logger.info("AD backfill starting. Source filter: %s | resumed last_id: %d",
-                args.source or "any", state["last_company_id"])
+    # First run (or after migration): start from top of the id space
+    if state["next_id_ceiling"] is None:
+        cursor = db.conn.cursor()
+        cursor.execute("SELECT MAX(id) FROM companies")
+        max_id = cursor.fetchone()[0] or 0
+        state["next_id_ceiling"] = max_id + 1
+
+    logger.info("AD backfill starting. Source filter: %s | ceiling: %d",
+                args.source or "any", state["next_id_ceiling"])
 
     deadline = time.time() + args.max_hours * 3600 if args.max_hours else None
 
@@ -223,10 +274,10 @@ def main() -> None:
                 break
 
             candidates = _select_candidates(
-                db, args.source, args.batch_size, state["last_company_id"]
+                db, args.source, args.batch_size, state["next_id_ceiling"]
             )
             if not candidates:
-                logger.info("No more candidates")
+                logger.info("No more candidates below ceiling=%d", state["next_id_ceiling"])
                 break
 
             for co in candidates:
@@ -235,16 +286,22 @@ def main() -> None:
                 if deadline and time.time() > deadline:
                     break
 
-                logger.info("[%d] %s (%s, %s)",
+                logger.info("[%d] %s (%s, %s) id=%d",
                             state["processed"] + 1,
                             co["name"][:50],
                             co["native_company_number"],
-                            co.get("source"))
+                            co.get("source"),
+                            co["id"])
 
                 ok = backfill_one(db, source, rate_limiter, co)
                 state["processed"] += 1
                 state["succeeded" if ok else "failed"] += 1
-                state["last_company_id"] = co["id"]
+                # Drop ceiling to this row's id — next query will only
+                # return rows STRICTLY below this, guaranteeing progress
+                # even if this row's capital wasn't updated (e.g., the PDF
+                # didn't parse cleanly). The row stays in the DB candidate
+                # set (capital still NULL) but the cursor has moved past.
+                state["next_id_ceiling"] = co["id"]
 
                 # Persist checkpoint every 10
                 if state["processed"] % 10 == 0:
@@ -264,8 +321,8 @@ def main() -> None:
         logger.info("  Processed: %d", state["processed"])
         logger.info("  Succeeded: %d (capital/purpose captured)", state["succeeded"])
         logger.info("  Failed:    %d", state["failed"])
-        logger.info("  Checkpoint: %s (last_company_id=%d)",
-                    args.state_file, state["last_company_id"])
+        logger.info("  Checkpoint: %s (next_id_ceiling=%d)",
+                    args.state_file, state["next_id_ceiling"])
 
 
 if __name__ == "__main__":
