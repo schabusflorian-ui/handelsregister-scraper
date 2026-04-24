@@ -24,6 +24,7 @@ from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.interval import IntervalTrigger
 
 from persistence.database import Database
+from scheduler.jobs.ad_backfill_job import ADBackfillJob
 from scheduler.jobs.announcement_job import AnnouncementMonitoringJob
 from scheduler.jobs.backfill_job import BackfillJob
 from scheduler.jobs.csv_export_job import CSVExportJob
@@ -445,6 +446,41 @@ class HandelsregisterScheduler:
         finally:
             db.close()
 
+    def _run_ad_backfill_job(self):
+        """Execute AD-PDF backfill job wrapper.
+
+        Small per-run batches (5 companies = up to 10 requests). Scheduled
+        frequently — runs roll unused rate-limit budget forward between
+        invocations, so this is a continuous drip-feed that eventually
+        empties the `capital_amount IS NULL` backlog without saturating
+        the shared rate limiter.
+        """
+        logger.info("Starting AD backfill job")
+
+        db = Database(self.db_path)
+        try:
+            job = ADBackfillJob(
+                db=db,
+                rate_limiter=self.rate_limiter,
+                max_companies=5,
+                source_filter="registration_scan",
+            )
+            stats = job.run()
+
+            logger.info(
+                "AD backfill completed: %d succeeded / %d processed (ceiling=%d)",
+                stats["ad_succeeded"],
+                stats["ad_processed"],
+                stats["ad_ceiling_end"],
+            )
+
+            self._log_job_completion("ad_backfill", stats, db)
+
+        except Exception as e:
+            logger.exception("AD backfill job failed: %s", e)
+        finally:
+            db.close()
+
     # Map each job type's stat keys → generic logging columns.
     # Each tuple: (key for companies_found, key for companies_new, key for requests_used)
     _STAT_KEY_MAP: Dict[str, tuple] = {
@@ -458,6 +494,7 @@ class HandelsregisterScheduler:
         "website_scrape": ("companies_checked", "companies_enriched", "requests_used"),
         "officer_linkedin": ("officers_processed", "officers_enriched", "requests_used"),
         "registration_scan": ("companies_found", "companies_new", "requests_used"),
+        "ad_backfill": ("ad_processed", "ad_succeeded", "ad_processed"),
     }
 
     def _log_job_completion(self, job_type: str, stats: Dict[str, Any], db: Database):
@@ -607,11 +644,26 @@ class HandelsregisterScheduler:
             replace_existing=True,
         )
 
+        # AD (Abdruck) PDF backfill job: every 20 minutes, processes 5
+        # companies per run. Backfills Stammkapital / Gegenstand /
+        # Geschäftsanschrift / first_registered_date for existing companies
+        # discovered before the AD-capture pipeline was wired in.
+        # At 5 rows × 3/hour = 15 rows/hour baseline, plus idle budget from
+        # other jobs → effective ~30-40 rows/hour. Will work through the
+        # 2,800-row backlog in ~3-7 days of continuous running.
+        self.scheduler.add_job(
+            self._run_ad_backfill_job,
+            trigger=IntervalTrigger(minutes=20),
+            id="ad_backfill_job",
+            name="AD Backfill Job",
+            replace_existing=True,
+        )
+
         logger.info(
             "Jobs configured: discovery every %d hours, backfill 3AM+3PM, enrichment 4AM, "
             "announcements 5AM, CSV export 6AM, investor detection 7AM, news monitoring 8AM, "
             "website finder 9AM, website scrape 10AM, officer LinkedIn 11AM, "
-            "founder emergence 12PM, registration scan every 4h",
+            "founder emergence 12PM, registration scan every 4h, AD backfill every 20min",
             self.discovery_interval_hours,
         )
 
