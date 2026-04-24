@@ -194,9 +194,12 @@ def backfill_one(
         logger.debug("%s: can't extract HRB / court", company["name"])
         return False
 
-    # Search by HRB (1 request)
-    if not rate_limiter.acquire(count=1, block=False):
-        logger.warning("rate limit empty — skipping %s", company["name"])
+    # Search by HRB (1 request). If the rate limiter is dry, wait for
+    # refill — skipping would advance the ceiling past this row without
+    # scraping it, wasting the slot. Block with a generous timeout so we
+    # survive a full token-depletion cycle (worst case ~1 hour).
+    if not rate_limiter.acquire(count=1, block=True, timeout=3700):
+        logger.warning("rate limit timeout after ~1h — skipping %s", company["name"])
         return False
 
     try:
