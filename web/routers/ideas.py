@@ -1538,3 +1538,319 @@ async def ideas_api_cluster_sunburst(cluster_id: int):
         return JSONResponse({"data": data, "current_cluster_id": cluster_id})
     finally:
         db.close()
+
+
+# ===========================================================================
+# Agent-facing discovery endpoints
+# ===========================================================================
+#
+# These two routes exist so another agent (or anyone landing cold) can
+# orient themselves without reading source. /ideas/api/index.json is the
+# API sitemap; /ideas/api/schema.json is the data dictionary.
+
+# Hand-maintained description of every /ideas/api/* route. Keeping this
+# inline rather than auto-deriving from FastAPI so each endpoint gets a
+# one-sentence task-oriented description, not a routing summary.
+_API_CATALOG = [
+    # ----- core JSON ---------------------------------------------------------
+    {"method": "GET",  "path": "/ideas/api/stats.json",
+     "desc": "Pipeline totals (ideas, extracted, clusters, launch_candidates).",
+     "example": "/ideas/api/stats.json",
+     "returns": "object with scalar counts"},
+    {"method": "GET",  "path": "/ideas/api/schema.json",
+     "desc": "Data dictionary: tables, enum domains, top tag vocabularies, "
+             "column descriptions. Hit this FIRST to orient.",
+     "example": "/ideas/api/schema.json",
+     "returns": "object with 'tables', 'enums', 'vocab', 'columns'"},
+    {"method": "GET",  "path": "/ideas/api/index.json",
+     "desc": "This endpoint. Lists every /ideas/api/* route with examples.",
+     "example": "/ideas/api/index.json",
+     "returns": "object with 'endpoints' array"},
+
+    # ----- full-text + drill --------------------------------------------------
+    {"method": "GET",  "path": "/ideas/api/search.json",
+     "desc": "Full-text search across company, problem_statement, tags. "
+             "Hit this to find ideas about a specific topic.",
+     "params": {"q": "required search string", "limit": "default 50"},
+     "example": "/ideas/api/search.json?q=invoice+reconciliation",
+     "returns": "array of hit objects (company, program, year, preview)"},
+    {"method": "GET",  "path": "/ideas/api/idea/{idea_id}.json",
+     "desc": "Full joined row for one company (company_ideas + extraction + "
+             "enrichment + cluster).",
+     "example": "/ideas/api/idea/1820.json",
+     "returns": "single object"},
+    {"method": "GET",  "path": "/ideas/api/idea-card/{idea_id}",
+     "desc": "Compact JSON card for UI preview (subset of idea/{id}).",
+     "example": "/ideas/api/idea-card/1820",
+     "returns": "single object"},
+
+    # ----- clustering --------------------------------------------------------
+    {"method": "GET",  "path": "/ideas/api/cluster/{cluster_id}.json",
+     "desc": "Cluster metadata + sample members.",
+     "example": "/ideas/api/cluster/30.json",
+     "returns": "object with cluster header + members array"},
+    {"method": "GET",  "path": "/ideas/api/cluster/{cluster_id}/sunburst.json",
+     "desc": "Hierarchical data for an ECharts sunburst (parent + children).",
+     "example": "/ideas/api/cluster/30/sunburst.json",
+     "returns": "object with 'data' (nested tree)"},
+
+    # ----- mechanism × sector matrix + gaps -----------------------------------
+    {"method": "GET",  "path": "/ideas/api/heatmap.json",
+     "desc": "Mechanism × sector heatmap cells for top N of each axis.",
+     "params": {"n_mechanisms": "default 25", "n_sectors": "default 20"},
+     "example": "/ideas/api/heatmap.json?n_mechanisms=30&n_sectors=25",
+     "returns": "object with 'mechanisms', 'sectors', 'cells' (x, y, n)"},
+    {"method": "GET",  "path": "/ideas/api/gaps.json",
+     "desc": "Top scored recombination gaps from idea_gap_ranking.",
+     "example": "/ideas/api/gaps.json",
+     "returns": "array of {mechanism, sector, score, ...}"},
+    {"method": "GET",  "path": "/ideas/api/gap/{mechanism}/{sector}.json",
+     "desc": "Proof rows for a specific (mechanism, sector) gap — companies "
+             "adjacent to the gap in related sectors.",
+     "example": "/ideas/api/gap/llm-copilot/legal.json",
+     "returns": "object with proof rows + neighbours"},
+
+    # ----- maps + scatter ----------------------------------------------------
+    {"method": "GET",  "path": "/ideas/api/scatter.json",
+     "desc": "Full UMAP 2D scatter — every row with (x, y, cluster_id, era_idx, "
+             "program_idx, id, company, desc). ~20K points, ~2MB.",
+     "example": "/ideas/api/scatter.json",
+     "returns": "object with 'rows', 'era_map', 'program_map', 'cluster_map'"},
+    {"method": "GET",  "path": "/ideas/api/map.json",
+     "desc": "Smaller sampled map (default 100 points, optional program filter).",
+     "example": "/ideas/api/map.json?program=Y+Combinator",
+     "returns": "array of points"},
+
+    # ----- feedback (writeable) ----------------------------------------------
+    {"method": "POST", "path": "/ideas/api/gap-feedback",
+     "desc": "Record an up/down vote on a (mechanism, sector) gap.",
+     "body": "{mechanism, sector, vote: 1 | -1, note?}",
+     "example": "POST /ideas/api/gap-feedback",
+     "returns": "object with current up/down counts"},
+
+    # ----- admin (auth-gated) ------------------------------------------------
+    {"method": "POST", "path": "/admin/ideas/seed",
+     "desc": "Restore the idea tables from a gzipped SQL dump. Requires "
+             "X-Seed-Token header.",
+     "example": "curl -H 'X-Seed-Token: ...' -F file=@dump.sql.gz ...",
+     "returns": "object with per-table row counts"},
+    {"method": "GET",  "path": "/admin/ideas/seed",
+     "desc": "Self-describing hint for the POST above. Shows whether the "
+             "token is required.",
+     "example": "/admin/ideas/seed",
+     "returns": "object with 'tables', 'token_required'"},
+]
+
+
+# Field-level docs. Kept terse — an agent glances at this rather than
+# parsing DDL. When a new column is added to idea_extraction /
+# company_ideas / idea_clusters, add a line here.
+_FIELD_DOCS = {
+    "company_ideas.id":                  "Integer primary key. Use in /ideas/{id} and /ideas/api/idea/{id}.json.",
+    "company_ideas.program":             "Source program (YC, GC, Lux, Playground Global, Speedrun, Sequoia Arc, Show HN, Reddit *).",
+    "company_ideas.company":             "Company name; may be empty for Reddit/HN rows where no brand was parsed.",
+    "company_ideas.one_liner":           "Short hand-written pitch from the source scrape.",
+    "company_ideas.long_description":    "Longer paragraph from the source scrape.",
+    "company_ideas.tags_json":           "JSON array of raw source tags.",
+    "company_ideas.company_website":     "As-scraped website URL (not normalized).",
+    "company_ideas.normalized_website":  "Host-only, lowercase, no www/trailing slash. Use for joins.",
+    "company_ideas.batch":               "Cohort label (W24, SR003, Arc Europe 2022, 2026-01 for HN monthly, ...).",
+    "company_ideas.year_founded":        "Integer year. Backfilled from batch label or raw_json where possible.",
+    "company_ideas.country":             "ISO-ish country name.",
+    "company_ideas.cluster_id":          "Leaf cluster id. Noise rows have -1.",
+    "company_ideas.umap_x":              "2D UMAP coordinate (float).",
+    "company_ideas.umap_y":              "2D UMAP coordinate (float).",
+    "company_ideas.opportunity_score":   "0-100 composite launch score. 90+ = top, 75-89 = strong, 60-74 = worth looking, <40 = skip. NULL means no extraction.",
+    "company_ideas.opportunity_breakdown": "JSON {niche, era, moat, shape, recency} — per-signal contributions to opportunity_score.",
+    "idea_extraction.problem_statement": "One-sentence concrete pain the startup solves.",
+    "idea_extraction.customer_verticals":"JSON array of 1-3 specific sub-segments.",
+    "idea_extraction.mechanism_tags":    "JSON array of 2-5 primitives (what it DOES; seed vocab + invented).",
+    "idea_extraction.sector_tags":       "JSON array of 1-3 sectors (WHO / WHERE it applies).",
+    "idea_extraction.customer_size":     "Enum, see schema.enums.customer_size.",
+    "idea_extraction.business_model":    "Enum, see schema.enums.business_model.",
+    "idea_extraction.solo_buildable":    "0/1: could 1-3 people ship this in 12 months?",
+    "idea_extraction.ai_first_advantage":"0/1: would this be meaningfully better built AI-first than pre-2022 approach?",
+    "idea_extraction.moat_type":         "Enum. 'regulatory' and 'capital' disqualify microbusiness shape.",
+    "idea_extraction.niche_specificity": "Enum. Narrower is generally more launch-feasible.",
+    "idea_clusters.cluster_id":          "Integer PK. -1 is the noise bucket.",
+    "idea_clusters.parent_cluster_id":   "NULL for top-level clusters; otherwise points at a parent row.",
+    "idea_clusters.size":                "Number of company_ideas rows in this cluster.",
+    "idea_clusters.label":               "Auto-generated TF-IDF label. Prefer llm_label if populated.",
+    "idea_clusters.llm_label":           "Claude-generated human-readable short label (may be NULL if relabel job not yet run).",
+    "idea_clusters.llm_description":     "Claude-generated one-sentence description (may be NULL).",
+    "idea_clusters.era_class":           "Enum: hot | steady | rebuild_candidate | legacy | unknown.",
+    "idea_clusters.median_year":         "Median founding year of members.",
+    "website_enrichment.normalized_website": "PK. Joins to company_ideas.normalized_website.",
+    "website_enrichment.meta_description":   "Homepage <meta name='description'>.",
+    "website_enrichment.hero_h1":            "Homepage <h1>.",
+    "website_enrichment.hero_text":          "First ~2000 chars of cleaned body text.",
+}
+
+
+_ENUM_DOMAINS = {
+    "era_class": {
+        "values": ["hot", "steady", "rebuild_candidate", "legacy", "unknown"],
+        "notes": {
+            "hot": "≥50% of members founded 2023+",
+            "steady": "mixed-era, no dominant cohort",
+            "rebuild_candidate": "median founding year ≤ 2018 with few recent entries — AI-first rewrite plausible",
+            "legacy": "dead/dominated space, very few 2023+ entries",
+            "unknown": "<40% year coverage; too thin to classify",
+        },
+    },
+    "customer_size": {
+        "values": ["consumer", "prosumer", "smb", "mid_market", "enterprise", "developer"],
+        "notes": {"developer": "Primary buyer is a dev (APIs, infra, tooling)"},
+    },
+    "business_model": {
+        "values": ["saas", "service", "marketplace", "api", "hardware",
+                   "agency", "course", "community", "consumer_app", "hybrid"],
+    },
+    "moat_type": {
+        "values": ["none", "brand", "integration", "domain_expertise",
+                   "data", "network", "regulatory", "capital"],
+        "notes": {
+            "none": "No structural moat (often correct for microbusinesses — space is contestable)",
+            "regulatory": "Licensing / compliance barrier — disqualifies microbusiness shape",
+            "capital": "Large upfront capital required — also disqualifies",
+        },
+    },
+    "niche_specificity": {
+        "values": ["narrow", "medium", "broad"],
+        "notes": {
+            "narrow": "Specific sub-segment within an industry (e.g. 'solo landlords with 1-4 units')",
+            "medium": "One industry OR one role",
+            "broad": "Horizontal across many industries",
+        },
+    },
+    "solo_buildable": {"values": [0, 1], "notes": {"1": "A 1-3 person team could ship + operate in 12 months"}},
+    "ai_first_advantage": {"values": [0, 1], "notes": {"1": "Meaningfully better with modern AI than pre-2022 approach"}},
+}
+
+
+@router.get("/ideas/api/index.json")
+async def ideas_api_index():
+    """Machine-readable catalog of every /ideas/api/* endpoint."""
+    return {
+        "name": "StartupRadar — Ideas API",
+        "description": "Idea discovery pipeline over accelerator cohorts, "
+                       "VC portfolios and microbusiness communities.",
+        "base": "https://fabulous-fascination-production-4638.up.railway.app",
+        "openapi": "/openapi.json",
+        "data_dictionary": "/ideas/api/schema.json",
+        "ui": {
+            "overview":         "/ideas",
+            "launch_shortlist": "/ideas/shortlist",
+            "search":           "/ideas/search",
+            "2d_map":           "/ideas/map",
+            "cluster_drill":    "/ideas/clusters/{cluster_id}",
+            "company_detail":   "/ideas/{idea_id}",
+        },
+        "endpoints": _API_CATALOG,
+    }
+
+
+@router.get("/ideas/api/schema.json")
+async def ideas_api_schema():
+    """Data dictionary — tables, enums, tag vocabulary, field docs.
+
+    Hit this endpoint first if you're an agent arriving cold. One fetch
+    tells you what's in the DB and what the column values mean."""
+    db = get_db()
+    try:
+        _ensure_views(db)
+        cur = db.conn.cursor()
+
+        # Table row counts (only the tables an agent cares about).
+        tables_of_interest = [
+            ("company_ideas", "One row per scraped idea. Source of truth."),
+            ("idea_extraction", "LLM-extracted structured fields per idea (Haiku 4.5 tool-use). May be absent for rows not yet extracted."),
+            ("idea_clusters", "HDBSCAN clusters + sub-clusters. cluster_id=-1 is noise."),
+            ("website_enrichment", "Homepage meta / hero text per unique domain."),
+            ("idea_gap_ranking", "Scored (mechanism × sector) recombination gaps."),
+            ("tag_alias", "variant → canonical tag mapping from canonicalization."),
+            ("companies", "Handelsregister entities (German company registry). DACH match to company_ideas not yet populated."),
+        ]
+        tables = []
+        for name, desc in tables_of_interest:
+            try:
+                n = int(cur.execute(f"SELECT COUNT(*) FROM {name}").fetchone()[0] or 0)
+            except Exception:
+                n = 0
+            tables.append({"name": name, "rows": n, "description": desc})
+
+        # Top N mechanism + sector vocabularies (what tags actually exist).
+        top_mechanisms = [
+            {"tag": r[0], "count": int(r[1])}
+            for r in _safe_query(
+                db, "SELECT mechanism, n FROM v_mechanism_totals "
+                    "ORDER BY n DESC LIMIT 100")
+        ]
+        top_sectors = [
+            {"tag": r[0], "count": int(r[1])}
+            for r in _safe_query(
+                db, "SELECT sector, n FROM v_sector_totals "
+                    "ORDER BY n DESC LIMIT 100")
+        ]
+
+        # Opportunity score bucket counts.
+        score_buckets: Dict[str, int] = {}
+        for r in _safe_query(db, """
+            SELECT CASE
+                WHEN opportunity_score >= 90 THEN '90-100 (top)'
+                WHEN opportunity_score >= 75 THEN '75-89 (strong)'
+                WHEN opportunity_score >= 60 THEN '60-74 (worth looking)'
+                WHEN opportunity_score >= 40 THEN '40-59 (meh)'
+                WHEN opportunity_score IS NULL THEN 'NULL (no extraction)'
+                ELSE '0-39 (skip)'
+            END AS bucket, COUNT(*) AS n
+            FROM company_ideas GROUP BY bucket
+        """):
+            score_buckets[r[0]] = int(r[1])
+
+        # Program coverage — which sources have LLM extractions.
+        programs = []
+        for r in _safe_query(db, """
+            SELECT ci.program, COUNT(*) AS total,
+                   SUM(CASE WHEN ie.company_idea_id IS NOT NULL
+                            AND ie.error IS NULL THEN 1 ELSE 0 END) AS extracted
+              FROM company_ideas ci
+         LEFT JOIN idea_extraction ie ON ie.company_idea_id = ci.id
+             GROUP BY ci.program ORDER BY total DESC
+        """):
+            programs.append({
+                "program": r[0], "rows": int(r[1]),
+                "extracted": int(r[2] or 0),
+            })
+
+        return JSONResponse({
+            "tables":      tables,
+            "programs":    programs,
+            "enums":       _ENUM_DOMAINS,
+            "vocab": {
+                "mechanism_tags": top_mechanisms,
+                "sector_tags":    top_sectors,
+            },
+            "columns":     _FIELD_DOCS,
+            "opportunity_score_buckets": score_buckets,
+            "canonical_queries": {
+                "top_launch_candidates":
+                    "/ideas/api/search.json (or /ideas/launch-candidates?sort=score)",
+                "drill_cluster":
+                    "/ideas/api/cluster/{cluster_id}.json",
+                "specific_gap":
+                    "/ideas/api/gap/{mechanism}/{sector}.json",
+                "ideas_about_a_topic":
+                    "/ideas/api/search.json?q=<your+query>",
+                "2d_map_data":
+                    "/ideas/api/scatter.json",
+                "heatmap":
+                    "/ideas/api/heatmap.json",
+            },
+            "how_to_auth": {
+                "read":  "All GET endpoints are public.",
+                "write": "POST /admin/ideas/seed requires X-Seed-Token header matching the IDEAS_SEED_TOKEN env var on the server.",
+            },
+        })
+    finally:
+        db.close()
