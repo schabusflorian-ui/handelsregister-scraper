@@ -127,10 +127,23 @@ def main():
     out_path = Path(args.out)
     out_path.parent.mkdir(parents=True, exist_ok=True)
     dump(Path(args.db), out_path)
+    # If the caller has IDEAS_SEED_TOKEN in their local env we assume the
+    # same token is configured on Railway, and include the auth header in
+    # the hint. Otherwise emit an unauthenticated command (the endpoint is
+    # public unless the env var is set on the target).
+    import os
+    token = os.environ.get("IDEAS_SEED_TOKEN")
+    auth_line = (f"    -H \"X-Seed-Token: $IDEAS_SEED_TOKEN\" \\\n"
+                 if token else "")
     print(f"\nTo seed Railway:\n"
           f"  curl -fSL -X POST \\\n"
+          f"{auth_line}"
           f"    -F \"file=@{out_path}\" \\\n"
-          f"    https://fabulous-fascination-production-4638.up.railway.app/admin/ideas/seed")
+          f"    https://fabulous-fascination-production-4638.up.railway.app/admin/ideas/seed"
+          + ("\n\n  (IDEAS_SEED_TOKEN found in env — header included above.)"
+             if token else
+             "\n\n  (no IDEAS_SEED_TOKEN in env — set one on Railway + locally "
+             "via .env to enable auth.)"))
 
 
 if __name__ == "__main__":

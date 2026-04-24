@@ -52,6 +52,29 @@ _COLLAPSE_DASH = re.compile(r"-+")
 _COLLAPSE_WS = re.compile(r"\s+")
 
 
+# Tokens that LOOK plural but aren't — depluralizing them produced bugs in
+# earlier runs (subscription-saa, devop, logistic, sale, analytic, etc.).
+# When a hyphenated tag's final segment is in this set, we do NOT strip the
+# trailing -s. Built conservatively from observation of the live DB.
+_KEEP_PLURAL = frozenset({
+    # Cloud / tech acronyms
+    "saas", "paas", "iaas", "faas", "baas", "daas", "aws", "api", "apis",
+    "css", "js", "news", "rss", "sass", "ops", "mlops", "devops",
+    "aiops", "secops", "dataops", "finops", "gitops",
+    # Disciplines / fields in -ics / -s
+    "analytics", "logistics", "electronics", "optics", "tactics",
+    "ethics", "metrics", "statistics", "economics", "physics",
+    "mathematics", "politics", "graphics", "dynamics", "robotics",
+    "cosmetics", "genetics", "mechanics", "aesthetics", "acoustics",
+    "diagnostics", "pediatrics", "semiconductors",
+    # Business/consumer functions that are canonical in plural form
+    "sales", "sports", "series", "species", "premises",
+    # Audience categories from our seed vocab (plurals are canonical)
+    "developers", "creators", "designers", "founders", "freelancers",
+    "prosumer-freelancers", "operations",
+})
+
+
 def normalize_string(tag: str) -> Optional[str]:
     if tag is None:
         return None
@@ -62,11 +85,15 @@ def normalize_string(tag: str) -> Optional[str]:
     t = t.strip("-")
     if len(t) < 2:
         return None
-    # simple plural handling: "saas-tools" -> "saas-tool"; leave singular
-    # nouns ending in -ss / -us / -is / -sis alone ("business", "corpus",
-    # "analysis", "thesis"). Still imperfect (false plurals like "ai-ops"
-    # -> "ai-op") but semantic clustering catches the rest.
+    # Suffix-based protection: skip depluralization for words ending in
+    # "-ss" (business), "-us" (corpus), "-is" (analysis), "-ys" (says).
     bad_endings = ("ss", "us", "is", "ys")
+    # Token-based protection: if the full tag or its last hyphen-segment
+    # is a known-singular-that-looks-plural (saas, devops, analytics,
+    # sales, creators, …) leave it alone.
+    last_seg = t.rsplit("-", 1)[-1]
+    if t in _KEEP_PLURAL or last_seg in _KEEP_PLURAL:
+        return t
     if (t.endswith("s") and not any(t.endswith(e) for e in bad_endings)
             and len(t) > 3):
         return t[:-1]
