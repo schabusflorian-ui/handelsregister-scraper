@@ -186,10 +186,51 @@
       {% endif %}
     </div>
 
-    {# Similar ideas (cluster neighbors) #}
+    {# Semantic "similar to this" — pre-computed nearest neighbours
+       across the whole corpus. More serendipitous than same-cluster. #}
+    {% if similar %}
+    <div class="bg-white p-4 rounded-lg shadow-sm border">
+      <div class="text-xs uppercase tracking-wide text-gray-500 mb-2 flex items-baseline justify-between">
+        <span>Similar companies</span>
+        <span class="text-gray-400 normal-case">semantic neighbours</span>
+      </div>
+      <ul class="space-y-2.5 text-xs">
+        {% for n in similar %}
+        <li class="flex gap-2 items-start">
+          <span class="flex-shrink-0 font-mono text-[10px] px-1 py-0.5 rounded bg-indigo-50 text-indigo-700"
+                title="Cosine similarity">
+            {{ (n.similarity * 100) | round(0) | int }}
+          </span>
+          <div class="flex-1 min-w-0">
+            <a href="/ideas/{{ n.id }}"
+               class="font-medium text-gray-900 hover:text-indigo-700">
+              {{ n.company or '(untitled)' }}
+            </a>
+            {% if n.opportunity_score is not none %}
+            {% set s = n.opportunity_score %}
+            <span class="ml-1 text-[10px] font-bold px-1 py-0 rounded
+              {% if s >= 90 %}bg-green-600 text-white{% elif s >= 75 %}bg-emerald-100 text-emerald-800{% elif s >= 60 %}bg-amber-100 text-amber-800{% else %}bg-gray-100 text-gray-600{% endif %}">{{ s }}</span>
+            {% endif %}
+            <span class="text-gray-400">· {{ n.program }} · {{ n.year_founded or '—' }}</span>
+            {% if n.cluster_id and n.cluster_id != r.cluster_id %}
+            <a href="/ideas/clusters/{{ n.cluster_id }}"
+               class="text-[10px] text-indigo-500 hover:text-indigo-700 ml-1"
+               title="Different cluster — click to drill">
+              ↗ {{ (n.llm_label or n.cluster_label or 'cluster ' ~ n.cluster_id)[:40] }}
+            </a>
+            {% endif %}
+            {% if n.one_liner %}<div class="text-gray-500 mt-0.5 line-clamp-2">{{ n.one_liner }}</div>{% endif %}
+          </div>
+        </li>
+        {% endfor %}
+      </ul>
+    </div>
+    {% endif %}
+
+    {# Same-cluster neighbours — kept as a separate panel. #}
     {% if neighbors %}
     <div class="bg-white p-4 rounded-lg shadow-sm border">
-      <div class="text-xs uppercase tracking-wide text-gray-500 mb-2">Similar (same cluster)</div>
+      <div class="text-xs uppercase tracking-wide text-gray-500 mb-2">Same cluster</div>
       <ul class="space-y-2 text-xs">
         {% for n in neighbors %}
         <li>

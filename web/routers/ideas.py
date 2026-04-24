@@ -1014,10 +1014,29 @@ async def ideas_detail(request: Request, idea_id: int):
                 (row["cluster_id"], idea_id),
             )]
 
+        # Semantic "similar to this" — from pre-computed idea_nearest,
+        # spans the whole corpus (not restricted to one cluster).
+        similar: List[Dict] = [dict(r) for r in cur.execute(
+            """
+            SELECT n.rank, n.similarity,
+                   ci.id, ci.company, ci.program, ci.year_founded,
+                   ci.one_liner, ci.opportunity_score,
+                   c.label AS cluster_label, c.llm_label,
+                   ci.cluster_id
+              FROM idea_nearest n
+              JOIN company_ideas ci ON ci.id = n.neighbor_id
+         LEFT JOIN idea_clusters  c ON c.cluster_id = ci.cluster_id
+             WHERE n.company_idea_id = ?
+             ORDER BY n.rank
+             LIMIT 10
+            """,
+            (idea_id,),
+        )]
+
         return templates.TemplateResponse(
             name="ideas/detail.html",
             request=request,
-            context={"r": dict(row), "neighbors": neighbors},
+            context={"r": dict(row), "neighbors": neighbors, "similar": similar},
         )
     finally:
         db.close()
@@ -1280,6 +1299,10 @@ SEED_TABLES = [
     # authoritative source for user thumbs-up/down.
     "tag_alias",
     "idea_gap_ranking",
+    # Pre-computed top-10 nearest-neighbour table for the
+    # /ideas/api/similar endpoint — built by idea_similar_job locally,
+    # shipped so Railway doesn't need ML deps to answer similarity.
+    "idea_nearest",
 ]
 
 # Max upload body; raise if your seed grows beyond this (currently ~13MB).
@@ -1583,6 +1606,13 @@ _API_CATALOG = [
      "desc": "Compact JSON card for UI preview (subset of idea/{id}).",
      "example": "/ideas/api/idea-card/1820",
      "returns": "single object"},
+    {"method": "GET",  "path": "/ideas/api/similar/{idea_id}.json",
+     "desc": "Top-k semantic neighbours for one company across the whole "
+             "corpus (pre-computed, cosine similarity over MiniLM). Use "
+             "this to pivot from any company to closely-related ideas.",
+     "params": {"k": "1-25, default 10"},
+     "example": "/ideas/api/similar/1820.json?k=10",
+     "returns": "object with 'source' + 'neighbors' array"},
 
     # ----- clustering --------------------------------------------------------
     {"method": "GET",  "path": "/ideas/api/cluster/{cluster_id}.json",
@@ -1684,6 +1714,10 @@ _FIELD_DOCS = {
     "website_enrichment.meta_description":   "Homepage <meta name='description'>.",
     "website_enrichment.hero_h1":            "Homepage <h1>.",
     "website_enrichment.hero_text":          "First ~2000 chars of cleaned body text.",
+    "idea_nearest.company_idea_id":          "Source company; PK with rank.",
+    "idea_nearest.rank":                     "1-10. 1 = closest neighbour.",
+    "idea_nearest.neighbor_id":              "Neighbour company_idea. Joins back to company_ideas.id.",
+    "idea_nearest.similarity":               "Cosine similarity 0..1 (higher = more similar).",
 }
 
 
@@ -1768,6 +1802,7 @@ async def ideas_api_schema():
             ("idea_clusters", "HDBSCAN clusters + sub-clusters. cluster_id=-1 is noise."),
             ("website_enrichment", "Homepage meta / hero text per unique domain."),
             ("idea_gap_ranking", "Scored (mechanism × sector) recombination gaps."),
+            ("idea_nearest", "Pre-computed top-10 semantic neighbours per row (260K). Feeds /ideas/api/similar/{id}.json."),
             ("tag_alias", "variant → canonical tag mapping from canonicalization."),
             ("companies", "Handelsregister entities (German company registry). DACH match to company_ideas not yet populated."),
         ]
@@ -1842,6 +1877,8 @@ async def ideas_api_schema():
                     "/ideas/api/gap/{mechanism}/{sector}.json",
                 "ideas_about_a_topic":
                     "/ideas/api/search.json?q=<your+query>",
+                "similar_to_this_idea":
+                    "/ideas/api/similar/{id}.json  (pre-computed cosine neighbours)",
                 "2d_map_data":
                     "/ideas/api/scatter.json",
                 "heatmap":
@@ -1851,6 +1888,83 @@ async def ideas_api_schema():
                 "read":  "All GET endpoints are public.",
                 "write": "POST /admin/ideas/seed requires X-Seed-Token header matching the IDEAS_SEED_TOKEN env var on the server.",
             },
+        })
+    finally:
+        db.close()
+
+
+# ===========================================================================
+# Similar-to-this (pre-computed nearest neighbours)
+# ===========================================================================
+
+@router.get("/ideas/api/similar/{idea_id}.json")
+async def ideas_api_similar(idea_id: int, k: int = 10):
+    """Return the top-k semantic neighbours for one company_ideas row.
+
+    Uses the pre-computed `idea_nearest` table — populated locally by
+    `scheduler.jobs.idea_similar_job` and shipped to Railway via the
+    seed dump. Instant lookup on the server (no ML deps).
+
+    Returns:
+        {"source": {...}, "neighbors": [{rank, similarity, id, company,
+         program, year_founded, cluster_id, cluster_label, one_liner,
+         mechanism_tags, sector_tags, opportunity_score}, ...]}
+    """
+    if k < 1 or k > 25:
+        raise HTTPException(400, "k must be in [1, 25]")
+    db = get_db()
+    try:
+        src = db.conn.execute(
+            "SELECT id, company, program, year_founded, one_liner, cluster_id "
+            "FROM company_ideas WHERE id = ?",
+            (idea_id,),
+        ).fetchone()
+        if src is None:
+            raise HTTPException(404, f"idea {idea_id} not found")
+
+        rows = db.conn.execute(
+            """
+            SELECT n.rank, n.similarity,
+                   ci.id, ci.company, ci.program, ci.year_founded,
+                   ci.one_liner, ci.cluster_id, ci.opportunity_score,
+                   c.label AS cluster_label, c.llm_label,
+                   ie.mechanism_tags, ie.sector_tags, ie.problem_statement
+              FROM idea_nearest n
+              JOIN company_ideas ci ON ci.id = n.neighbor_id
+         LEFT JOIN idea_clusters  c ON c.cluster_id = ci.cluster_id
+         LEFT JOIN idea_extraction ie ON ie.company_idea_id = ci.id
+                                      AND ie.error IS NULL
+             WHERE n.company_idea_id = ?
+             ORDER BY n.rank
+             LIMIT ?
+            """,
+            (idea_id, k),
+        ).fetchall()
+
+        return JSONResponse({
+            "source": {
+                "id": src["id"], "company": src["company"],
+                "program": src["program"], "year_founded": src["year_founded"],
+                "one_liner": src["one_liner"], "cluster_id": src["cluster_id"],
+            },
+            "neighbors": [
+                {
+                    "rank": r["rank"],
+                    "similarity": round(float(r["similarity"]), 3),
+                    "id": r["id"],
+                    "company": r["company"],
+                    "program": r["program"],
+                    "year_founded": r["year_founded"],
+                    "cluster_id": r["cluster_id"],
+                    "cluster_label": r["llm_label"] or r["cluster_label"],
+                    "one_liner": r["one_liner"],
+                    "problem_statement": r["problem_statement"],
+                    "mechanism_tags": r["mechanism_tags"],
+                    "sector_tags": r["sector_tags"],
+                    "opportunity_score": r["opportunity_score"],
+                }
+                for r in rows
+            ],
         })
     finally:
         db.close()

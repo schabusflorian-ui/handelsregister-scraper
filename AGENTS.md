@@ -62,6 +62,7 @@ The schema endpoint returns:
 | Ideas about a topic | `GET /ideas/api/search.json?q=invoice+reconciliation` |
 | Top launch candidates | `GET /ideas/api/search.json` then filter by `opportunity_score >= 90`, or `GET /ideas/launch-candidates?sort=score` (HTML) |
 | One company's full profile | `GET /ideas/api/idea/{id}.json` |
+| **Semantically similar companies** | `GET /ideas/api/similar/{id}.json?k=10` |
 | Cluster + its members | `GET /ideas/api/cluster/{cluster_id}.json` |
 | Ranked gaps (mechanism × sector) | `GET /ideas/api/gaps.json` |
 | Companies in a specific cell | `GET /ideas/api/gap/{mechanism}/{sector}.json` |
@@ -106,6 +107,10 @@ idea_gap_ranking (~1,000)
 
 tag_alias (~2,794)
 └── variant → canonical tag mapping (mechanism + sector axes)
+
+idea_nearest (~260K, keyed on (company_idea_id, rank))
+└── pre-computed top-10 cosine neighbours per row; powers
+    /ideas/api/similar/{id}.json without any ML deps on the server
 ```
 
 Full field docs are at `/ideas/api/schema.json` under `.columns`.

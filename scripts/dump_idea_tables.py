@@ -57,6 +57,10 @@ IDEA_TABLES = [
     # is intentionally NOT dumped — Railway owns user thumbs-up/down state.
     "tag_alias",
     "idea_gap_ranking",
+    # Pre-computed top-10 semantic neighbours per row (populated by
+    # idea_similar_job). ~260K rows, ~5MB SQL. Ships to Railway so the
+    # /ideas/api/similar endpoint works without any ML deps on the server.
+    "idea_nearest",
 ]
 
 # FTS virtual tables travel with their base tables via sqlite3 .dump (the
