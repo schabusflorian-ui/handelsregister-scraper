@@ -47,6 +47,7 @@
     <label class="text-gray-600">sort</label>
     <select name="sort" onchange="this.form.submit()"
             class="rounded-md border-gray-300 text-sm">
+      <option value="score"  {% if not filters.sort or filters.sort == 'score' %}selected{% endif %}>Opportunity score</option>
       <option value="recent" {% if filters.sort == 'recent' %}selected{% endif %}>Recent</option>
       <option value="name"   {% if filters.sort == 'name'   %}selected{% endif %}>Name</option>
     </select>
@@ -127,6 +128,14 @@
                  class="font-semibold text-gray-900 hover:text-indigo-700">
                 {{ r.company or '(untitled)' }}
               </a>
+              {% if r.opportunity_score is not none %}
+              {% set s = r.opportunity_score %}
+              <span class="text-[10px] font-bold px-1.5 py-0.5 rounded
+                {% if s >= 90 %}bg-green-600 text-white{% elif s >= 75 %}bg-emerald-100 text-emerald-800{% elif s >= 60 %}bg-amber-100 text-amber-800{% else %}bg-gray-100 text-gray-600{% endif %}"
+                title="Opportunity score {{ s }}/100 — click for breakdown">
+                {{ s }}
+              </span>
+              {% endif %}
               <span class="text-xs text-gray-400">{{ r.year_founded or '' }}</span>
               <span class="text-xs px-1.5 py-0.5 rounded bg-gray-100 text-gray-600">
                 {{ r.program }}

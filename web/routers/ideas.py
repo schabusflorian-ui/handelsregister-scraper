@@ -403,6 +403,18 @@ def _build_launch_filter(
     return " AND ".join(clauses), params
 
 
+@router.get("/ideas/shortlist")
+async def ideas_shortlist():
+    """Quick alias for the top-scoring launch candidates. Redirects to
+    /ideas/launch-candidates sorted by opportunity_score, page size 50.
+    """
+    from fastapi.responses import RedirectResponse
+    return RedirectResponse(
+        "/ideas/launch-candidates?sort=score&per_page=50",
+        status_code=302,
+    )
+
+
 @router.get("/ideas/launch-candidates", response_class=HTMLResponse)
 async def ideas_launch_candidates(
     request: Request,
@@ -433,11 +445,12 @@ async def ideas_launch_candidates(
             solo, ai_first, strict_only,
         )
 
-        # Sort options: recent (default), name. Anything else falls back.
+        # Sort options: score (default — newly added), recent, name.
         sort_sql = {
+            "score":  "ci.opportunity_score DESC NULLS LAST, ci.year_founded DESC NULLS LAST, ci.id DESC",
             "name":   "ci.company ASC",
             "recent": "ci.year_founded DESC NULLS LAST, ci.id DESC",
-        }.get(sort or "recent", "ci.year_founded DESC NULLS LAST, ci.id DESC")
+        }.get(sort or "score", "ci.opportunity_score DESC NULLS LAST, ci.year_founded DESC NULLS LAST, ci.id DESC")
 
         cur = db.conn.cursor()
         total_row = cur.execute(
@@ -453,6 +466,7 @@ async def ideas_launch_candidates(
             f"""
             SELECT ci.id, ci.program, ci.company, ci.year_founded,
                    ci.company_website, ci.cluster_id,
+                   ci.opportunity_score, ci.opportunity_breakdown,
                    ie.problem_statement, ie.customer_verticals,
                    ie.mechanism_tags, ie.sector_tags,
                    ie.customer_size, ie.business_model,
@@ -1014,14 +1028,23 @@ async def ideas_detail(request: Request, idea_id: int):
 # ---------------------------------------------------------------------------
 
 def _load_cluster(db, cluster_id: int) -> Optional[Dict]:
+    """Full cluster row with JSON columns parsed + parent's label hydrated.
+
+    Single source of truth for cluster metadata across the drill page, the
+    sunburst endpoint, and the agent JSON API. Supersedes the earlier
+    `_cluster_header` helper so there's one canonical cluster fetch path.
+    """
     row = db.conn.execute(
         """
-        SELECT cluster_id, size, label, top_terms, top_tags, top_programs,
-               representative_ids, min_year, median_year, max_year,
-               count_pre_2015, count_2015_2022, count_2023_plus,
-               era_class, parent_cluster_id
-          FROM idea_clusters
-         WHERE cluster_id = ?
+        SELECT c.cluster_id, c.size, c.label, c.top_terms, c.top_tags,
+               c.top_programs, c.representative_ids,
+               c.min_year, c.median_year, c.max_year,
+               c.count_pre_2015, c.count_2015_2022, c.count_2023_plus,
+               c.year_coverage_pct, c.era_class, c.parent_cluster_id,
+               p.label AS parent_label, p.era_class AS parent_era
+          FROM idea_clusters c
+     LEFT JOIN idea_clusters p ON p.cluster_id = c.parent_cluster_id
+         WHERE c.cluster_id = ?
         """,
         (cluster_id,),
     ).fetchone()
@@ -1073,8 +1096,16 @@ async def ideas_cluster_detail(
         ).fetchall()
 
         parent = None
+        siblings: List[Dict] = []
         if c["parent_cluster_id"] is not None:
             parent = _load_cluster(db, c["parent_cluster_id"])
+            siblings = _cluster_siblings(db, c["parent_cluster_id"], cluster_id)
+
+        # Cluster-internal top-mechanism / top-sector breakdown — computed
+        # from the cluster's actual extractions rather than the stored
+        # top_tags column (which was summarised at clustering time and may
+        # lag new rows). Used for inline bar charts on the drill page.
+        breakdown = _cluster_mechanism_sector_breakdown(db, cluster_id)
 
         # Members — with optional FTS search restricted to this cluster.
         clauses = ["ci.cluster_id = ?"]
@@ -1147,6 +1178,8 @@ async def ideas_cluster_detail(
                 "cluster": c,
                 "parent": parent,
                 "subclusters": [dict(r) for r in subs],
+                "siblings": siblings,
+                "breakdown": breakdown,
                 "members": [dict(r) for r in members],
                 "representatives": reps,
                 "total": total,
@@ -1423,21 +1456,6 @@ async def ideas_api_scatter():
 # /ideas/clusters/{cluster_id} — drill into one cluster
 # ===========================================================================
 
-def _cluster_header(db, cluster_id: int) -> Optional[Dict]:
-    row = db.conn.execute("""
-        SELECT c.cluster_id, c.label, c.size, c.era_class,
-               c.min_year, c.median_year, c.max_year,
-               c.count_pre_2015, c.count_2015_2022, c.count_2023_plus,
-               c.year_coverage_pct,
-               c.top_tags, c.top_programs, c.top_terms, c.parent_cluster_id,
-               p.label AS parent_label, p.era_class AS parent_era
-          FROM idea_clusters c
-     LEFT JOIN idea_clusters p ON p.cluster_id = c.parent_cluster_id
-         WHERE c.cluster_id = ?
-    """, (cluster_id,)).fetchone()
-    return dict(row) if row else None
-
-
 def _cluster_children(db, cluster_id: int) -> List[Dict]:
     rows = db.conn.execute("""
         SELECT cluster_id, label, size, era_class,
@@ -1457,23 +1475,6 @@ def _cluster_siblings(db, parent_id: int, current_id: int) -> List[Dict]:
          ORDER BY size DESC
          LIMIT 10
     """, (parent_id, current_id)).fetchall()
-    return [dict(r) for r in rows]
-
-
-def _cluster_members(db, cluster_id: int, limit: int = 120) -> List[Dict]:
-    rows = db.conn.execute("""
-        SELECT ci.id, ci.program, ci.company, ci.year_founded, ci.batch,
-               ci.company_website, ci.one_liner,
-               ie.problem_statement, ie.mechanism_tags, ie.sector_tags,
-               ie.customer_size, ie.business_model, ie.moat_type,
-               ie.solo_buildable, ie.ai_first_advantage
-          FROM company_ideas ci
-     LEFT JOIN idea_extraction ie ON ie.company_idea_id = ci.id AND ie.error IS NULL
-         WHERE ci.cluster_id = ?
-           AND ci.company IS NOT NULL AND ci.company != ''
-         ORDER BY ci.year_founded DESC, ci.id DESC
-         LIMIT ?
-    """, (cluster_id, limit)).fetchall()
     return [dict(r) for r in rows]
 
 
@@ -1503,72 +1504,18 @@ def _cluster_mechanism_sector_breakdown(db, cluster_id: int) -> Dict[str, List]:
     }
 
 
-@router.get("/ideas/clusters/{cluster_id}", response_class=HTMLResponse)
-async def ideas_cluster_drill(request: Request, cluster_id: int):
-    """Drill page: one cluster, its members, siblings and breakdown."""
-    db = get_db()
-    try:
-        _ensure_views(db)
-        header = _cluster_header(db, cluster_id)
-        if header is None:
-            return HTMLResponse(
-                content=f"<h1>Cluster {cluster_id} not found</h1>"
-                        f"<p><a href='/ideas'>&larr; back to Ideas</a></p>",
-                status_code=404,
-            )
-
-        # If this is a parent, show children. If it's a sub, show siblings.
-        children: List[Dict] = []
-        siblings: List[Dict] = []
-        if header.get("parent_cluster_id") is None:
-            children = _cluster_children(db, cluster_id)
-        else:
-            siblings = _cluster_siblings(db, header["parent_cluster_id"], cluster_id)
-
-        members = _cluster_members(db, cluster_id, limit=120)
-        breakdown = _cluster_mechanism_sector_breakdown(db, cluster_id)
-
-        # Parse JSON strings from top_* columns so the template can iterate.
-        import json as _json
-        def _decode(s: Optional[str]):
-            try:
-                return _json.loads(s) if s else []
-            except Exception:
-                return []
-        header["top_tags_parsed"]     = _decode(header.get("top_tags"))
-        header["top_programs_parsed"] = list((_json.loads(header["top_programs"]).items()
-                                              if header.get("top_programs") else []))
-        header["top_terms_parsed"]    = _decode(header.get("top_terms"))
-
-        context = {
-            "cluster":      header,
-            "children":     children,
-            "siblings":     siblings,
-            "members":      members,
-            "breakdown":    breakdown,
-            "member_count": len(members),
-        }
-        return templates.TemplateResponse(
-            name="ideas/cluster.html",
-            request=request,
-            context=context,
-        )
-    finally:
-        db.close()
-
-
 @router.get("/ideas/api/cluster/{cluster_id}/sunburst.json")
 async def ideas_api_cluster_sunburst(cluster_id: int):
     """Data for the sunburst on the cluster drill page: this cluster as
     root (if parent) or its parent as root (if sub), with children sized."""
     db = get_db()
     try:
-        header = _cluster_header(db, cluster_id)
+        header = _load_cluster(db, cluster_id)
         if not header:
             return JSONResponse({"error": "not found"}, status_code=404)
 
         root_id = header.get("parent_cluster_id") or cluster_id
-        root = _cluster_header(db, root_id) if root_id != cluster_id else header
+        root = _load_cluster(db, root_id) if root_id != cluster_id else header
         children = _cluster_children(db, root_id)
 
         # ECharts sunburst expects nested {name, value, children?}
