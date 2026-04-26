@@ -898,6 +898,209 @@ def save_company_ideas(db, records: List[CompanyIdea]) -> int:
     return inserted
 
 
+# ---------------------------------------------------------------------------
+# IndiePage — directory of indie founder portfolios (huge solo-founder
+# corpus). The /discover page renders a __NEXT_DATA__ blob with up to
+# 2,268 startups per fetch; the total claimed is ~5K but the API caps
+# the initial render. We accept the cap — 2,268 is already the biggest
+# single source in this scraper after YC.
+# ---------------------------------------------------------------------------
+
+class IndiePageScraper(AcceleratorScraper):
+    program_name = "IndiePage"
+    crawl_delay = 2.0
+    DISCOVER_URL = "https://indiepa.ge/discover"
+
+    def scrape(self, on_record: OnRecord = None) -> List[CompanyIdea]:
+        html_text = self._fetch(self.DISCOVER_URL)
+        if not html_text:
+            return []
+        m = re.search(
+            r'<script id="__NEXT_DATA__"[^>]*>(.+?)</script>',
+            html_text, re.S,
+        )
+        if not m:
+            logger.warning("IndiePage: no __NEXT_DATA__ script tag")
+            return []
+        try:
+            data = json.loads(m.group(1))
+        except Exception as e:  # noqa: BLE001
+            logger.warning("IndiePage: bad JSON: %s", e)
+            return []
+        startups = (data.get("props", {})
+                    .get("pageProps", {})
+                    .get("startups", []) or [])
+        total = (data.get("props", {})
+                 .get("pageProps", {})
+                 .get("startupsTotal"))
+        logger.info("IndiePage: %d startups in payload (total claim=%s)",
+                    len(startups), total)
+
+        out: List[CompanyIdea] = []
+        for s in startups:
+            name = (s.get("name") or "").strip()
+            url = (s.get("url") or "").strip() or None
+            bio = (s.get("bio") or "").strip() or None
+            slug = s.get("_id")
+            if not name and not bio:
+                continue
+            user = s.get("user") or {}
+            founder = (user.get("name") or "").strip() if isinstance(user, dict) else ""
+            rec = CompanyIdea(
+                program=self.program_name,
+                company=name,
+                one_liner=bio[:300] if bio else None,
+                long_description=bio if bio and len(bio) > 300 else None,
+                tags=[],
+                company_website=url,
+                source_url=f"https://indiepa.ge/startup/{slug}" if slug else self.DISCOVER_URL + f"#{name.lower()}",
+                raw={
+                    "indiepage_id":  s.get("_id"),
+                    "votes":          s.get("votesCounter"),
+                    "founder":        founder or None,
+                    "founder_handle": user.get("username") if isinstance(user, dict) else None,
+                },
+            )
+            out.append(rec)
+            if on_record:
+                on_record(rec)
+        if self.max_records:
+            out = out[: self.max_records]
+        return out
+
+
+# ---------------------------------------------------------------------------
+# Tiny.com — Andrew Wilkinson's holding-co portfolio. ~75 acquired SaaS /
+# digital businesses. Only company name (sometimes) + outbound URL — light
+# data, but fills a unique "indie rollup" angle.
+# ---------------------------------------------------------------------------
+
+class TinyComScraper(AcceleratorScraper):
+    program_name = "Tiny.com"
+    crawl_delay = 2.0
+    URL = "https://www.tiny.com/companies"
+
+    def scrape(self, on_record: OnRecord = None) -> List[CompanyIdea]:
+        html_text = self._fetch(self.URL)
+        if not html_text:
+            return []
+        soup = BeautifulSoup(html_text, "html.parser")
+        cards = soup.select("a.company-grid-item")
+        logger.info("Tiny.com: %d portfolio cards", len(cards))
+
+        out: List[CompanyIdea] = []
+        for c in cards:
+            href = c.get("href") or ""
+            if not href.startswith("http"):
+                continue
+            from urllib.parse import urlparse
+            host = urlparse(href).hostname or ""
+            host = host.replace("www.", "")
+            # Derive a name from the host (metalab.com -> "Metalab")
+            base = host.split(".")[0] if host else ""
+            name = base.capitalize() if base else "(unknown)"
+            # Try to get richer text from card overlay if present
+            overlay = c.select_one(".company-item-overlay")
+            blurb = self._clean(overlay.get_text(" ", strip=True)) if overlay else None
+            img = c.find("img")
+            if img and img.get("alt"):
+                alt = self._clean(img.get("alt")) or ""
+                # Tiny suffixes alts with " Image" / " Logo" — strip those
+                # before treating the alt as a company name.
+                alt = re.sub(r"\s+(image|logo)$", "", alt, flags=re.I).strip()
+                if alt and len(alt) < 80 and alt.lower() not in {"logo", "company logo"}:
+                    name = alt
+            rec = CompanyIdea(
+                program=self.program_name,
+                company=name,
+                one_liner=blurb,
+                tags=[],
+                company_website=href,
+                source_url=f"{self.URL}#{base}",
+                raw={"tiny_host": host},
+            )
+            out.append(rec)
+            if on_record:
+                on_record(rec)
+        if self.max_records:
+            out = out[: self.max_records]
+        return out
+
+
+# ---------------------------------------------------------------------------
+# Anthropic / Claude customers — 39 customer stories on claude.com/customers.
+# Each has a company name, vertical, and a problem/outcome write-up.
+# ---------------------------------------------------------------------------
+
+class ClaudeCustomersScraper(AcceleratorScraper):
+    program_name = "Claude Customers"
+    crawl_delay = 2.0
+    URL = "https://claude.com/customers"
+
+    def scrape(self, on_record: OnRecord = None) -> List[CompanyIdea]:
+        html_text = self._fetch(self.URL)
+        if not html_text:
+            return []
+        soup = BeautifulSoup(html_text, "html.parser")
+        articles = soup.find_all("article")
+        logger.info("Claude customers: %d article cards", len(articles))
+
+        out: List[CompanyIdea] = []
+        for art in articles:
+            # The visible headline is in a <p> tag inside the card
+            # ("Notion is building a workspace for teams and agents").
+            # The h3 only contains the company name short ("Notion").
+            # We prefer the <p> headline; fall back to h3.
+            headline = None
+            for p in art.find_all("p"):
+                t = self._clean(p.get_text())
+                if not t:
+                    continue
+                low = t.lower()
+                if low in {"customer story", "read story", "play video"}:
+                    continue
+                if 15 <= len(t) <= 200:
+                    headline = t
+                    break
+            if not headline:
+                h = art.find(["h2", "h3"])
+                if h:
+                    headline = self._clean(h.get_text())
+            if not headline:
+                continue
+            # The company name is typically the first word(s) before a verb.
+            # Use a heuristic: first " is " or " uses " or " builds " split.
+            company = headline
+            for split in (" is building", " is using", " uses ", " builds ",
+                          " accelerates", " automates", " powers", " transforms"):
+                if split in headline.lower():
+                    company = headline.split(split, 1)[0].strip()
+                    break
+            company = company[:80]
+            # Detail-page link
+            detail_link = None
+            for a in art.find_all("a", href=True):
+                href = a["href"]
+                if "/customers/" in href and href != "/customers":
+                    detail_link = href if href.startswith("http") else f"https://claude.com{href}"
+                    break
+            rec = CompanyIdea(
+                program=self.program_name,
+                company=company,
+                one_liner=headline,
+                tags=["ai-native", "claude-customer"],
+                company_website=None,  # not on the listing; would need detail fetch
+                source_url=detail_link or f"{self.URL}#{re.sub(r'[^a-z0-9]+', '-', company.lower())}",
+                raw={"headline": headline},
+            )
+            out.append(rec)
+            if on_record:
+                on_record(rec)
+        if self.max_records:
+            out = out[: self.max_records]
+        return out
+
+
 SCRAPERS = {
     "yc":         YCombinatorScraper,
     "gc":         GeneralCatalystScraper,
@@ -905,6 +1108,9 @@ SCRAPERS = {
     "playground": PlaygroundGlobalScraper,
     "speedrun":   A16zSpeedrunScraper,
     "sequoia_arc": SequoiaArcScraper,
+    "indiepage":  IndiePageScraper,
+    "tiny":       TinyComScraper,
+    "claude":     ClaudeCustomersScraper,
 }
 
 
