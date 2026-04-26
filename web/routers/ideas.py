@@ -17,6 +17,7 @@ from __future__ import annotations
 import gzip
 import logging
 import os
+import re
 import time
 from typing import Dict, List, Optional
 
@@ -32,6 +33,25 @@ router = APIRouter()
 
 
 # --- helpers ---------------------------------------------------------------
+
+
+def _safe_fts_query(q: Optional[str]) -> str:
+    """Build a safe FTS5 prefix-match query from user input.
+
+    FTS5 treats `-`, `+`, `*`, `"`, `:`, `(`, `)` as operators. User-supplied
+    input — or even our own URL params with hyphens like
+    `?q=observability-monitoring+creators` — would otherwise raise a syntax
+    error at MATCH time. Strip every non-word character to whitespace, then
+    tokenize, then prefix-match each token.
+
+    Returns an empty string when the input has no usable tokens.
+    """
+    if not q:
+        return ""
+    # \w preserves alphanumerics + underscore, plus unicode word chars.
+    cleaned = re.sub(r"[^\w\s]", " ", q, flags=re.UNICODE)
+    words = [w for w in cleaned.split() if w.strip()]
+    return " ".join(f"{w}*" for w in words)
 
 def _ideas_tables_exist(db) -> bool:
     """Cheap check: are the idea-pipeline tables present at all? On a
@@ -390,16 +410,18 @@ def _build_launch_filter(
     # FTS search across company_ideas_fts + idea_extraction_fts. We union the
     # rowids into a subquery and intersect with the main filter.
     if q:
-        # Use a prefix-enabled query so "health" matches "healthcare" etc.
-        fts_q = " ".join(f"{w}*" for w in q.split() if w.strip())
-        clauses.append(
-            "ci.id IN ("
-            "  SELECT rowid FROM company_ideas_fts   WHERE company_ideas_fts   MATCH ?"
-            "  UNION"
-            "  SELECT rowid FROM idea_extraction_fts WHERE idea_extraction_fts MATCH ?"
-            ")"
-        )
-        params.extend([fts_q, fts_q])
+        # Sanitize + prefix-match. _safe_fts_query strips FTS5 operator chars
+        # so tokens like "observability-monitoring" don't crash the query.
+        fts_q = _safe_fts_query(q)
+        if fts_q:
+            clauses.append(
+                "ci.id IN ("
+                "  SELECT rowid FROM company_ideas_fts   WHERE company_ideas_fts   MATCH ?"
+                "  UNION"
+                "  SELECT rowid FROM idea_extraction_fts WHERE idea_extraction_fts MATCH ?"
+                ")"
+            )
+            params.extend([fts_q, fts_q])
     return " AND ".join(clauses), params
 
 
@@ -1089,15 +1111,16 @@ def _build_search_filter(
 
     # FTS prefix-match across both FTS tables.
     if q and q.strip():
-        fts_q = " ".join(f"{w}*" for w in q.split() if w.strip())
-        clauses.append(
-            "ci.id IN ("
-            "  SELECT rowid FROM company_ideas_fts   WHERE company_ideas_fts   MATCH ?"
-            "  UNION"
-            "  SELECT rowid FROM idea_extraction_fts WHERE idea_extraction_fts MATCH ?"
-            ")"
-        )
-        params.extend([fts_q, fts_q])
+        fts_q = _safe_fts_query(q)
+        if fts_q:
+            clauses.append(
+                "ci.id IN ("
+                "  SELECT rowid FROM company_ideas_fts   WHERE company_ideas_fts   MATCH ?"
+                "  UNION"
+                "  SELECT rowid FROM idea_extraction_fts WHERE idea_extraction_fts MATCH ?"
+                ")"
+            )
+            params.extend([fts_q, fts_q])
 
     return " AND ".join(clauses), params
 
@@ -1433,15 +1456,16 @@ async def ideas_cluster_detail(
         clauses = ["ci.cluster_id = ?"]
         params: list = [cluster_id]
         if q:
-            fts_q = " ".join(f"{w}*" for w in q.split() if w.strip())
-            clauses.append(
-                "ci.id IN ("
-                "  SELECT rowid FROM company_ideas_fts   WHERE company_ideas_fts   MATCH ?"
-                "  UNION"
-                "  SELECT rowid FROM idea_extraction_fts WHERE idea_extraction_fts MATCH ?"
-                ")"
-            )
-            params.extend([fts_q, fts_q])
+            fts_q = _safe_fts_query(q)
+            if fts_q:
+                clauses.append(
+                    "ci.id IN ("
+                    "  SELECT rowid FROM company_ideas_fts   WHERE company_ideas_fts   MATCH ?"
+                    "  UNION"
+                    "  SELECT rowid FROM idea_extraction_fts WHERE idea_extraction_fts MATCH ?"
+                    ")"
+                )
+                params.extend([fts_q, fts_q])
         where_sql = " AND ".join(clauses)
 
         total = cur.execute(

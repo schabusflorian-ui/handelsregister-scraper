@@ -335,7 +335,7 @@
             x-data="gapVote('{{ g.mechanism | e }}', '{{ g.sector | e }}', {{ g.votes.up }}, {{ g.votes.down }})">
           <td class="px-3 py-2 text-right text-gray-400">{{ g.rank }}</td>
           <td class="px-3 py-2">
-            <a href="/ideas/search?q={{ g.mechanism | urlencode }}+{{ g.sector | urlencode }}&mechanism={{ g.mechanism | urlencode }}&sector={{ g.sector | urlencode }}"
+            <a href="/ideas/search?mechanism={{ g.mechanism | urlencode }}&sector={{ g.sector | urlencode }}"
                class="group inline-flex flex-col gap-1"
                title="Search ideas matching this mechanism × sector">
               <div class="flex items-center gap-2 flex-wrap">
