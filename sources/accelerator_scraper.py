@@ -899,6 +899,61 @@ def save_company_ideas(db, records: List[CompanyIdea]) -> int:
 
 
 # ---------------------------------------------------------------------------
+# Khosla Ventures — public portfolio listing on khoslaventures.com.
+# 130 companies in the static HTML, each as a `<a class="company-slide">`
+# with website href, image alt = company name, and inner text = tagline.
+# Scrapes in one fetch; no detail pages needed.
+# ---------------------------------------------------------------------------
+
+class KhoslaVenturesScraper(AcceleratorScraper):
+    program_name = "Khosla Ventures"
+    crawl_delay = 2.0
+    URL = "https://www.khoslaventures.com/portfolio/"
+
+    def scrape(self, on_record: OnRecord = None) -> List[CompanyIdea]:
+        html_text = self._fetch(self.URL)
+        if not html_text:
+            return []
+        soup = BeautifulSoup(html_text, "html.parser")
+        slides = soup.select("a.company-slide.w-inline-block")
+        logger.info("Khosla: %d company slides", len(slides))
+
+        out: List[CompanyIdea] = []
+        seen_hosts = set()
+        from urllib.parse import urlparse
+        for s in slides:
+            href = (s.get("href") or "").strip()
+            if not href.startswith("http"):
+                continue
+            host = (urlparse(href).hostname or "").replace("www.", "")
+            if not host or host in seen_hosts:
+                continue
+            seen_hosts.add(host)
+            img = s.find("img", alt=True)
+            alt_name = self._clean(img.get("alt") if img else "") or ""
+            tagline = self._clean(s.get_text(" ", strip=True))
+            # Most cards have empty alt — fall back to a Title-Cased
+            # version of the host root (openai.com -> "Openai", we leave
+            # casing alone since the host is the canonical identifier).
+            name = alt_name or host.split(".")[0].capitalize()
+            rec = CompanyIdea(
+                program=self.program_name,
+                company=name,
+                one_liner=tagline if tagline and tagline != name else None,
+                tags=[],
+                company_website=href,
+                source_url=f"{self.URL}#{host}",
+                raw={"khosla_host": host},
+            )
+            out.append(rec)
+            if on_record:
+                on_record(rec)
+        if self.max_records:
+            out = out[: self.max_records]
+        return out
+
+
+# ---------------------------------------------------------------------------
 # IndiePage — directory of indie founder portfolios (huge solo-founder
 # corpus). The /discover page renders a __NEXT_DATA__ blob with up to
 # 2,268 startups per fetch; the total claimed is ~5K but the API caps
@@ -1111,6 +1166,7 @@ SCRAPERS = {
     "indiepage":  IndiePageScraper,
     "tiny":       TinyComScraper,
     "claude":     ClaudeCustomersScraper,
+    "khosla":     KhoslaVenturesScraper,
 }
 
 
