@@ -2,6 +2,31 @@
 
 {% block title %}Search — Ideas{% endblock %}
 
+{% macro filter_select(name, label, options, current) %}
+  <label class="flex items-center gap-1.5 text-xs">
+    <span class="text-gray-600">{{ label }}</span>
+    <select name="{{ name }}" onchange="this.form.submit()"
+            class="rounded border-gray-300 text-xs py-1 pl-2 pr-7 {% if current %}bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200{% endif %}">
+      <option value="">any</option>
+      {% for opt in options %}
+      <option value="{{ opt.value }}" {% if current == opt.value %}selected{% endif %}>{{ opt.value }} ({{ opt.count }})</option>
+      {% endfor %}
+    </select>
+  </label>
+{% endmacro %}
+
+{% macro filter_chip(name, value, label) %}
+  {% if value %}
+  <a href="/ideas/search?{{ chip_links[name] }}"
+     class="inline-flex items-center gap-1 rounded-full bg-indigo-50 ring-1 ring-indigo-200 px-2.5 py-0.5 text-xs text-indigo-700 hover:bg-indigo-100"
+     title="Remove filter">
+    <span class="text-indigo-400">{{ label }}:</span>
+    <span class="font-medium">{{ value }}</span>
+    <span class="text-indigo-400">&times;</span>
+  </a>
+  {% endif %}
+{% endmacro %}
+
 {% block header %}
 <div class="bg-white shadow-sm border-b">
   <div class="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
@@ -9,43 +34,124 @@
       <h1 class="text-2xl font-bold text-gray-900">Search ideas</h1>
       <a href="/ideas" class="text-sm text-indigo-600 hover:text-indigo-800 ml-auto">← overview</a>
     </div>
-    <form method="GET" action="/ideas/search"
-          class="flex items-center gap-2 max-w-3xl">
-      <input type="text" name="q" value="{{ q }}" autofocus
-             placeholder='full-text search across 26k ideas — try "voice agent healthcare" or "solo fintech"'
-             class="flex-1 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm">
-      <button type="submit"
-              class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-500">
-        Search
-      </button>
+
+    <form method="GET" action="/ideas/search" class="space-y-3" x-data="{ more: {{ 'true' if (filters.business_model or filters.niche or filters.customer_size or filters.year_min or filters.year_max or filters.moat) else 'false' }} }">
+      {# --- Search input --- #}
+      <div class="flex items-center gap-2 max-w-3xl">
+        <input type="text" name="q" value="{{ filters.q }}" autofocus
+               placeholder='full-text search across all ideas — try "voice agent healthcare" or "solo fintech"'
+               class="flex-1 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm">
+        <button type="submit"
+                class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-500">
+          Search
+        </button>
+      </div>
+
+      {# --- Default filters (always visible) --- #}
+      <div class="flex flex-wrap items-center gap-x-4 gap-y-2">
+        {{ filter_select('program', 'program', facets.get('program', []), filters.program) }}
+        {{ filter_select('era', 'era', facets.get('era', []), filters.era) }}
+
+        <label class="flex items-center gap-1.5 text-xs">
+          <span class="text-gray-600">solo</span>
+          <select name="solo" onchange="this.form.submit()"
+                  class="rounded border-gray-300 text-xs py-1 pl-2 pr-7 {% if filters.solo %}bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200{% endif %}">
+            <option value="">any</option>
+            <option value="1" {% if filters.solo == '1' %}selected{% endif %}>yes</option>
+            <option value="0" {% if filters.solo == '0' %}selected{% endif %}>no</option>
+          </select>
+        </label>
+
+        <label class="flex items-center gap-1.5 text-xs">
+          <span class="text-gray-600">ai-first</span>
+          <select name="ai_first" onchange="this.form.submit()"
+                  class="rounded border-gray-300 text-xs py-1 pl-2 pr-7 {% if filters.ai_first %}bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200{% endif %}">
+            <option value="">any</option>
+            <option value="1" {% if filters.ai_first == '1' %}selected{% endif %}>yes</option>
+            <option value="0" {% if filters.ai_first == '0' %}selected{% endif %}>no</option>
+          </select>
+        </label>
+
+        <label class="flex items-center gap-1.5 text-xs">
+          <span class="text-gray-600">mechanism</span>
+          <input type="text" name="mechanism" value="{{ filters.mechanism }}" placeholder="e.g. llm-copilot"
+                 class="rounded border-gray-300 text-xs py-1 px-2 w-40 {% if filters.mechanism %}bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200{% endif %}">
+        </label>
+
+        <label class="flex items-center gap-1.5 text-xs">
+          <span class="text-gray-600">sector</span>
+          <input type="text" name="sector" value="{{ filters.sector }}" placeholder="e.g. healthcare"
+                 class="rounded border-gray-300 text-xs py-1 px-2 w-40 {% if filters.sector %}bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200{% endif %}">
+        </label>
+
+        <button type="button" @click="more = !more"
+                class="text-xs text-indigo-600 hover:text-indigo-800 ml-auto">
+          <span x-show="!more">+ more filters</span>
+          <span x-show="more" x-cloak>− fewer filters</span>
+        </button>
+      </div>
+
+      {# --- Extended filters (toggle) --- #}
+      <div x-show="more" x-cloak
+           class="flex flex-wrap items-center gap-x-4 gap-y-2 border-t pt-3 border-gray-100">
+        {{ filter_select('business_model', 'business model', facets.get('business_model', []), filters.business_model) }}
+        {{ filter_select('moat', 'moat', facets.get('moat', []), filters.moat) }}
+        {{ filter_select('niche', 'niche', facets.get('niche', []), filters.niche) }}
+        {{ filter_select('customer_size', 'customer size', facets.get('customer_size', []), filters.customer_size) }}
+
+        <label class="flex items-center gap-1.5 text-xs">
+          <span class="text-gray-600">year</span>
+          <input type="number" name="year_min" value="{{ filters.year_min }}" placeholder="from"
+                 class="rounded border-gray-300 text-xs py-1 px-2 w-20 {% if filters.year_min %}bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200{% endif %}">
+          <span class="text-gray-400">–</span>
+          <input type="number" name="year_max" value="{{ filters.year_max }}" placeholder="to"
+                 class="rounded border-gray-300 text-xs py-1 px-2 w-20 {% if filters.year_max %}bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200{% endif %}">
+        </label>
+      </div>
     </form>
-    {% if q %}
-    <p class="text-xs text-gray-500 mt-2">
-      {{ "{:,}".format(total) }} ideas match "<span class="font-mono">{{ q }}</span>"
-    </p>
+
+    {# --- Active filter chips + result count --- #}
+    {% if any_filter %}
+    <div class="mt-3 flex items-center gap-2 flex-wrap">
+      <span class="text-xs text-gray-500">{{ "{:,}".format(total) }} results</span>
+      <span class="text-gray-300">·</span>
+      {{ filter_chip('q', filters.q, 'text') }}
+      {{ filter_chip('program', filters.program, 'program') }}
+      {{ filter_chip('era', filters.era, 'era') }}
+      {{ filter_chip('mechanism', filters.mechanism, 'mechanism') }}
+      {{ filter_chip('sector', filters.sector, 'sector') }}
+      {{ filter_chip('solo', filters.solo, 'solo') }}
+      {{ filter_chip('ai_first', filters.ai_first, 'ai-first') }}
+      {{ filter_chip('business_model', filters.business_model, 'model') }}
+      {{ filter_chip('moat', filters.moat, 'moat') }}
+      {{ filter_chip('niche', filters.niche, 'niche') }}
+      {{ filter_chip('customer_size', filters.customer_size, 'customer') }}
+      {{ filter_chip('year_min', filters.year_min, 'year ≥') }}
+      {{ filter_chip('year_max', filters.year_max, 'year ≤') }}
+      <a href="/ideas/search" class="text-xs text-gray-500 hover:text-gray-800 ml-1">clear all</a>
+    </div>
     {% endif %}
   </div>
 </div>
 {% endblock %}
 
 {% block content %}
-{% if not q %}
+{% if not any_filter %}
 <div class="bg-white rounded-lg shadow-sm border p-6 text-sm text-gray-600">
-  <p>Searches across company names, one-liners, long descriptions, problem statements, reasoning fields, and tags using SQLite FTS5 (prefix-matching enabled).</p>
-  <p class="mt-3 text-xs text-gray-500">Tip: use lowercase words; the query <code class="font-mono bg-gray-50 px-1">voice agent</code> matches any row containing both terms (or prefixes like "agentic").</p>
+  <p>Search across company names, problem statements, and tags using SQLite FTS5 — or filter by program, era, mechanism, sector, and more.</p>
+  <p class="mt-3 text-xs text-gray-500">Tip: lowercase, prefixes match (<code class="font-mono bg-gray-50 px-1">voice</code> matches "voice agent"). Combine free-text with structured filters for precision.</p>
 </div>
 {% elif rows %}
 <div class="bg-white rounded-lg shadow-sm border">
   <div class="divide-y">
     {% for r in rows %}
-    <div class="px-5 py-3 hover:bg-gray-50">
+    <a href="/ideas/{{ r.id }}" class="block px-5 py-3 hover:bg-gray-50 focus:bg-gray-50 focus:outline-none">
       <div class="flex items-start justify-between gap-3">
         <div class="flex-1 min-w-0">
           <div class="flex items-center gap-2 flex-wrap">
-            <a href="/ideas/{{ r.id }}"
-               class="font-medium text-gray-900 hover:text-indigo-700">
+            <span class="font-medium text-gray-900 hover:text-indigo-700">
               {{ r.company or (r.one_liner[:60] ~ '…' if r.one_liner and r.one_liner|length > 60 else r.one_liner) or '(untitled)' }}
-            </a>
+            </span>
             <span class="text-xs text-gray-400">{{ r.year_founded or '' }}</span>
             <span class="text-xs px-1.5 py-0.5 rounded bg-gray-100 text-gray-600">
               {{ r.program }}
@@ -76,23 +182,23 @@
         </div>
         <div class="flex-shrink-0 text-right text-xs space-y-1">
           {% if r.company_website %}
-          <a href="{{ r.company_website }}" target="_blank"
-             class="text-indigo-600 hover:text-indigo-800">site ↗</a><br>
+          <span onclick="event.stopPropagation(); event.preventDefault(); window.open('{{ r.company_website }}', '_blank');"
+                class="text-indigo-600 hover:text-indigo-800 cursor-pointer">site ↗</span><br>
           {% endif %}
           {% if r.cluster_id is not none and r.cluster_id != -1 %}
-          <a href="/ideas/clusters/{{ r.cluster_id }}"
-             class="text-gray-500 hover:text-gray-800">cluster {{ r.cluster_id }}</a>
+          <span onclick="event.stopPropagation(); event.preventDefault(); window.location='/ideas/clusters/{{ r.cluster_id }}';"
+                class="text-gray-500 hover:text-gray-800 cursor-pointer">cluster {{ r.cluster_id }}</span>
           {% endif %}
         </div>
       </div>
-    </div>
+    </a>
     {% endfor %}
   </div>
   {% include 'partials/pagination.html' %}
 </div>
 {% else %}
 <div class="bg-white rounded-lg shadow-sm border p-6 text-sm text-gray-500">
-  No ideas match "{{ q }}".
+  No ideas match these filters. Try widening the search or clearing some filters.
 </div>
 {% endif %}
 {% endblock %}

@@ -26,10 +26,11 @@
 <body class="h-full">
     <div class="min-h-full">
         <!-- Navigation -->
+        {% set admin_path = '/jobs' in request.url.path or '/admin/' in request.url.path %}
         <nav class="bg-indigo-600" x-data="{ open: false }">
             <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
                 <div class="flex h-16 items-center justify-between">
-                    <div class="flex items-center">
+                    <div class="flex items-center min-w-0">
                         <div class="flex-shrink-0">
                             <a href="/" class="text-white font-bold text-xl flex items-center gap-2">
                                 <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
@@ -37,27 +38,43 @@
                             </a>
                         </div>
                         <div class="hidden md:block">
-                            <div class="ml-10 flex items-baseline space-x-4">
+                            <div class="ml-8 flex items-center gap-1">
                                 <a href="/" class="{% if request.url.path == '/' %}bg-indigo-700 text-white{% else %}text-indigo-100 hover:bg-indigo-500{% endif %} rounded-md px-3 py-2 text-sm font-medium">Dashboard</a>
                                 <a href="/companies" class="{% if '/companies' in request.url.path %}bg-indigo-700 text-white{% else %}text-indigo-100 hover:bg-indigo-500{% endif %} rounded-md px-3 py-2 text-sm font-medium">Companies</a>
                                 <a href="/ideas" class="{% if request.url.path == '/ideas' or request.url.path.startswith('/ideas/') %}bg-indigo-700 text-white{% else %}text-indigo-100 hover:bg-indigo-500{% endif %} rounded-md px-3 py-2 text-sm font-medium">Ideas</a>
+                                <a href="/founders" class="{% if '/founders' in request.url.path %}bg-indigo-700 text-white{% else %}text-indigo-100 hover:bg-indigo-500{% endif %} rounded-md px-3 py-2 text-sm font-medium">Founders</a>
                                 <a href="/investors" class="{% if '/investors' in request.url.path %}bg-indigo-700 text-white{% else %}text-indigo-100 hover:bg-indigo-500{% endif %} rounded-md px-3 py-2 text-sm font-medium">Investors</a>
-                                <a href="/capital-events" class="{% if '/capital-events' in request.url.path %}bg-indigo-700 text-white{% else %}text-indigo-100 hover:bg-indigo-500{% endif %} rounded-md px-3 py-2 text-sm font-medium">Capital Events</a>
+                                <a href="/capital-events" class="{% if '/capital-events' in request.url.path %}bg-indigo-700 text-white{% else %}text-indigo-100 hover:bg-indigo-500{% endif %} rounded-md px-3 py-2 text-sm font-medium">Events</a>
                                 <a href="/news" class="{% if '/news' in request.url.path %}bg-indigo-700 text-white{% else %}text-indigo-100 hover:bg-indigo-500{% endif %} rounded-md px-3 py-2 text-sm font-medium">News</a>
-                                <a href="/founders" class="{% if '/founders' in request.url.path %}bg-indigo-700 text-white{% else %}text-indigo-100 hover:bg-indigo-500{% endif %} rounded-md px-3 py-2 text-sm font-medium">Stealth Founders</a>
-                                <a href="/jobs" class="{% if '/jobs' in request.url.path %}bg-indigo-700 text-white{% else %}text-indigo-100 hover:bg-indigo-500{% endif %} rounded-md px-3 py-2 text-sm font-medium">Jobs</a>
-                                <a href="/admin/stealth-job" class="{% if '/admin/' in request.url.path %}bg-indigo-700 text-white{% else %}text-indigo-100 hover:bg-indigo-500{% endif %} rounded-md px-3 py-2 text-sm font-medium">Admin</a>
                             </div>
                         </div>
                     </div>
-                    <div class="hidden md:block">
-                        <div class="ml-4 flex items-center md:ml-6">
-                            <a href="/export/csv?min_score=1" class="text-indigo-100 hover:text-white px-3 py-2 text-sm">
-                                Export CSV
-                            </a>
-                            <a href="/export/db" class="text-indigo-100 hover:text-white px-3 py-2 text-sm">
-                                Download DB
-                            </a>
+                    <div class="hidden md:flex items-center gap-1">
+                        <!-- Data dropdown -->
+                        <div class="relative" x-data="{ menu: false }" @keydown.escape="menu = false" @click.outside="menu = false">
+                            <button @click="menu = !menu" type="button" class="inline-flex items-center gap-1 text-indigo-100 hover:bg-indigo-500 rounded-md px-3 py-2 text-sm font-medium">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 15V3"/></svg>
+                                Data
+                            </button>
+                            <div x-show="menu" x-cloak x-transition
+                                 class="absolute right-0 z-20 mt-1 w-48 rounded-md bg-white shadow-lg ring-1 ring-black ring-opacity-5 py-1">
+                                <a href="/export/csv?min_score=1" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Export CSV</a>
+                                <a href="/export/db" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Download DB</a>
+                            </div>
+                        </div>
+                        <!-- Admin dropdown -->
+                        <div class="relative" x-data="{ menu: false }" @keydown.escape="menu = false" @click.outside="menu = false">
+                            <button @click="menu = !menu" type="button"
+                                    class="{% if admin_path %}bg-indigo-700 text-white{% else %}text-indigo-100 hover:bg-indigo-500{% endif %} inline-flex items-center gap-1 rounded-md px-3 py-2 text-sm font-medium">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                                Admin
+                            </button>
+                            <div x-show="menu" x-cloak x-transition
+                                 class="absolute right-0 z-20 mt-1 w-48 rounded-md bg-white shadow-lg ring-1 ring-black ring-opacity-5 py-1">
+                                <a href="/jobs" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Jobs</a>
+                                <a href="/admin/stealth-job" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Stealth job</a>
+                                <a href="/admin/sync-founders" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Sync founders</a>
+                            </div>
                         </div>
                     </div>
                     <!-- Mobile menu button -->
@@ -75,26 +92,30 @@
             </div>
 
             <!-- Mobile menu -->
-            <div class="md:hidden" x-show="open" x-cloak
+            <div class="md:hidden border-t border-indigo-500 bg-indigo-700" x-show="open" x-cloak
                  x-transition:enter="transition ease-out duration-100"
-                 x-transition:enter-start="transform opacity-0 scale-95"
-                 x-transition:enter-end="transform opacity-100 scale-100"
+                 x-transition:enter-start="opacity-0"
+                 x-transition:enter-end="opacity-100"
                  x-transition:leave="transition ease-in duration-75"
-                 x-transition:leave-start="transform opacity-100 scale-100"
-                 x-transition:leave-end="transform opacity-0 scale-95">
+                 x-transition:leave-start="opacity-100"
+                 x-transition:leave-end="opacity-0">
                 <div class="space-y-1 px-2 pb-3 pt-2">
-                    <a href="/" class="{% if request.url.path == '/' %}bg-indigo-700 text-white{% else %}text-indigo-100 hover:bg-indigo-500{% endif %} block rounded-md px-3 py-2 text-base font-medium">Dashboard</a>
-                    <a href="/companies" class="{% if '/companies' in request.url.path %}bg-indigo-700 text-white{% else %}text-indigo-100 hover:bg-indigo-500{% endif %} block rounded-md px-3 py-2 text-base font-medium">Companies</a>
-                    <a href="/ideas" class="{% if request.url.path == '/ideas' or request.url.path.startswith('/ideas/') %}bg-indigo-700 text-white{% else %}text-indigo-100 hover:bg-indigo-500{% endif %} block rounded-md px-3 py-2 text-base font-medium">Ideas</a>
-                    <a href="/investors" class="{% if '/investors' in request.url.path %}bg-indigo-700 text-white{% else %}text-indigo-100 hover:bg-indigo-500{% endif %} block rounded-md px-3 py-2 text-base font-medium">Investors</a>
-                    <a href="/capital-events" class="{% if '/capital-events' in request.url.path %}bg-indigo-700 text-white{% else %}text-indigo-100 hover:bg-indigo-500{% endif %} block rounded-md px-3 py-2 text-base font-medium">Capital Events</a>
-                    <a href="/news" class="{% if '/news' in request.url.path %}bg-indigo-700 text-white{% else %}text-indigo-100 hover:bg-indigo-500{% endif %} block rounded-md px-3 py-2 text-base font-medium">News</a>
-                    <a href="/founders" class="{% if '/founders' in request.url.path %}bg-indigo-700 text-white{% else %}text-indigo-100 hover:bg-indigo-500{% endif %} block rounded-md px-3 py-2 text-base font-medium">Stealth Founders</a>
-                    <a href="/jobs" class="{% if '/jobs' in request.url.path %}bg-indigo-700 text-white{% else %}text-indigo-100 hover:bg-indigo-500{% endif %} block rounded-md px-3 py-2 text-base font-medium">Jobs</a>
-                    <a href="/admin/stealth-job" class="{% if '/admin/' in request.url.path %}bg-indigo-700 text-white{% else %}text-indigo-100 hover:bg-indigo-500{% endif %} block rounded-md px-3 py-2 text-base font-medium">Admin</a>
-                    <div class="border-t border-indigo-500 mt-2 pt-2">
-                        <a href="/export/csv?min_score=1" class="text-indigo-100 hover:bg-indigo-500 block rounded-md px-3 py-2 text-base font-medium">Export CSV</a>
-                        <a href="/export/db" class="text-indigo-100 hover:bg-indigo-500 block rounded-md px-3 py-2 text-base font-medium">Download DB</a>
+                    <a href="/" class="{% if request.url.path == '/' %}bg-indigo-800 text-white{% else %}text-white hover:bg-indigo-600{% endif %} block rounded-md px-3 py-2 text-base font-medium">Dashboard</a>
+                    <a href="/companies" class="{% if '/companies' in request.url.path %}bg-indigo-800 text-white{% else %}text-white hover:bg-indigo-600{% endif %} block rounded-md px-3 py-2 text-base font-medium">Companies</a>
+                    <a href="/ideas" class="{% if request.url.path == '/ideas' or request.url.path.startswith('/ideas/') %}bg-indigo-800 text-white{% else %}text-white hover:bg-indigo-600{% endif %} block rounded-md px-3 py-2 text-base font-medium">Ideas</a>
+                    <a href="/founders" class="{% if '/founders' in request.url.path %}bg-indigo-800 text-white{% else %}text-white hover:bg-indigo-600{% endif %} block rounded-md px-3 py-2 text-base font-medium">Founders</a>
+                    <a href="/investors" class="{% if '/investors' in request.url.path %}bg-indigo-800 text-white{% else %}text-white hover:bg-indigo-600{% endif %} block rounded-md px-3 py-2 text-base font-medium">Investors</a>
+                    <a href="/capital-events" class="{% if '/capital-events' in request.url.path %}bg-indigo-800 text-white{% else %}text-white hover:bg-indigo-600{% endif %} block rounded-md px-3 py-2 text-base font-medium">Events</a>
+                    <a href="/news" class="{% if '/news' in request.url.path %}bg-indigo-800 text-white{% else %}text-white hover:bg-indigo-600{% endif %} block rounded-md px-3 py-2 text-base font-medium">News</a>
+                    <div class="border-t border-indigo-500 mt-2 pt-2 space-y-1">
+                        <p class="px-3 py-1 text-xs uppercase tracking-wider text-indigo-300">Data</p>
+                        <a href="/export/csv?min_score=1" class="text-white hover:bg-indigo-600 block rounded-md px-3 py-2 text-base font-medium">Export CSV</a>
+                        <a href="/export/db" class="text-white hover:bg-indigo-600 block rounded-md px-3 py-2 text-base font-medium">Download DB</a>
+                    </div>
+                    <div class="border-t border-indigo-500 mt-2 pt-2 space-y-1">
+                        <p class="px-3 py-1 text-xs uppercase tracking-wider text-indigo-300">Admin</p>
+                        <a href="/jobs" class="{% if '/jobs' in request.url.path %}bg-indigo-800 text-white{% else %}text-white hover:bg-indigo-600{% endif %} block rounded-md px-3 py-2 text-base font-medium">Jobs</a>
+                        <a href="/admin/stealth-job" class="{% if '/admin/' in request.url.path %}bg-indigo-800 text-white{% else %}text-white hover:bg-indigo-600{% endif %} block rounded-md px-3 py-2 text-base font-medium">Stealth job</a>
                     </div>
                 </div>
             </div>

@@ -13,8 +13,14 @@
 
 {% block content %}
 <!-- Search and Filters -->
-<div class="bg-white shadow rounded-lg mb-6">
-    <div class="px-4 py-5 sm:p-6">
+<div class="bg-white shadow rounded-lg mb-6" x-data="{ open: false }">
+    <div class="md:hidden flex items-center justify-between px-4 py-3 border-b border-gray-200">
+        <span class="text-sm font-medium text-gray-700">Filters</span>
+        <button type="button" @click="open = !open" class="text-sm text-indigo-600 hover:text-indigo-800">
+            <span x-text="open ? 'Hide' : 'Show'"></span>
+        </button>
+    </div>
+    <div :class="open ? 'block' : 'hidden md:block'" class="px-4 py-5 sm:p-6">
         <form method="GET" action="/companies" class="space-y-4">
             <div class="grid grid-cols-1 md:grid-cols-6 gap-4">
                 <!-- Search -->

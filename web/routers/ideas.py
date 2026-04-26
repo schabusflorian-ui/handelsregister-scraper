@@ -556,52 +556,101 @@ def _idea_row_dict(row) -> Dict:
 
 @router.get("/ideas/api/search.json")
 async def ideas_api_search(
-    q: str,
+    q: Optional[str] = None,
+    program: Optional[str] = None,
+    mechanism: Optional[str] = None,
+    sector: Optional[str] = None,
+    era: Optional[str] = None,
+    business_model: Optional[str] = None,
+    moat: Optional[str] = None,
+    niche: Optional[str] = None,
+    customer_size: Optional[str] = None,
+    solo: Optional[str] = None,
+    ai_first: Optional[str] = None,
+    year_min: Optional[int] = None,
+    year_max: Optional[int] = None,
     limit: int = 50,
     offset: int = 0,
 ):
-    """FTS5 search, JSON. Prefix-matching enabled.
+    """FTS5 + faceted search across all ideas. JSON parity for /ideas/search.
 
-    Response:  { "query": str, "total": int, "offset": int, "results": [...] }
+    All filter parameters are optional. Behaviour matches the HTML route at
+    /ideas/search 1:1 — same `_build_search_filter()` helper, same join shape.
+    Pass any subset of:
+      q, program, mechanism, sector, era, business_model, moat, niche,
+      customer_size, solo (0/1), ai_first (0/1), year_min, year_max.
+
+    At least one filter must be provided; an empty request returns total=0
+    rather than running an unbounded scan (matches the HTML page's empty
+    state).
+
+    Response: { "query", "filters", "total", "offset", "limit", "results" }
     """
     db = get_db()
     try:
         _ensure_views(db)
-        fts_q = " ".join(f"{w}*" for w in q.split() if w.strip())
-        if not fts_q:
-            return JSONResponse({"query": q, "total": 0, "offset": offset, "results": []})
+
+        any_filter = any([
+            q and q.strip(), program, mechanism, sector, era, business_model,
+            moat, niche, customer_size, solo, ai_first,
+            year_min is not None, year_max is not None,
+        ])
+        active_filters = {
+            "q": q or None, "program": program, "mechanism": mechanism,
+            "sector": sector, "era": era, "business_model": business_model,
+            "moat": moat, "niche": niche, "customer_size": customer_size,
+            "solo": solo, "ai_first": ai_first,
+            "year_min": year_min, "year_max": year_max,
+        }
+        active_filters = {k: v for k, v in active_filters.items() if v not in (None, "")}
+
+        if not any_filter:
+            return JSONResponse({
+                "query": q or "",
+                "filters": active_filters,
+                "total": 0,
+                "offset": offset,
+                "limit": limit,
+                "results": [],
+            })
+
+        where_sql, params = _build_search_filter(
+            q, program, mechanism, sector, era, business_model,
+            moat, niche, customer_size, solo, ai_first, year_min, year_max,
+        )
         cur = db.conn.cursor()
-        ids_sql = """
-            SELECT ci.id FROM company_ideas ci
-             WHERE ci.id IN (
-               SELECT rowid FROM company_ideas_fts
-                WHERE company_ideas_fts MATCH ?
-               UNION
-               SELECT rowid FROM idea_extraction_fts
-                WHERE idea_extraction_fts MATCH ?
-             )
-        """
-        total = cur.execute(f"SELECT COUNT(*) FROM ({ids_sql})",
-                            (fts_q, fts_q)).fetchone()[0]
+        total_row = cur.execute(
+            f"""
+            SELECT COUNT(*) FROM company_ideas ci
+            LEFT JOIN idea_extraction ie ON ie.company_idea_id = ci.id
+            WHERE {where_sql}
+            """,
+            params,
+        ).fetchone()
+        total = int(total_row[0]) if total_row else 0
+
         rows = cur.execute(
             f"""
             SELECT ci.id, ci.program, ci.company, ci.year_founded,
                    ci.one_liner, ci.company_website, ci.cluster_id,
                    ie.problem_statement, ie.mechanism_tags, ie.sector_tags,
                    ie.solo_buildable, ie.ai_first_advantage,
-                   ie.business_model, ie.moat_type, ie.niche_specificity
+                   ie.business_model, ie.moat_type, ie.niche_specificity,
+                   ie.customer_size
               FROM company_ideas ci
          LEFT JOIN idea_extraction ie ON ie.company_idea_id = ci.id
-             WHERE ci.id IN ({ids_sql})
+             WHERE {where_sql}
              ORDER BY ci.year_founded DESC NULLS LAST, ci.id DESC
              LIMIT ? OFFSET ?
             """,
-            (fts_q, fts_q, min(limit, 200), offset),
+            (*params, min(limit, 200), offset),
         ).fetchall()
         return JSONResponse({
-            "query": q,
+            "query": q or "",
+            "filters": active_filters,
             "total": int(total),
             "offset": offset,
+            "limit": min(limit, 200),
             "results": [_idea_row_dict(r) for r in rows],
         })
     finally:
@@ -780,68 +829,133 @@ async def ideas_api_map(
     program: Optional[str] = None,
     solo: Optional[str] = None,
     ai_first: Optional[str] = None,
+    business_model: Optional[str] = None,
+    moat: Optional[str] = None,
+    niche: Optional[str] = None,
+    highlight: Optional[str] = None,
     limit: int = 25000,
 ):
     """Map scatter data. One point per idea with umap coords.
 
-    Returns a compact row format (array-of-arrays) to keep payload small
-    for ECharts. Each point is [x, y, cluster_id, idea_id].
+    Each point: [x, y, cluster_id, idea_id, program, company,
+                 business_model, moat_type, niche_specificity,
+                 solo, ai_first, match]
 
-    Filters are SQL-side and cumulative — all optional.
+    Filters are cumulative — all optional. When `highlight=1`, filters do
+    NOT restrict the result set; instead every point gets a `match` flag
+    (1/0) so the client can gray non-matching points to preserve context.
     """
     db = get_db()
     try:
-        clauses = [
-            "ci.umap_x IS NOT NULL",
-            "ci.umap_y IS NOT NULL",
-        ]
-        params: list = []
-        joined = ""
-        if mechanism or sector or solo in ("0", "1") or ai_first in ("0", "1"):
-            joined = "LEFT JOIN idea_extraction ie ON ie.company_idea_id = ci.id"
+        # Always JOIN idea_extraction now — we surface its fields per-point
+        # for color-by + match computation.
+        joined = "LEFT JOIN idea_extraction ie ON ie.company_idea_id = ci.id"
+
+        match_clauses: list[str] = []
+        match_params: list = []
         if program:
-            clauses.append("ci.program = ?")
-            params.append(program)
+            match_clauses.append("ci.program = ?")
+            match_params.append(program)
         if solo in ("0", "1"):
-            clauses.append("ie.solo_buildable = ?")
-            params.append(int(solo))
+            match_clauses.append("ie.solo_buildable = ?")
+            match_params.append(int(solo))
         if ai_first in ("0", "1"):
-            clauses.append("ie.ai_first_advantage = ?")
-            params.append(int(ai_first))
+            match_clauses.append("ie.ai_first_advantage = ?")
+            match_params.append(int(ai_first))
         if mechanism:
-            clauses.append("ie.mechanism_tags LIKE ?")
-            params.append(f"%\"{mechanism}\"%")
+            match_clauses.append("ie.mechanism_tags LIKE ?")
+            match_params.append(f"%\"{mechanism}\"%")
         if sector:
-            clauses.append("ie.sector_tags LIKE ?")
-            params.append(f"%\"{sector}\"%")
-        where_sql = " AND ".join(clauses)
-        sql = f"""
-            SELECT ci.id, ci.umap_x, ci.umap_y, ci.cluster_id,
-                   ci.program, ci.company
-              FROM company_ideas ci
-              {joined}
-             WHERE {where_sql}
-             LIMIT ?
-        """
-        params.append(int(limit))
+            match_clauses.append("ie.sector_tags LIKE ?")
+            match_params.append(f"%\"{sector}\"%")
+        if business_model:
+            match_clauses.append("ie.business_model = ?")
+            match_params.append(business_model)
+        if moat:
+            match_clauses.append("ie.moat_type = ?")
+            match_params.append(moat)
+        if niche:
+            match_clauses.append("ie.niche_specificity = ?")
+            match_params.append(niche)
+
+        base_clauses = ["ci.umap_x IS NOT NULL", "ci.umap_y IS NOT NULL"]
+        is_highlight = highlight == "1"
+
+        if is_highlight and match_clauses:
+            # Highlight mode: return ALL points, compute match per-row in SQL.
+            match_expr = " AND ".join(match_clauses) if match_clauses else "1=1"
+            sql = f"""
+                SELECT ci.id, ci.umap_x, ci.umap_y, ci.cluster_id,
+                       ci.program, ci.company,
+                       ie.business_model, ie.moat_type, ie.niche_specificity,
+                       ie.solo_buildable, ie.ai_first_advantage,
+                       CASE WHEN {match_expr} THEN 1 ELSE 0 END AS match_flag
+                  FROM company_ideas ci
+                  {joined}
+                 WHERE {' AND '.join(base_clauses)}
+                 LIMIT ?
+            """
+            params = [*match_params, int(limit)]
+        else:
+            # Default mode: filter rows server-side, return only matches.
+            where_sql = " AND ".join(base_clauses + match_clauses)
+            sql = f"""
+                SELECT ci.id, ci.umap_x, ci.umap_y, ci.cluster_id,
+                       ci.program, ci.company,
+                       ie.business_model, ie.moat_type, ie.niche_specificity,
+                       ie.solo_buildable, ie.ai_first_advantage,
+                       1 AS match_flag
+                  FROM company_ideas ci
+                  {joined}
+                 WHERE {where_sql}
+                 LIMIT ?
+            """
+            params = [*match_params, int(limit)]
+
         rows = db.conn.execute(sql, params).fetchall()
 
-        # Programs for the filter select. Static across filters so compute
-        # once.
+        # Picklists for the filter selects. Static across filters.
         programs = [r[0] for r in db.conn.execute(
-            "SELECT DISTINCT program FROM company_ideas ORDER BY program"
+            "SELECT DISTINCT program FROM company_ideas WHERE program IS NOT NULL ORDER BY program"
+        )]
+        business_models = [r[0] for r in db.conn.execute(
+            "SELECT DISTINCT business_model FROM idea_extraction "
+            "WHERE business_model IS NOT NULL AND business_model != '' "
+            "ORDER BY business_model"
+        )]
+        moat_types = [r[0] for r in db.conn.execute(
+            "SELECT DISTINCT moat_type FROM idea_extraction "
+            "WHERE moat_type IS NOT NULL AND moat_type != '' "
+            "ORDER BY moat_type"
+        )]
+        niche_options = [r[0] for r in db.conn.execute(
+            "SELECT DISTINCT niche_specificity FROM idea_extraction "
+            "WHERE niche_specificity IS NOT NULL AND niche_specificity != '' "
+            "ORDER BY niche_specificity"
         )]
 
         points = [
             [float(r["umap_x"]), float(r["umap_y"]),
              int(r["cluster_id"]) if r["cluster_id"] is not None else -9999,
              int(r["id"]), r["program"],
-             (r["company"] or "")[:60]]
+             (r["company"] or "")[:60],
+             r["business_model"] or "",
+             r["moat_type"] or "",
+             r["niche_specificity"] or "",
+             int(r["solo_buildable"]) if r["solo_buildable"] is not None else -1,
+             int(r["ai_first_advantage"]) if r["ai_first_advantage"] is not None else -1,
+             int(r["match_flag"]),
+            ]
             for r in rows
         ]
+        match_count = sum(1 for p in points if p[11] == 1)
         return JSONResponse({
             "count": len(points),
+            "match_count": match_count,
             "programs": programs,
+            "business_models": business_models,
+            "moat_types": moat_types,
+            "niche_options": niche_options,
             "points": points,
         })
     finally:
@@ -890,40 +1004,196 @@ async def ideas_api_idea_card(idea_id: int):
 # Global search  — /ideas/search
 # ---------------------------------------------------------------------------
 
+# Categorical facets surfaced on the search page sidebar. Each tuple is
+# (param_name, sql_column). Era is handled separately because it lives on
+# idea_clusters, not idea_extraction.
+_SEARCH_FACETS = (
+    ("program",        "ci.program"),
+    ("business_model", "ie.business_model"),
+    ("moat",           "ie.moat_type"),
+    ("niche",          "ie.niche_specificity"),
+    ("customer_size",  "ie.customer_size"),
+)
+
+
+def _build_search_filter(
+    q: Optional[str],
+    program: Optional[str],
+    mechanism: Optional[str],
+    sector: Optional[str],
+    era: Optional[str],
+    business_model: Optional[str],
+    moat: Optional[str],
+    niche: Optional[str],
+    customer_size: Optional[str],
+    solo: Optional[str],
+    ai_first: Optional[str],
+    year_min: Optional[int],
+    year_max: Optional[int],
+) -> tuple[str, list]:
+    """Build the WHERE clause + params for /ideas/search.
+
+    Unlike _build_launch_filter, this has no implicit launch-only defaults.
+    Search spans every idea in company_ideas (LEFT JOIN idea_extraction).
+    """
+    clauses: List[str] = ["1=1"]
+    params: list = []
+
+    if program:
+        clauses.append("ci.program = ?")
+        params.append(program)
+    if business_model:
+        clauses.append("ie.business_model = ?")
+        params.append(business_model)
+    if moat:
+        clauses.append("ie.moat_type = ?")
+        params.append(moat)
+    if niche:
+        clauses.append("ie.niche_specificity = ?")
+        params.append(niche)
+    if customer_size:
+        clauses.append("ie.customer_size = ?")
+        params.append(customer_size)
+    if solo in ("0", "1"):
+        clauses.append("ie.solo_buildable = ?")
+        params.append(int(solo))
+    if ai_first in ("0", "1"):
+        clauses.append("ie.ai_first_advantage = ?")
+        params.append(int(ai_first))
+    if year_min is not None:
+        clauses.append("ci.year_founded >= ?")
+        params.append(year_min)
+    if year_max is not None:
+        clauses.append("ci.year_founded <= ?")
+        params.append(year_max)
+
+    # JSON-array tag filters (mechanism_tags / sector_tags). SQLite's json_each
+    # iterates the array; EXISTS short-circuits as soon as a match is found.
+    if mechanism:
+        clauses.append(
+            "EXISTS (SELECT 1 FROM json_each(ie.mechanism_tags) WHERE value = ?)"
+        )
+        params.append(mechanism)
+    if sector:
+        clauses.append(
+            "EXISTS (SELECT 1 FROM json_each(ie.sector_tags) WHERE value = ?)"
+        )
+        params.append(sector)
+
+    # Era lives on idea_clusters; join via cluster_id.
+    if era:
+        clauses.append(
+            "ci.cluster_id IN (SELECT cluster_id FROM idea_clusters WHERE era_class = ?)"
+        )
+        params.append(era)
+
+    # FTS prefix-match across both FTS tables.
+    if q and q.strip():
+        fts_q = " ".join(f"{w}*" for w in q.split() if w.strip())
+        clauses.append(
+            "ci.id IN ("
+            "  SELECT rowid FROM company_ideas_fts   WHERE company_ideas_fts   MATCH ?"
+            "  UNION"
+            "  SELECT rowid FROM idea_extraction_fts WHERE idea_extraction_fts MATCH ?"
+            ")"
+        )
+        params.extend([fts_q, fts_q])
+
+    return " AND ".join(clauses), params
+
+
+def _search_facet_counts(db, where_sql: str, params: tuple) -> Dict[str, List[Dict]]:
+    """Counts per facet under the current filter set (top 15 each)."""
+    out: Dict[str, List[Dict]] = {}
+    cur = db.conn.cursor()
+    for key, col in _SEARCH_FACETS:
+        rows = cur.execute(
+            f"""
+            SELECT {col} AS v, COUNT(*) AS n
+              FROM company_ideas ci
+         LEFT JOIN idea_extraction ie ON ie.company_idea_id = ci.id
+             WHERE {where_sql}
+               AND {col} IS NOT NULL AND {col} != ''
+             GROUP BY {col}
+             ORDER BY n DESC
+             LIMIT 15
+            """,
+            params,
+        ).fetchall()
+        out[key] = [{"value": r["v"], "count": r["n"]} for r in rows]
+
+    # Era counts — joined separately via idea_clusters.
+    era_rows = cur.execute(
+        f"""
+        SELECT icl.era_class AS v, COUNT(*) AS n
+          FROM company_ideas ci
+     LEFT JOIN idea_extraction ie ON ie.company_idea_id = ci.id
+     LEFT JOIN idea_clusters   icl ON icl.cluster_id   = ci.cluster_id
+         WHERE {where_sql}
+           AND icl.era_class IS NOT NULL
+         GROUP BY icl.era_class
+         ORDER BY n DESC
+        """,
+        params,
+    ).fetchall()
+    out["era"] = [{"value": r["v"], "count": r["n"]} for r in era_rows]
+
+    return out
+
+
 @router.get("/ideas/search", response_class=HTMLResponse)
 async def ideas_search(
     request: Request,
     q: Optional[str] = None,
+    program: Optional[str] = None,
+    mechanism: Optional[str] = None,
+    sector: Optional[str] = None,
+    era: Optional[str] = None,
+    business_model: Optional[str] = None,
+    moat: Optional[str] = None,
+    niche: Optional[str] = None,
+    customer_size: Optional[str] = None,
+    solo: Optional[str] = None,
+    ai_first: Optional[str] = None,
+    year_min: Optional[int] = None,
+    year_max: Optional[int] = None,
     page: int = 1,
     per_page: int = 25,
 ):
-    """FTS5 search across company_ideas + idea_extraction for ALL ideas
-    (not just launch candidates). Single search box, simple result list.
+    """FTS5 + faceted search across all ideas.
+
+    Filterable dimensions: program, mechanism (JSON tag), sector (JSON tag),
+    era (cluster era_class), business_model, moat_type, niche_specificity,
+    customer_size, solo_buildable, ai_first_advantage, year range.
     """
     db = get_db()
     try:
         _ensure_views(db)
+
+        any_filter = any([
+            q and q.strip(), program, mechanism, sector, era, business_model,
+            moat, niche, customer_size, solo, ai_first,
+            year_min is not None, year_max is not None,
+        ])
+
         rows: List[Dict] = []
         total = 0
-        if q and q.strip():
-            fts_q = " ".join(f"{w}*" for w in q.split() if w.strip())
+        facets: Dict[str, List[Dict]] = {}
+
+        if any_filter:
+            where_sql, params = _build_search_filter(
+                q, program, mechanism, sector, era, business_model,
+                moat, niche, customer_size, solo, ai_first, year_min, year_max,
+            )
             cur = db.conn.cursor()
-            # Union rowids from both FTS tables, dedupe to company_idea.id.
-            # Rank by BM25 if available; fall back to insertion order.
-            ids_sql = """
-                SELECT ci.id
-                  FROM company_ideas ci
-                 WHERE ci.id IN (
-                   SELECT rowid FROM company_ideas_fts
-                    WHERE company_ideas_fts MATCH ?
-                   UNION
-                   SELECT rowid FROM idea_extraction_fts
-                    WHERE idea_extraction_fts MATCH ?
-                 )
-            """
+
             total_row = cur.execute(
-                f"SELECT COUNT(*) FROM ({ids_sql})",
-                (fts_q, fts_q),
+                f"""
+                SELECT COUNT(*) FROM company_ideas ci
+                LEFT JOIN idea_extraction ie ON ie.company_idea_id = ci.id
+                WHERE {where_sql}
+                """,
+                params,
             ).fetchone()
             total = int(total_row[0]) if total_row else 0
 
@@ -934,31 +1204,64 @@ async def ideas_search(
                        ci.one_liner, ci.company_website, ci.cluster_id,
                        ie.problem_statement, ie.mechanism_tags, ie.sector_tags,
                        ie.solo_buildable, ie.ai_first_advantage,
-                       ie.business_model, ie.moat_type
+                       ie.business_model, ie.moat_type, ie.niche_specificity,
+                       ie.customer_size
                   FROM company_ideas ci
              LEFT JOIN idea_extraction ie ON ie.company_idea_id = ci.id
-                 WHERE ci.id IN ({ids_sql})
+                 WHERE {where_sql}
                  ORDER BY ci.year_founded DESC NULLS LAST, ci.id DESC
                  LIMIT ? OFFSET ?
                 """,
-                (fts_q, fts_q, per_page, offset),
+                (*params, per_page, offset),
             )]
 
+            facets = _search_facet_counts(db, where_sql, tuple(params))
+
         total_pages = max(1, (total + per_page - 1) // per_page) if total else 1
+
+        # Active filters list — used by template for the chip row.
+        filters = {
+            "q": q or "",
+            "program": program or "",
+            "mechanism": mechanism or "",
+            "sector": sector or "",
+            "era": era or "",
+            "business_model": business_model or "",
+            "moat": moat or "",
+            "niche": niche or "",
+            "customer_size": customer_size or "",
+            "solo": solo or "",
+            "ai_first": ai_first or "",
+            "year_min": str(year_min) if year_min is not None else "",
+            "year_max": str(year_max) if year_max is not None else "",
+        }
+
         from urllib.parse import urlencode
-        base_qs = urlencode([("q", q or "")])
+        base_qs = urlencode([(k, v) for k, v in filters.items() if v])
+
+        # Pre-compute "remove this one filter" URLs for each active chip.
+        # The chip macro reads chip_links[name] as the href.
+        chip_links = {
+            name: urlencode([(k, v) for k, v in filters.items() if v and k != name])
+            for name in filters
+        }
 
         return templates.TemplateResponse(
             name="ideas/search.html",
             request=request,
             context={
-                "q": q or "",
+                "filters": filters,
+                "any_filter": any_filter,
+                "facets": facets,
                 "rows": rows,
                 "total": total,
                 "page": page,
                 "per_page": per_page,
                 "total_pages": total_pages,
                 "base_qs": base_qs,
+                "chip_links": chip_links,
+                # Backward-compat for any partials that still read `q` directly:
+                "q": q or "",
             },
         )
     finally:
@@ -1224,6 +1527,117 @@ async def ideas_api_heatmap(n_mechanisms: int = 25, n_sectors: int = 20):
         db.close()
 
 
+def _timeline_data(
+    db,
+    mode: str = "mechanism",
+    top_n: int = 15,
+    year_min: int = 2015,
+) -> Dict:
+    """Year × top-N {mechanism|sector|era} heatmap.
+
+    ECharts-friendly shape:
+      {
+        "years":      [2015, 2016, ...],     # x-axis
+        "categories": [...],                 # y-axis (top N by total count)
+        "cells":      [[xi, yi, n], ...],
+        "max_n":      max cell count (for color scale)
+      }
+
+    For mechanism/sector we expand the JSON tag arrays via json_each. For
+    era we join idea_clusters. Year is bucketed by ci.year_founded.
+    """
+    mode = mode if mode in ("mechanism", "sector", "era") else "mechanism"
+
+    if mode == "era":
+        # year × era heatmap via idea_clusters join. Era is small (~5
+        # values) so top_n is irrelevant — return all eras.
+        rows = _safe_query(db, """
+            SELECT ci.year_founded AS year,
+                   COALESCE(c.era_class, 'unknown') AS category,
+                   COUNT(*) AS n
+              FROM company_ideas ci
+         LEFT JOIN idea_clusters c ON c.cluster_id = ci.cluster_id
+             WHERE ci.year_founded IS NOT NULL
+               AND ci.year_founded >= ?
+             GROUP BY ci.year_founded, COALESCE(c.era_class, 'unknown')
+        """, (year_min,))
+    else:
+        col = "mechanism_tags" if mode == "mechanism" else "sector_tags"
+        rows = _safe_query(db, f"""
+            SELECT ci.year_founded AS year,
+                   je.value AS category,
+                   COUNT(*) AS n
+              FROM company_ideas ci
+              JOIN idea_extraction ie ON ie.company_idea_id = ci.id
+              JOIN json_each(ie.{col}) je
+             WHERE ci.year_founded IS NOT NULL
+               AND ci.year_founded >= ?
+               AND je.value IS NOT NULL AND je.value != ''
+             GROUP BY ci.year_founded, je.value
+        """, (year_min,))
+
+    if not rows:
+        return {"years": [], "categories": [], "cells": [], "max_n": 0}
+
+    # Top-N categories by total count.
+    totals: Dict[str, int] = {}
+    for r in rows:
+        totals[r["category"]] = totals.get(r["category"], 0) + int(r["n"])
+    top_cats = sorted(totals.items(), key=lambda kv: -kv[1])
+    if mode != "era":
+        top_cats = top_cats[:top_n]
+    categories = [c for c, _ in top_cats]
+    cat_idx = {c: i for i, c in enumerate(categories)}
+
+    # Years span: min..max from data, but cap top end at current year + 1.
+    years_set = sorted({int(r["year"]) for r in rows})
+    if not years_set:
+        return {"years": [], "categories": categories, "cells": [], "max_n": 0}
+    years = list(range(years_set[0], years_set[-1] + 1))
+    year_idx = {y: i for i, y in enumerate(years)}
+
+    cells: List[List[int]] = []
+    max_n = 0
+    for r in rows:
+        cat = r["category"]
+        if cat not in cat_idx:
+            continue
+        yi = year_idx.get(int(r["year"]))
+        if yi is None:
+            continue
+        n = int(r["n"])
+        cells.append([yi, cat_idx[cat], n])
+        if n > max_n:
+            max_n = n
+
+    return {
+        "years": years,
+        "categories": categories,
+        "cells": cells,
+        "max_n": max_n,
+    }
+
+
+@router.get("/ideas/api/timeline.json")
+async def ideas_api_timeline(
+    mode: str = "mechanism",
+    top_n: int = 15,
+    year_min: int = 2015,
+):
+    """Year × top-N {mechanism|sector|era} timeline heatmap data.
+
+    Reveals cohort drift — which mechanisms/sectors got hot when.
+    `mode` ∈ {mechanism, sector, era}. `top_n` ignored for era (always all).
+    `year_min` lower-bounds the year axis.
+    """
+    db = get_db()
+    try:
+        _ensure_views(db)
+        return JSONResponse(_timeline_data(db, mode=mode, top_n=top_n, year_min=year_min))
+    finally:
+        db.close()
+
+
 @router.get("/ideas/api/stats.json")
 async def ideas_api_stats():
     db = get_db()
@@ -1407,34 +1821,59 @@ async def ideas_api_scatter():
 
     Shape:
       {
-        "rows": [[x, y, cluster_id, era_rank, program_rank, id, company, short_desc], ...],
-        "era_map":     {0: "hot", 1: "steady", ...},       # era_class <-> numeric idx
-        "program_map": {0: "Y Combinator", ...},           # program <-> numeric idx
+        "rows": [[x, y, cluster_id, era_rank, program_rank, id, company, short_desc,
+                  bm_rank, moat_rank, niche_rank, solo, ai_first], ...],
+        "era_map":     {0: "hot", 1: "steady", ...},
+        "program_map": {0: "Y Combinator", ...},
+        "bm_map":      {0: "saas", 1: "consumer_app", ...},
+        "moat_map":    {0: "none", 1: "data", ...},
+        "niche_map":   {0: "narrow", 1: "broad"},
         "cluster_map": {cluster_id: "label"}               # resolved on hover
       }
 
+    Indices are -1 when the value is null. solo / ai_first are 0/1/-1 directly.
     x/y rounded to 3 decimals; short_desc truncated to 140 chars.
-    Response is ~2-3 MB raw, ~400-700 KB gzipped.
+    Response is ~3-4 MB raw, ~600-900 KB gzipped.
     """
     db = get_db()
     try:
         cur = db.conn.cursor()
-        # Normalize era_class + program into small integers so each row is
-        # 8 fields of simple primitives — keeps the JSON compact.
+        # Normalize categorical strings into small integers so each row stays
+        # cheap — extracted twice (here and in the JS) but the wire format
+        # gets ~30% smaller.
         eras = [r[0] for r in cur.execute(
             "SELECT DISTINCT era_class FROM idea_clusters "
             "WHERE era_class IS NOT NULL ORDER BY era_class").fetchall()]
         programs = [r[0] for r in cur.execute(
             "SELECT DISTINCT program FROM company_ideas "
             "WHERE program IS NOT NULL ORDER BY program").fetchall()]
-        era_idx = {e: i for i, e in enumerate(eras)}
+        bms = [r[0] for r in cur.execute(
+            "SELECT DISTINCT business_model FROM idea_extraction "
+            "WHERE business_model IS NOT NULL AND business_model != '' "
+            "ORDER BY business_model").fetchall()]
+        moats = [r[0] for r in cur.execute(
+            "SELECT DISTINCT moat_type FROM idea_extraction "
+            "WHERE moat_type IS NOT NULL AND moat_type != '' "
+            "ORDER BY moat_type").fetchall()]
+        niches = [r[0] for r in cur.execute(
+            "SELECT DISTINCT niche_specificity FROM idea_extraction "
+            "WHERE niche_specificity IS NOT NULL AND niche_specificity != '' "
+            "ORDER BY niche_specificity").fetchall()]
+
+        era_idx  = {e: i for i, e in enumerate(eras)}
         prog_idx = {p: i for i, p in enumerate(programs)}
+        bm_idx   = {b: i for i, b in enumerate(bms)}
+        moat_idx = {m: i for i, m in enumerate(moats)}
+        niche_idx = {n: i for i, n in enumerate(niches)}
 
         rows_raw = cur.execute("""
             SELECT ci.id, ci.company, ci.one_liner, ci.program, ci.umap_x, ci.umap_y,
-                   ci.cluster_id, c.era_class
+                   ci.cluster_id, c.era_class,
+                   ie.business_model, ie.moat_type, ie.niche_specificity,
+                   ie.solo_buildable, ie.ai_first_advantage
               FROM company_ideas ci
-         LEFT JOIN idea_clusters c ON c.cluster_id = ci.cluster_id
+         LEFT JOIN idea_clusters   c  ON c.cluster_id  = ci.cluster_id
+         LEFT JOIN idea_extraction ie ON ie.company_idea_id = ci.id
              WHERE ci.umap_x IS NOT NULL
                AND ci.umap_y IS NOT NULL
                AND ci.company IS NOT NULL AND ci.company != ''
@@ -1452,6 +1891,11 @@ async def ideas_api_scatter():
                 int(r["id"]),
                 r["company"][:60] if r["company"] else "",
                 desc,
+                bm_idx.get(r["business_model"], -1),
+                moat_idx.get(r["moat_type"], -1),
+                niche_idx.get(r["niche_specificity"], -1),
+                int(r["solo_buildable"]) if r["solo_buildable"] is not None else -1,
+                int(r["ai_first_advantage"]) if r["ai_first_advantage"] is not None else -1,
             ])
 
         # Cluster labels for hover — only include the ones present in rows.
@@ -1469,6 +1913,9 @@ async def ideas_api_scatter():
             "rows":        rows,
             "era_map":     {i: e for i, e in enumerate(eras)},
             "program_map": {i: p for i, p in enumerate(programs)},
+            "bm_map":      {i: b for i, b in enumerate(bms)},
+            "moat_map":    {i: m for i, m in enumerate(moats)},
+            "niche_map":   {i: n for i, n in enumerate(niches)},
             "cluster_map": {str(k): v for k, v in cluster_map.items()},
         })
     finally:

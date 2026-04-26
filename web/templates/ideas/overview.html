@@ -11,19 +11,12 @@
 {% block header %}
 <div class="bg-white shadow-sm border-b">
   <div class="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
-    <div class="flex items-start justify-between gap-4">
-      <div>
-        <h1 class="text-2xl font-bold text-gray-900">Ideas</h1>
-        <p class="text-sm text-gray-500 mt-1">
-          Idea discovery across accelerator cohorts, VC portfolios and microbusiness communities.
-          Tagged by mechanism × sector for gap-finding.
-        </p>
-      </div>
-      <div class="flex items-center gap-2 text-xs text-gray-500">
-        <span class="inline-flex items-center gap-1 px-2 py-1 rounded bg-gray-100">
-          Model: <code class="font-mono">claude-haiku-4-5</code>
-        </span>
-      </div>
+    <div>
+      <h1 class="text-2xl font-bold text-gray-900">Ideas</h1>
+      <p class="text-sm text-gray-500 mt-1">
+        Idea discovery across accelerator cohorts, VC portfolios and microbusiness communities.
+        Tagged by mechanism × sector for gap-finding.
+      </p>
     </div>
     {# Search box — routes to /ideas/search for global FTS5 #}
     <form method="GET" action="/ideas/search"
@@ -45,9 +38,6 @@
       <a href="/ideas/search" class="hover:text-indigo-700">
         full search →
       </a>
-      <a href="/openapi.json" class="hover:text-indigo-700 ml-auto font-mono">
-        /openapi.json
-      </a>
     </div>
   </div>
 </div>
@@ -57,12 +47,8 @@
 
 {% if stats.ideas == 0 %}
 <div class="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-6 text-sm text-amber-900">
-  <div class="font-semibold mb-1">Idea-pipeline tables are empty on this deployment.</div>
-  <div>
-    This page is wired up, but the DB at <code class="font-mono">{{ request.app.extra.db_path if request.app.extra.db_path else '/data/handelsregister.db' }}</code>
-    doesn't yet contain <code>company_ideas</code> / <code>idea_extraction</code> / <code>idea_clusters</code>.
-    Either seed it from a local dump, or run the scrapers + loader + clustering jobs under <code>scheduler/jobs/</code>.
-  </div>
+  <div class="font-semibold mb-1">No ideas indexed yet</div>
+  <div>The idea-discovery pipeline hasn't produced results on this deployment. Check back soon.</div>
 </div>
 {% endif %}
 
@@ -95,55 +81,133 @@
   </div>
 </div>
 
-{# ---------------- UMAP "map of idea space" scatter ---------------- #}
-<div class="bg-white p-5 rounded-lg shadow-sm border mb-6">
-  <div class="flex items-center justify-between mb-3">
-    <div>
-      <h2 class="text-lg font-semibold text-gray-900">Map of idea space</h2>
-      <p class="text-xs text-gray-500">
-        Every row in <code>company_ideas</code>, projected from a 384-dim MiniLM embedding to 2D via UMAP.
-        Hover a dot; click to drill into that company's cluster.
-      </p>
-    </div>
-    <div class="flex items-center gap-2" id="scatter-controls">
-      <label class="text-xs text-gray-500">Colour by:</label>
-      <select id="color-by" class="text-xs border-gray-300 rounded">
-        <option value="era" selected>era</option>
-        <option value="program">program</option>
-        <option value="cluster">cluster (top 30)</option>
-      </select>
-      <button id="scatter-reset" type="button"
-              class="text-xs px-2 py-1 border border-gray-300 rounded hover:bg-gray-50">
-        Reset zoom
-      </button>
-    </div>
+{# ---------------- Tabbed exploration views ---------------- #}
+<div class="bg-white rounded-lg shadow-sm border mb-6"
+     x-data="{ tab: 'similarity', loaded: { similarity: false, heatmap: false, timeline: false } }"
+     x-init="$watch('tab', v => { window.dispatchEvent(new CustomEvent('idea-tab-change', { detail: v })); loaded[v] = true; })">
+  {# Tab strip #}
+  <div class="flex items-center border-b border-gray-200 px-2">
+    <button @click="tab = 'similarity'" type="button"
+            :class="tab === 'similarity' ? 'border-indigo-600 text-indigo-700' : 'border-transparent text-gray-500 hover:text-gray-800'"
+            class="px-4 py-3 text-sm font-medium border-b-2 -mb-px transition-colors">
+      Similarity map
+    </button>
+    <button @click="tab = 'heatmap'" type="button"
+            :class="tab === 'heatmap' ? 'border-indigo-600 text-indigo-700' : 'border-transparent text-gray-500 hover:text-gray-800'"
+            class="px-4 py-3 text-sm font-medium border-b-2 -mb-px transition-colors">
+      Mechanism × Sector
+    </button>
+    <button @click="tab = 'timeline'" type="button"
+            :class="tab === 'timeline' ? 'border-indigo-600 text-indigo-700' : 'border-transparent text-gray-500 hover:text-gray-800'"
+            class="px-4 py-3 text-sm font-medium border-b-2 -mb-px transition-colors">
+      Timeline
+    </button>
+    <span class="ml-auto text-xs text-gray-400 mr-3 hidden md:inline">
+      Three lenses on the same dataset — pick the axes that match your question.
+    </span>
   </div>
-  <div id="umap-scatter" style="width: 100%; height: 620px;"></div>
-  <div id="umap-loading" class="text-xs text-gray-400 mt-2">Loading 2D embedding…</div>
-</div>
 
-{# ---------------- Mechanism × Sector heatmap ---------------- #}
-<div class="bg-white p-5 rounded-lg shadow-sm border mb-6">
-  <div class="flex items-center justify-between mb-3">
-    <div>
-      <h2 class="text-lg font-semibold text-gray-900">Mechanism × Sector heatmap</h2>
-      <p class="text-xs text-gray-500">
-        Top mechanisms (y) × top sectors (x). Dense cells = herd. Blank cells = potential whitespace.
-      </p>
+  {# Similarity tab — UMAP scatter #}
+  <div x-show="tab === 'similarity'" class="p-5">
+    <div class="flex items-center justify-between mb-3">
+      <div>
+        <h2 class="text-lg font-semibold text-gray-900">Map of idea space</h2>
+        <p class="text-xs text-gray-500">
+          <span class="font-medium text-gray-700">Position = idea similarity.</span>
+          Nearby dots describe ideas in similar language. Colors group ideas the algorithm
+          clustered together (same neighborhood = same broad concept).
+          Dense regions = crowded territory; empty regions = candidate whitespace.
+          Hover a dot for details, click to drill into that cluster.
+        </p>
+      </div>
+      <div class="flex items-center gap-2" id="scatter-controls">
+        <label class="text-xs text-gray-500">Colour by:</label>
+        <select id="color-by" class="text-xs border-gray-300 rounded">
+          <optgroup label="cohort">
+            <option value="era" selected>era</option>
+            <option value="program">program</option>
+            <option value="cluster">cluster (top 30)</option>
+          </optgroup>
+          <optgroup label="business shape">
+            <option value="business_model">business model</option>
+            <option value="moat">moat type</option>
+            <option value="niche">niche specificity</option>
+          </optgroup>
+          <optgroup label="builder fit">
+            <option value="solo">solo-buildable</option>
+            <option value="ai_first">ai-first advantage</option>
+          </optgroup>
+        </select>
+        <button id="scatter-reset" type="button"
+                class="text-xs px-2 py-1 border border-gray-300 rounded hover:bg-gray-50">
+          Reset zoom
+        </button>
+      </div>
     </div>
-    <div class="flex items-center gap-2">
-      <label class="text-xs text-gray-500">Top N mechanisms:</label>
-      <select id="n-mech" class="text-xs border-gray-300 rounded">
-        <option value="15">15</option><option value="25" selected>25</option><option value="40">40</option>
-      </select>
-      <label class="text-xs text-gray-500 ml-2">Top N sectors:</label>
-      <select id="n-sector" class="text-xs border-gray-300 rounded">
-        <option value="12">12</option><option value="20" selected>20</option><option value="30">30</option>
-      </select>
-    </div>
+    <div id="umap-scatter" style="width: 100%; height: 620px;"></div>
+    <div id="umap-loading" class="text-xs text-gray-400 mt-2">Loading 2D embedding…</div>
   </div>
-  <div id="heatmap" style="width: 100%; height: 560px;"></div>
-  <div id="heatmap-loading" class="text-xs text-gray-400 mt-2">Loading heatmap…</div>
+
+  {# Mechanism × Sector tab #}
+  <div x-show="tab === 'heatmap'" x-cloak class="p-5">
+    <div class="flex items-center justify-between mb-3">
+      <div>
+        <h2 class="text-lg font-semibold text-gray-900">Mechanism × Sector</h2>
+        <p class="text-xs text-gray-500">
+          <span class="font-medium text-gray-700">Semantic axes.</span>
+          Top mechanisms (Y) × top sectors (X). Dense cells = herd territory.
+          Blank cells = candidate whitespace. Click a cell to see its members.
+        </p>
+      </div>
+      <div class="flex items-center gap-2">
+        <label class="text-xs text-gray-500">Top N mechanisms:</label>
+        <select id="n-mech" class="text-xs border-gray-300 rounded">
+          <option value="15">15</option><option value="25" selected>25</option><option value="40">40</option>
+        </select>
+        <label class="text-xs text-gray-500 ml-2">Top N sectors:</label>
+        <select id="n-sector" class="text-xs border-gray-300 rounded">
+          <option value="12">12</option><option value="20" selected>20</option><option value="30">30</option>
+        </select>
+      </div>
+    </div>
+    <div id="heatmap" style="width: 100%; height: 560px;"></div>
+    <div id="heatmap-loading" class="text-xs text-gray-400 mt-2">Click the tab to load the heatmap.</div>
+  </div>
+
+  {# Timeline tab #}
+  <div x-show="tab === 'timeline'" x-cloak class="p-5">
+    <div class="flex items-center justify-between mb-3">
+      <div>
+        <h2 class="text-lg font-semibold text-gray-900">Timeline</h2>
+        <p class="text-xs text-gray-500">
+          <span class="font-medium text-gray-700">Year × category.</span>
+          Cohort drift — which categories surged when. Bright cells in recent years
+          = momentum; bright in old years with cold today = rebuild territory.
+          Click a cell to drill into its members.
+        </p>
+      </div>
+      <div class="flex items-center gap-2">
+        <label class="text-xs text-gray-500">Y-axis:</label>
+        <select id="tl-mode" class="text-xs border-gray-300 rounded">
+          <option value="mechanism" selected>mechanism</option>
+          <option value="sector">sector</option>
+          <option value="era">era</option>
+        </select>
+        <label class="text-xs text-gray-500 ml-2">Top N:</label>
+        <select id="tl-top" class="text-xs border-gray-300 rounded">
+          <option value="10">10</option><option value="15" selected>15</option><option value="25">25</option>
+        </select>
+        <label class="text-xs text-gray-500 ml-2">From:</label>
+        <select id="tl-year" class="text-xs border-gray-300 rounded">
+          <option value="2010">2010</option>
+          <option value="2015" selected>2015</option>
+          <option value="2020">2020</option>
+        </select>
+      </div>
+    </div>
+    <div id="timeline" style="width: 100%; height: 560px;"></div>
+    <div id="timeline-loading" class="text-xs text-gray-400 mt-2">Click the tab to load the timeline.</div>
+  </div>
 </div>
 
 {# ---------------- Split: Launch candidates + Rebuild candidates ---------------- #}
@@ -158,7 +222,7 @@
     </div>
     <div class="divide-y">
       {% for c in launch_candidates %}
-      <div class="px-5 py-3 hover:bg-gray-50">
+      <a href="/ideas/{{ c.id }}" class="block px-5 py-3 hover:bg-gray-50 focus:bg-gray-50 focus:outline-none">
         <div class="flex items-baseline justify-between gap-3">
           <div class="flex-1 min-w-0">
             <div class="flex items-center gap-2">
@@ -186,14 +250,15 @@
             </div>
           </div>
           {% if c.company_website %}
-          <a href="{{ c.company_website }}" target="_blank"
-             class="text-xs text-indigo-600 hover:text-indigo-800 whitespace-nowrap">↗</a>
+          <span onclick="event.stopPropagation(); window.open('{{ c.company_website }}', '_blank'); return false;"
+                class="text-xs text-indigo-600 hover:text-indigo-800 whitespace-nowrap cursor-pointer"
+                title="Open company website">↗</span>
           {% endif %}
         </div>
-      </div>
+      </a>
       {% else %}
       <div class="px-5 py-6 text-sm text-gray-500">
-        No launch candidates yet. Run the LLM extraction job.
+        No launch candidates indexed yet.
       </div>
       {% endfor %}
     </div>
@@ -209,7 +274,8 @@
     </div>
     <div class="divide-y">
       {% for r in rebuild_candidates %}
-      <div class="px-5 py-3 hover:bg-gray-50 flex items-center justify-between gap-3">
+      <a href="/ideas/clusters/{{ r.cluster_id }}"
+         class="block px-5 py-3 hover:bg-gray-50 focus:bg-gray-50 focus:outline-none flex items-center justify-between gap-3">
         <div class="flex-1 min-w-0">
           <div class="flex items-center gap-2">
             <span class="font-medium text-gray-900 truncate">{{ r.label }}</span>
@@ -225,12 +291,11 @@
             · <span class="text-green-700">{{ r.count_2023_plus }}</span> 2023+
           </div>
         </div>
-        <a href="/ideas/clusters/{{ r.cluster_id }}"
-           class="text-xs text-indigo-600 hover:text-indigo-800 whitespace-nowrap">drill →</a>
-      </div>
+        <span class="text-xs text-indigo-600 whitespace-nowrap">drill →</span>
+      </a>
       {% else %}
       <div class="px-5 py-6 text-sm text-gray-500">
-        No rebuild candidates yet (clusters need year data first).
+        No rebuild candidates yet — clusters need year data first.
       </div>
       {% endfor %}
     </div>
@@ -270,14 +335,19 @@
             x-data="gapVote('{{ g.mechanism | e }}', '{{ g.sector | e }}', {{ g.votes.up }}, {{ g.votes.down }})">
           <td class="px-3 py-2 text-right text-gray-400">{{ g.rank }}</td>
           <td class="px-3 py-2">
-            <div class="flex items-center gap-2 flex-wrap">
-              <span class="font-mono text-xs px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-700">{{ g.mechanism }}</span>
-              <span class="text-gray-400">×</span>
-              <span class="font-mono text-xs px-1.5 py-0.5 rounded bg-amber-50 text-amber-800">{{ g.sector }}</span>
-            </div>
-            <div class="text-[11px] text-gray-400 mt-1">
-              mech used {{ g.mech_uses }}× · sector used {{ g.sector_uses }}×
-            </div>
+            <a href="/ideas/search?q={{ g.mechanism | urlencode }}+{{ g.sector | urlencode }}&mechanism={{ g.mechanism | urlencode }}&sector={{ g.sector | urlencode }}"
+               class="group inline-flex flex-col gap-1"
+               title="Search ideas matching this mechanism × sector">
+              <div class="flex items-center gap-2 flex-wrap">
+                <span class="font-mono text-xs px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-700 group-hover:bg-indigo-100">{{ g.mechanism }}</span>
+                <span class="text-gray-400">×</span>
+                <span class="font-mono text-xs px-1.5 py-0.5 rounded bg-amber-50 text-amber-800 group-hover:bg-amber-100">{{ g.sector }}</span>
+                <span class="text-[10px] text-indigo-500 opacity-0 group-hover:opacity-100 transition-opacity">→ search</span>
+              </div>
+              <div class="text-[11px] text-gray-400">
+                mech used {{ g.mech_uses }}× · sector used {{ g.sector_uses }}×
+              </div>
+            </a>
           </td>
           <td class="px-3 py-2 text-xs text-gray-600 max-w-xs truncate" title="{{ g.mech_examples }}">
             {{ g.mech_examples or '—' }}
@@ -407,7 +477,13 @@
     'legacy':            '#6b7280',  // gray
     'unknown':           '#d1d5db',  // light gray
   };
-  // Qualitative palette for programs + top clusters.
+  // Binary palettes: yes/no/unknown. Green = high-leverage, gray = unknown.
+  const BINARY_COLORS = {
+    'yes':     '#10b981',  // emerald
+    'no':      '#94a3b8',  // slate
+    'unknown': '#e5e7eb',  // light gray
+  };
+  // Qualitative palette for programs + top clusters + business_model etc.
   const QUAL = [
     '#4f46e5', '#059669', '#dc2626', '#ea580c', '#ca8a04',
     '#0891b2', '#c026d3', '#16a34a', '#e11d48', '#7c3aed',
@@ -425,13 +501,26 @@
     const colors = {};
 
     for (const row of raw.rows) {
-      const [x, y, cid, eraIdx, progIdx, id, company, desc] = row;
+      const [x, y, cid, eraIdx, progIdx, id, company, desc,
+             bmIdx, moatIdx, nicheIdx, solo, aiFirst] = row;
       let key;
       if (colorBy === 'era') {
         key = raw.era_map[eraIdx] || 'unknown';
         colors[key] = ERA_COLORS[key] || '#d1d5db';
       } else if (colorBy === 'program') {
         key = raw.program_map[progIdx] || '(other)';
+      } else if (colorBy === 'business_model') {
+        key = raw.bm_map[bmIdx] || '(other)';
+      } else if (colorBy === 'moat') {
+        key = raw.moat_map[moatIdx] || '(other)';
+      } else if (colorBy === 'niche') {
+        key = raw.niche_map[nicheIdx] || '(other)';
+      } else if (colorBy === 'solo') {
+        key = solo === 1 ? 'yes' : solo === 0 ? 'no' : 'unknown';
+        colors[key] = BINARY_COLORS[key];
+      } else if (colorBy === 'ai_first') {
+        key = aiFirst === 1 ? 'yes' : aiFirst === 0 ? 'no' : 'unknown';
+        colors[key] = BINARY_COLORS[key];
       } else {  // cluster
         const topIdx = topClusters.findIndex(c => c.id === cid);
         if (topIdx >= 0) {
@@ -577,14 +666,22 @@
     chart.dispatchAction({ type: 'restore' });
   });
   window.addEventListener('resize', () => chart.resize());
+  // Re-resize when switching back to the Similarity tab — Alpine x-show
+  // toggles display:none, which leaves ECharts with stale 0×0 dimensions.
+  window.addEventListener('idea-tab-change', (e) => {
+    if (e.detail === 'similarity' && chart) {
+      requestAnimationFrame(() => chart.resize());
+    }
+  });
   load();
 })();
 
 // =========================================================================
-//  Mechanism × Sector heatmap (existing)
+//  Mechanism × Sector heatmap — lazy-loads on first tab activation
 // =========================================================================
 (function () {
-  const chart = echarts.init(document.getElementById('heatmap'));
+  let chart = null;
+  let loaded = false;
   const loadingEl = document.getElementById('heatmap-loading');
 
   function renderOption(data) {
@@ -594,7 +691,7 @@
         position: 'top',
         formatter: (p) =>
           `<b>${mechanisms[p.data[1]]}</b> × <b>${sectors[p.data[0]]}</b><br>` +
-          `${p.data[2]} companies`,
+          `${p.data[2]} ideas`,
       },
       grid: { left: 180, right: 20, top: 30, bottom: 120 },
       xAxis: {
@@ -619,7 +716,7 @@
         inRange: { color: ['#f6f7fa', '#a7d8ff', '#3a82f6', '#1e40af'] },
       },
       series: [{
-        name: 'companies',
+        name: 'ideas',
         type: 'heatmap',
         data: cells,
         label: { show: false },
@@ -629,35 +726,143 @@
   }
 
   async function load() {
+    if (!chart) chart = echarts.init(document.getElementById('heatmap'));
     loadingEl.textContent = 'Loading heatmap…';
     const nMech = document.getElementById('n-mech').value;
     const nSect = document.getElementById('n-sector').value;
     const res = await fetch(`/ideas/api/heatmap.json?n_mechanisms=${nMech}&n_sectors=${nSect}`);
     const data = await res.json();
     chart.setOption(renderOption(data), { notMerge: true });
-    loadingEl.textContent = `${data.cells.length} cells · max ${data.max_n} companies`;
+    loadingEl.textContent = `${data.cells.length} cells · max ${data.max_n} ideas in any cell`;
+    loaded = true;
   }
 
-  // Click a cell → drill to Datasette page with mechanism/sector pre-filled
-  chart.on('click', function (params) {
+  // Click a cell → drill to filtered search
+  function onClick(params) {
+    if (!chart) return;
     const sector = params.data && params.data[0] !== undefined
       ? chart.getOption().xAxis[0].data[params.data[0]] : null;
     const mech = params.data && params.data[1] !== undefined
       ? chart.getOption().yAxis[0].data[params.data[1]] : null;
     if (mech && sector) {
-      // Drill via Datasette if available on :8001, else noop
-      // In-app drill: search for ideas that match BOTH axes. FTS5 AND's
-      // space-separated terms by default, so this narrows to the cell's
-      // actual members rather than opening the old external Datasette.
-      const url = `/ideas/search?q=${encodeURIComponent(mech + ' ' + sector)}`;
-      window.open(url, '_blank');
+      window.location.href = `/ideas/search?mechanism=${encodeURIComponent(mech)}&sector=${encodeURIComponent(sector)}`;
+    }
+  }
+
+  document.getElementById('n-mech').addEventListener('change', () => { if (loaded) load(); });
+  document.getElementById('n-sector').addEventListener('change', () => { if (loaded) load(); });
+  window.addEventListener('resize', () => { if (chart) chart.resize(); });
+
+  // Lazy-init on first tab activation
+  window.addEventListener('idea-tab-change', (e) => {
+    if (e.detail === 'heatmap' && !loaded) {
+      load();
+    } else if (e.detail === 'heatmap' && chart) {
+      // Resize on re-show — Alpine x-show=hide leaves stale sizing
+      requestAnimationFrame(() => chart.resize());
     }
   });
+  // Click handler is bound after first init
+  const initInterval = setInterval(() => {
+    if (chart) {
+      chart.on('click', onClick);
+      clearInterval(initInterval);
+    }
+  }, 500);
+})();
 
-  document.getElementById('n-mech').addEventListener('change', load);
-  document.getElementById('n-sector').addEventListener('change', load);
-  window.addEventListener('resize', () => chart.resize());
-  load();
+// =========================================================================
+//  Timeline heatmap — year × top-N mechanism/sector/era
+// =========================================================================
+(function () {
+  let chart = null;
+  let loaded = false;
+  const loadingEl = document.getElementById('timeline-loading');
+
+  function renderOption(data) {
+    const { years, categories, cells, max_n } = data;
+    return {
+      tooltip: {
+        position: 'top',
+        formatter: (p) =>
+          `<b>${categories[p.data[1]]}</b> in <b>${years[p.data[0]]}</b><br>` +
+          `${p.data[2]} ideas`,
+      },
+      grid: { left: 180, right: 20, top: 30, bottom: 80 },
+      xAxis: {
+        type: 'category',
+        data: years.map(String),
+        splitArea: { show: true },
+        axisLabel: { fontSize: 11 },
+      },
+      yAxis: {
+        type: 'category',
+        data: categories,
+        splitArea: { show: true },
+        axisLabel: { fontSize: 11 },
+      },
+      visualMap: {
+        min: 0,
+        max: Math.max(1, max_n),
+        calculable: true,
+        orient: 'horizontal',
+        left: 'center',
+        bottom: 10,
+        inRange: { color: ['#f6f7fa', '#fde68a', '#f59e0b', '#b45309'] },
+      },
+      series: [{
+        name: 'ideas',
+        type: 'heatmap',
+        data: cells,
+        label: { show: false },
+        emphasis: { itemStyle: { shadowBlur: 8, shadowColor: 'rgba(0,0,0,0.3)' } },
+      }],
+    };
+  }
+
+  async function load() {
+    if (!chart) chart = echarts.init(document.getElementById('timeline'));
+    loadingEl.textContent = 'Loading timeline…';
+    const mode = document.getElementById('tl-mode').value;
+    const top = document.getElementById('tl-top').value;
+    const yr  = document.getElementById('tl-year').value;
+    const res = await fetch(`/ideas/api/timeline.json?mode=${mode}&top_n=${top}&year_min=${yr}`);
+    const data = await res.json();
+    chart.setOption(renderOption(data), { notMerge: true });
+    loadingEl.textContent =
+      `${data.cells.length} cells · ${data.categories.length} ${mode}${mode === 'sector' ? 's' : 's'} `
+      + `× ${data.years.length} years · max ${data.max_n} ideas`;
+    loaded = true;
+  }
+
+  function onClick(params) {
+    if (!chart) return;
+    const yearLabel = params.data && params.data[0] !== undefined
+      ? chart.getOption().xAxis[0].data[params.data[0]] : null;
+    const cat = params.data && params.data[1] !== undefined
+      ? chart.getOption().yAxis[0].data[params.data[1]] : null;
+    const mode = document.getElementById('tl-mode').value;
+    if (!cat || !yearLabel) return;
+    const year = parseInt(yearLabel, 10);
+    let url = `/ideas/search?year_min=${year}&year_max=${year}`;
+    if (mode === 'mechanism') url += `&mechanism=${encodeURIComponent(cat)}`;
+    else if (mode === 'sector') url += `&sector=${encodeURIComponent(cat)}`;
+    else if (mode === 'era')    url += `&era=${encodeURIComponent(cat)}`;
+    window.location.href = url;
+  }
+
+  ['tl-mode', 'tl-top', 'tl-year'].forEach(id => {
+    document.getElementById(id).addEventListener('change', () => { if (loaded) load(); });
+  });
+  window.addEventListener('resize', () => { if (chart) chart.resize(); });
+
+  window.addEventListener('idea-tab-change', (e) => {
+    if (e.detail === 'timeline' && !loaded) {
+      load().then(() => chart.on('click', onClick));
+    } else if (e.detail === 'timeline' && chart) {
+      requestAnimationFrame(() => chart.resize());
+    }
+  });
 })();
 </script>
 

@@ -12,9 +12,10 @@
     <div>
       <h1 class="text-2xl font-bold text-gray-900">Idea map</h1>
       <p class="text-sm text-gray-500 mt-1">
-        2-D UMAP projection of {{ "{:,}".format(n_coords) }} ideas over the
-        all-MiniLM-L6-v2 embedding space. Dense regions = herd territory.
-        Empty regions = candidate whitespace.
+        <span class="font-medium text-gray-700">Position = idea similarity.</span>
+        {{ "{:,}".format(n_coords) }} ideas placed so that nearby dots describe similar concepts.
+        Dense regions = herd territory; empty regions = candidate whitespace.
+        Colors group ideas the algorithm clustered together.
       </p>
     </div>
     <a href="/ideas" class="text-sm text-indigo-600 hover:text-indigo-800">← overview</a>
@@ -33,47 +34,86 @@
 {% else %}
 <div class="bg-white rounded-lg shadow-sm border">
   {# Filter bar #}
-  <div class="px-4 py-3 border-b flex flex-wrap items-center gap-3 text-sm">
-    <label class="flex items-center gap-1">
-      <span class="text-gray-600">program</span>
-      <select id="filter-program" class="rounded border-gray-300 text-sm">
-        <option value="">any</option>
-      </select>
-    </label>
-    <label class="flex items-center gap-1">
-      <span class="text-gray-600">solo</span>
-      <select id="filter-solo" class="rounded border-gray-300 text-sm">
-        <option value="">any</option>
-        <option value="1">yes</option>
-        <option value="0">no</option>
-      </select>
-    </label>
-    <label class="flex items-center gap-1">
-      <span class="text-gray-600">ai-first</span>
-      <select id="filter-ai" class="rounded border-gray-300 text-sm">
-        <option value="">any</option>
-        <option value="1">yes</option>
-        <option value="0">no</option>
-      </select>
-    </label>
-    <label class="flex items-center gap-1">
-      <span class="text-gray-600">mechanism</span>
-      <input id="filter-mech" type="text" placeholder="e.g. llm-copilot"
-             class="rounded border-gray-300 text-sm w-40">
-    </label>
-    <label class="flex items-center gap-1">
-      <span class="text-gray-600">sector</span>
-      <input id="filter-sector" type="text" placeholder="e.g. healthcare"
-             class="rounded border-gray-300 text-sm w-40">
-    </label>
-    <label class="flex items-center gap-1 ml-auto">
-      <span class="text-gray-600">color by</span>
-      <select id="color-by" class="rounded border-gray-300 text-sm">
-        <option value="cluster" selected>cluster</option>
-        <option value="program">program</option>
-      </select>
-    </label>
-    <button id="reset-btn" class="text-xs text-gray-500 hover:text-gray-900">reset</button>
+  <div class="px-4 py-3 border-b space-y-2 text-sm">
+    <div class="flex flex-wrap items-center gap-3">
+      <label class="flex items-center gap-1">
+        <span class="text-gray-600">program</span>
+        <select id="filter-program" class="rounded border-gray-300 text-sm">
+          <option value="">any</option>
+        </select>
+      </label>
+      <label class="flex items-center gap-1">
+        <span class="text-gray-600">solo</span>
+        <select id="filter-solo" class="rounded border-gray-300 text-sm">
+          <option value="">any</option>
+          <option value="1">yes</option>
+          <option value="0">no</option>
+        </select>
+      </label>
+      <label class="flex items-center gap-1">
+        <span class="text-gray-600">ai-first</span>
+        <select id="filter-ai" class="rounded border-gray-300 text-sm">
+          <option value="">any</option>
+          <option value="1">yes</option>
+          <option value="0">no</option>
+        </select>
+      </label>
+      <label class="flex items-center gap-1">
+        <span class="text-gray-600">mechanism</span>
+        <input id="filter-mech" type="text" placeholder="e.g. llm-copilot"
+               class="rounded border-gray-300 text-sm w-40">
+      </label>
+      <label class="flex items-center gap-1">
+        <span class="text-gray-600">sector</span>
+        <input id="filter-sector" type="text" placeholder="e.g. healthcare"
+               class="rounded border-gray-300 text-sm w-40">
+      </label>
+      <button id="reset-btn" class="text-xs text-gray-500 hover:text-gray-900 ml-auto">reset filters</button>
+    </div>
+    <div class="flex flex-wrap items-center gap-3">
+      <label class="flex items-center gap-1">
+        <span class="text-gray-600">business model</span>
+        <select id="filter-bm" class="rounded border-gray-300 text-sm">
+          <option value="">any</option>
+        </select>
+      </label>
+      <label class="flex items-center gap-1">
+        <span class="text-gray-600">moat</span>
+        <select id="filter-moat" class="rounded border-gray-300 text-sm">
+          <option value="">any</option>
+        </select>
+      </label>
+      <label class="flex items-center gap-1">
+        <span class="text-gray-600">niche</span>
+        <select id="filter-niche" class="rounded border-gray-300 text-sm">
+          <option value="">any</option>
+        </select>
+      </label>
+      <label class="flex items-center gap-1.5 ml-auto">
+        <input id="highlight-mode" type="checkbox" class="rounded border-gray-300 text-indigo-600">
+        <span class="text-gray-700" title="Show all points with non-matching ones grayed out">
+          highlight matching
+        </span>
+      </label>
+      <label class="flex items-center gap-1">
+        <span class="text-gray-600">color by</span>
+        <select id="color-by" class="rounded border-gray-300 text-sm">
+          <optgroup label="cohort">
+            <option value="cluster" selected>cluster</option>
+            <option value="program">program</option>
+          </optgroup>
+          <optgroup label="business shape">
+            <option value="business_model">business model</option>
+            <option value="moat">moat type</option>
+            <option value="niche">niche</option>
+          </optgroup>
+          <optgroup label="builder fit">
+            <option value="solo">solo-buildable</option>
+            <option value="ai_first">ai-first</option>
+          </optgroup>
+        </select>
+      </label>
+    </div>
   </div>
 
   <div class="relative">
@@ -106,6 +146,10 @@
   const aiSel = document.getElementById('filter-ai');
   const mechIn = document.getElementById('filter-mech');
   const sectorIn = document.getElementById('filter-sector');
+  const bmSel = document.getElementById('filter-bm');
+  const moatSel = document.getElementById('filter-moat');
+  const nicheSel = document.getElementById('filter-niche');
+  const highlightChk = document.getElementById('highlight-mode');
   const colorSel = document.getElementById('color-by');
   const resetBtn = document.getElementById('reset-btn');
   const cardHost = document.getElementById('idea-card-host');
@@ -119,6 +163,9 @@
     '#f97316','#84cc16','#06b6d4','#ec4899','#a855f7','#eab308',
     '#3b82f6','#22c55e','#e11d48','#0891b2','#d946ef','#f43f5e',
   ];
+  const BINARY_COLORS = { yes: '#10b981', no: '#94a3b8', unknown: '#e5e7eb' };
+  const GRAY_NON_MATCH = '#e5e7eb';
+
   function colorFor(key, map) {
     if (!map.has(key)) map.set(key, COLOR_POOL[map.size % COLOR_POOL.length]);
     return map.get(key);
@@ -130,6 +177,35 @@
     return colorFor(cid, map);
   }
 
+  // Resolve the color-by group key for a single point. Point fields:
+  // [x, y, cid, id, prog, co, bm, moat, niche, solo, aiFirst, match]
+  function keyForPoint(mode, p) {
+    const [, , cid, , prog, , bm, moat, niche, solo, aiFirst] = p;
+    if (mode === 'program')        return prog || '(other)';
+    if (mode === 'business_model') return bm   || '(other)';
+    if (mode === 'moat')           return moat || '(other)';
+    if (mode === 'niche')          return niche || '(other)';
+    if (mode === 'solo')           return solo === 1 ? 'yes' : solo === 0 ? 'no' : 'unknown';
+    if (mode === 'ai_first')       return aiFirst === 1 ? 'yes' : aiFirst === 0 ? 'no' : 'unknown';
+    return cid;  // cluster
+  }
+
+  function colorForKey(mode, key, colorMap) {
+    if (mode === 'cluster')  return clusterColor(key, colorMap);
+    if (mode === 'solo' || mode === 'ai_first') return BINARY_COLORS[key] || '#e5e7eb';
+    if (key === '(other)') return '#d1d5db';
+    return colorFor(key, colorMap);
+  }
+
+  function populateOnce(sel, values) {
+    if (sel.options.length > 1) return;
+    for (const v of values) {
+      const o = document.createElement('option');
+      o.value = v; o.textContent = v;
+      sel.appendChild(o);
+    }
+  }
+
   async function load() {
     loadingEl.textContent = 'Loading…';
     loadingEl.classList.remove('hidden');
@@ -139,37 +215,58 @@
     if (aiSel.value)      params.set('ai_first', aiSel.value);
     if (mechIn.value)     params.set('mechanism', mechIn.value.trim());
     if (sectorIn.value)   params.set('sector', sectorIn.value.trim());
+    if (bmSel.value)      params.set('business_model', bmSel.value);
+    if (moatSel.value)    params.set('moat', moatSel.value);
+    if (nicheSel.value)   params.set('niche', nicheSel.value);
+    if (highlightChk.checked) params.set('highlight', '1');
 
     const res = await fetch('/ideas/api/map.json?' + params.toString());
     const data = await res.json();
-    loadingEl.textContent = data.count.toLocaleString() + ' points';
-
-    // Populate program select once
-    if (programSel.options.length <= 1) {
-      for (const p of data.programs) {
-        const o = document.createElement('option');
-        o.value = p; o.textContent = p;
-        programSel.appendChild(o);
-      }
+    if (highlightChk.checked && data.match_count !== undefined) {
+      loadingEl.textContent =
+        data.match_count.toLocaleString() + ' / ' +
+        data.count.toLocaleString() + ' points highlighted';
+    } else {
+      loadingEl.textContent = data.count.toLocaleString() + ' points';
     }
+
+    // Populate selects once
+    populateOnce(programSel, data.programs || []);
+    populateOnce(bmSel,      data.business_models || []);
+    populateOnce(moatSel,    data.moat_types || []);
+    populateOnce(nicheSel,   data.niche_options || []);
 
     // Group points by color key so each group becomes its own series.
-    // ECharts `large: true` only honors series-level color, so color
-    // variety requires per-group series.
+    // In highlight mode, non-matching points all collapse into a single
+    // grey "context" series rendered behind the colored ones.
     const mode = colorSel.value;
-    const groups = new Map();  // key -> { color, points: [...] }
+    const isHighlight = highlightChk.checked;
+    const groups = new Map();
     const colorMap = new Map();
+    const NON_MATCH_KEY = '__nonmatch__';
+
     for (const p of data.points) {
+      const match = p[11];  // last field
+      let key;
+      if (isHighlight && match === 0) {
+        key = NON_MATCH_KEY;
+      } else {
+        key = keyForPoint(mode, p);
+      }
+      if (!groups.has(key)) {
+        const color = key === NON_MATCH_KEY
+          ? GRAY_NON_MATCH
+          : colorForKey(mode, key, colorMap);
+        groups.set(key, { color, label: key, points: [] });
+      }
+      // Re-pack to preserve [x, y, id, co, prog, cid] (used by tooltip / click)
       const [x, y, cid, id, prog, co] = p;
-      const key = mode === 'program' ? prog : cid;
-      const color = mode === 'program'
-        ? colorFor(prog, colorMap)
-        : clusterColor(cid, colorMap);
-      if (!groups.has(key)) groups.set(key, { color, label: key, points: [] });
       groups.get(key).points.push([x, y, id, co, prog, cid]);
     }
-    // Render noise (cid -1) first so real clusters sit on top.
+    // Render order: non-match (grey context) first, then noise, then real clusters.
     const keys = [...groups.keys()].sort((a, b) => {
+      if (a === NON_MATCH_KEY) return -1;
+      if (b === NON_MATCH_KEY) return 1;
       if (a === -1 || a === -9999) return -1;
       if (b === -1 || b === -9999) return 1;
       return 0;
@@ -177,16 +274,25 @@
 
     const series = keys.map(k => {
       const g = groups.get(k);
+      const isNonMatch = k === NON_MATCH_KEY;
+      const isNoise = k === -1 || k === -9999;
+      let name;
+      if (isNonMatch) name = 'context';
+      else if (mode === 'cluster' && isNoise) name = 'noise';
+      else if (mode === 'cluster') name = 'cluster ' + k;
+      else name = String(k);
       return {
         type: 'scatter',
-        name: mode === 'cluster' && (k === -1 || k === -9999)
-          ? 'noise'
-          : (mode === 'cluster' ? 'cluster ' + k : String(k)),
+        name,
         data: g.points,
-        symbolSize: (k === -1 || k === -9999) ? 3 : 4,
+        symbolSize: isNonMatch ? 2 : isNoise ? 3 : 4,
         large: g.points.length > 2000,
-        itemStyle: { color: g.color, opacity: (k === -1 || k === -9999) ? 0.35 : 0.85 },
-        emphasis: { focus: 'series', scale: 2.5 },
+        itemStyle: {
+          color: g.color,
+          opacity: isNonMatch ? 0.25 : isNoise ? 0.35 : 0.85,
+        },
+        emphasis: { focus: isNonMatch ? 'none' : 'series', scale: 2.5 },
+        silent: isNonMatch,  // non-match points don't trigger tooltip/click
       };
     });
 
@@ -242,11 +348,17 @@
   resetBtn.onclick = () => {
     programSel.value = ''; soloSel.value = ''; aiSel.value = '';
     mechIn.value = ''; sectorIn.value = '';
+    bmSel.value = ''; moatSel.value = ''; nicheSel.value = '';
+    highlightChk.checked = false;
     load();
   };
   programSel.onchange = load;
   soloSel.onchange = load;
   aiSel.onchange = load;
+  bmSel.onchange = load;
+  moatSel.onchange = load;
+  nicheSel.onchange = load;
+  highlightChk.onchange = load;
   colorSel.onchange = load;
   let dbTimer;
   const debouncedLoad = () => {
