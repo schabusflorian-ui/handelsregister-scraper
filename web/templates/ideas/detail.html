@@ -8,9 +8,10 @@
     <div class="flex items-start justify-between gap-4">
       <div class="flex-1 min-w-0">
         <div class="flex items-center gap-2 text-xs text-gray-500 mb-2">
+          <a href="javascript:if(history.length>1){history.back()}else{location.href='/ideas'}"
+             class="text-indigo-600 hover:text-indigo-800">← back</a>
+          <span class="text-gray-300">·</span>
           <a href="/ideas" class="hover:text-indigo-700">Ideas</a>
-          <span>/</span>
-          <a href="/ideas/search" class="hover:text-indigo-700">Search</a>
           <span>/</span>
           <span class="text-gray-700">#{{ r.id }}</span>
         </div>
@@ -133,8 +134,9 @@
       <div class="text-xs uppercase tracking-wide text-gray-500 mb-1">Mechanism</div>
       <div class="flex flex-wrap gap-1 mb-3">
         {% for tag in (r.mechanism_tags | from_json) %}
-        <a href="/ideas/search?q={{ tag | urlencode }}"
-           class="text-[11px] px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-700 font-mono hover:bg-indigo-100">{{ tag }}</a>
+        <a href="/ideas/search?mechanism={{ tag | urlencode }}"
+           class="text-[11px] px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-700 font-mono hover:bg-indigo-100"
+           title="Find all ideas with this mechanism">{{ tag }}</a>
         {% endfor %}
       </div>
       {% endif %}
@@ -142,8 +144,9 @@
       <div class="text-xs uppercase tracking-wide text-gray-500 mb-1">Sector</div>
       <div class="flex flex-wrap gap-1 mb-3">
         {% for tag in (r.sector_tags | from_json) %}
-        <a href="/ideas/search?q={{ tag | urlencode }}"
-           class="text-[11px] px-1.5 py-0.5 rounded bg-amber-50 text-amber-800 font-mono hover:bg-amber-100">{{ tag }}</a>
+        <a href="/ideas/search?sector={{ tag | urlencode }}"
+           class="text-[11px] px-1.5 py-0.5 rounded bg-amber-50 text-amber-800 font-mono hover:bg-amber-100"
+           title="Find all ideas in this sector">{{ tag }}</a>
         {% endfor %}
       </div>
       {% endif %}
@@ -186,66 +189,6 @@
       {% endif %}
     </div>
 
-    {# Semantic "similar to this" — pre-computed nearest neighbours
-       across the whole corpus. More serendipitous than same-cluster. #}
-    {% if similar %}
-    <div class="bg-white p-4 rounded-lg shadow-sm border">
-      <div class="text-xs uppercase tracking-wide text-gray-500 mb-2 flex items-baseline justify-between">
-        <span>Similar companies</span>
-        <span class="text-gray-400 normal-case">semantic neighbours</span>
-      </div>
-      <ul class="space-y-2.5 text-xs">
-        {% for n in similar %}
-        <li class="flex gap-2 items-start">
-          <span class="flex-shrink-0 font-mono text-[10px] px-1 py-0.5 rounded bg-indigo-50 text-indigo-700"
-                title="Cosine similarity">
-            {{ (n.similarity * 100) | round(0) | int }}
-          </span>
-          <div class="flex-1 min-w-0">
-            <a href="/ideas/{{ n.id }}"
-               class="font-medium text-gray-900 hover:text-indigo-700">
-              {{ n.company or '(untitled)' }}
-            </a>
-            {% if n.opportunity_score is not none %}
-            {% set s = n.opportunity_score %}
-            <span class="ml-1 text-[10px] font-bold px-1 py-0 rounded
-              {% if s >= 90 %}bg-green-600 text-white{% elif s >= 75 %}bg-emerald-100 text-emerald-800{% elif s >= 60 %}bg-amber-100 text-amber-800{% else %}bg-gray-100 text-gray-600{% endif %}">{{ s }}</span>
-            {% endif %}
-            <span class="text-gray-400">· {{ n.program }} · {{ n.year_founded or '—' }}</span>
-            {% if n.cluster_id and n.cluster_id != r.cluster_id %}
-            <a href="/ideas/clusters/{{ n.cluster_id }}"
-               class="text-[10px] text-indigo-500 hover:text-indigo-700 ml-1"
-               title="Different cluster — click to drill">
-              ↗ {{ (n.llm_label or n.cluster_label or 'cluster ' ~ n.cluster_id)[:40] }}
-            </a>
-            {% endif %}
-            {% if n.one_liner %}<div class="text-gray-500 mt-0.5 line-clamp-2">{{ n.one_liner }}</div>{% endif %}
-          </div>
-        </li>
-        {% endfor %}
-      </ul>
-    </div>
-    {% endif %}
-
-    {# Same-cluster neighbours — kept as a separate panel. #}
-    {% if neighbors %}
-    <div class="bg-white p-4 rounded-lg shadow-sm border">
-      <div class="text-xs uppercase tracking-wide text-gray-500 mb-2">Same cluster</div>
-      <ul class="space-y-2 text-xs">
-        {% for n in neighbors %}
-        <li>
-          <a href="/ideas/{{ n.id }}"
-             class="font-medium text-gray-900 hover:text-indigo-700">
-            {{ n.company or '(untitled)' }}
-          </a>
-          <span class="text-gray-400">· {{ n.program }} · {{ n.year_founded or '—' }}</span>
-          {% if n.one_liner %}<div class="text-gray-500 mt-0.5 line-clamp-2">{{ n.one_liner }}</div>{% endif %}
-        </li>
-        {% endfor %}
-      </ul>
-    </div>
-    {% endif %}
-
     {% if r.ie_error %}
     <div class="bg-red-50 border border-red-200 rounded-lg p-3 text-xs text-red-700">
       Extraction error: <code class="font-mono">{{ r.ie_error }}</code>
@@ -253,4 +196,76 @@
     {% endif %}
   </aside>
 </div>
+
+{# -------- Full-width related ideas — placed below the 2-col grid so the
+   left/right column heights stay roughly balanced. -------- #}
+{% if similar or neighbors %}
+<div class="grid grid-cols-1 {% if similar and neighbors %}lg:grid-cols-2{% endif %} gap-4 mt-4">
+  {% if similar %}
+  <div class="bg-white rounded-lg shadow-sm border">
+    <div class="px-5 py-3 border-b flex items-baseline justify-between">
+      <h2 class="text-sm font-semibold text-gray-900">Similar companies</h2>
+      <span class="text-xs text-gray-400">semantic neighbours</span>
+    </div>
+    <ul class="divide-y">
+      {% for n in similar %}
+      <li>
+        <a href="/ideas/{{ n.id }}" class="block px-5 py-3 hover:bg-gray-50 focus:bg-gray-50 focus:outline-none">
+          <div class="flex gap-3 items-start">
+            <span class="flex-shrink-0 font-mono text-[10px] px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-700"
+                  title="Cosine similarity">
+              {{ (n.similarity * 100) | round(0) | int }}
+            </span>
+            <div class="flex-1 min-w-0">
+              <div class="flex items-center gap-2 flex-wrap">
+                <span class="font-medium text-gray-900">{{ n.company or '(untitled)' }}</span>
+                {% if n.opportunity_score is not none %}
+                {% set s = n.opportunity_score %}
+                <span class="text-[10px] font-bold px-1 py-0 rounded
+                  {% if s >= 90 %}bg-green-600 text-white{% elif s >= 75 %}bg-emerald-100 text-emerald-800{% elif s >= 60 %}bg-amber-100 text-amber-800{% else %}bg-gray-100 text-gray-600{% endif %}">{{ s }}</span>
+                {% endif %}
+                <span class="text-xs text-gray-400">· {{ n.program }} · {{ n.year_founded or '—' }}</span>
+                {% if n.cluster_id and n.cluster_id != r.cluster_id %}
+                <span onclick="event.stopPropagation(); event.preventDefault(); window.location='/ideas/clusters/{{ n.cluster_id }}';"
+                      class="text-[10px] text-indigo-500 hover:text-indigo-700 cursor-pointer"
+                      title="Different cluster — click to drill">
+                  ↗ {{ (n.llm_label or n.cluster_label or 'cluster ' ~ n.cluster_id)[:40] }}
+                </span>
+                {% endif %}
+              </div>
+              {% if n.one_liner %}<div class="text-xs text-gray-500 mt-0.5 line-clamp-2">{{ n.one_liner }}</div>{% endif %}
+            </div>
+          </div>
+        </a>
+      </li>
+      {% endfor %}
+    </ul>
+  </div>
+  {% endif %}
+
+  {% if neighbors %}
+  <div class="bg-white rounded-lg shadow-sm border">
+    <div class="px-5 py-3 border-b flex items-baseline justify-between">
+      <h2 class="text-sm font-semibold text-gray-900">Same cluster</h2>
+      {% if r.cluster_id is not none and r.cluster_id != -1 %}
+      <a href="/ideas/clusters/{{ r.cluster_id }}" class="text-xs text-indigo-600 hover:text-indigo-800">view cluster →</a>
+      {% endif %}
+    </div>
+    <ul class="divide-y">
+      {% for n in neighbors %}
+      <li>
+        <a href="/ideas/{{ n.id }}" class="block px-5 py-3 hover:bg-gray-50 focus:bg-gray-50 focus:outline-none">
+          <div class="flex items-center gap-2 flex-wrap">
+            <span class="font-medium text-gray-900">{{ n.company or '(untitled)' }}</span>
+            <span class="text-xs text-gray-400">· {{ n.program }} · {{ n.year_founded or '—' }}</span>
+          </div>
+          {% if n.one_liner %}<div class="text-xs text-gray-500 mt-0.5 line-clamp-2">{{ n.one_liner }}</div>{% endif %}
+        </a>
+      </li>
+      {% endfor %}
+    </ul>
+  </div>
+  {% endif %}
+</div>
+{% endif %}
 {% endblock %}

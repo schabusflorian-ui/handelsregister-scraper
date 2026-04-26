@@ -51,7 +51,11 @@
           {% endif %}
         </div>
       </div>
-      <a href="/ideas" class="text-sm text-indigo-600 hover:text-indigo-800 flex-shrink-0">← overview</a>
+      <div class="flex-shrink-0 flex items-center gap-3 text-sm">
+        <a href="javascript:if(history.length>1){history.back()}else{location.href='/ideas'}"
+           class="text-indigo-600 hover:text-indigo-800">← back</a>
+        <a href="/ideas" class="text-gray-500 hover:text-gray-800">overview</a>
+      </div>
     </div>
   </div>
 </div>
@@ -103,7 +107,9 @@
     <div class="space-y-1.5">
       {% for m in (breakdown.mechanisms or []) %}
       {% set pct = (m.n / breakdown.mechanisms[0].n * 100) if breakdown.mechanisms and breakdown.mechanisms[0].n else 0 %}
-      <div class="text-xs">
+      <a href="/ideas/search?mechanism={{ m.tag | urlencode }}"
+         class="block text-xs hover:bg-indigo-50 rounded px-1 -mx-1 py-0.5"
+         title="Find all ideas using this mechanism">
         <div class="flex items-baseline justify-between">
           <span class="font-mono text-indigo-700 truncate">{{ m.tag }}</span>
           <span class="text-gray-400 ml-1">{{ m.n }}</span>
@@ -111,7 +117,7 @@
         <div class="bg-gray-100 h-1 rounded mt-0.5">
           <div class="bg-indigo-400 h-full rounded" style="width:{{ pct }}%"></div>
         </div>
-      </div>
+      </a>
       {% else %}
       <p class="text-xs text-gray-400">No mechanism tags extracted for this cluster.</p>
       {% endfor %}
@@ -123,7 +129,9 @@
     <div class="space-y-1.5">
       {% for s in (breakdown.sectors or []) %}
       {% set pct = (s.n / breakdown.sectors[0].n * 100) if breakdown.sectors and breakdown.sectors[0].n else 0 %}
-      <div class="text-xs">
+      <a href="/ideas/search?sector={{ s.tag | urlencode }}"
+         class="block text-xs hover:bg-amber-50 rounded px-1 -mx-1 py-0.5"
+         title="Find all ideas in this sector">
         <div class="flex items-baseline justify-between">
           <span class="font-mono text-amber-700 truncate">{{ s.tag }}</span>
           <span class="text-gray-400 ml-1">{{ s.n }}</span>
@@ -131,7 +139,7 @@
         <div class="bg-gray-100 h-1 rounded mt-0.5">
           <div class="bg-amber-400 h-full rounded" style="width:{{ pct }}%"></div>
         </div>
-      </div>
+      </a>
       {% else %}
       <p class="text-xs text-gray-400">No sector tags extracted for this cluster.</p>
       {% endfor %}
@@ -170,12 +178,15 @@
       <div class="text-xs uppercase tracking-wide text-gray-500 mb-2">Top tags</div>
       <div class="flex flex-wrap gap-1">
         {% for tag in cluster.top_tags[:14] %}
-        <span class="text-[11px] px-2 py-0.5 rounded bg-indigo-50 text-indigo-700 font-mono">
-          {{ tag[0] if tag is iterable and tag is not string else tag }}
+        {% set tag_name = tag[0] if tag is iterable and tag is not string else tag %}
+        <a href="/ideas/search?mechanism={{ tag_name | urlencode }}"
+           class="text-[11px] px-2 py-0.5 rounded bg-indigo-50 text-indigo-700 font-mono hover:bg-indigo-100"
+           title="Find all ideas with this tag">
+          {{ tag_name }}
           {% if tag is iterable and tag is not string and tag|length > 1 %}
           <span class="text-indigo-400">{{ tag[1] }}</span>
           {% endif %}
-        </span>
+        </a>
         {% endfor %}
       </div>
     </div>
@@ -187,14 +198,16 @@
       <div class="space-y-1">
         {% for prog, n in cluster.top_programs.items() %}
         {% if loop.index0 < 10 %}
-        <div class="flex items-center gap-2 text-xs">
+        <a href="/ideas/search?program={{ prog | urlencode }}"
+           class="flex items-center gap-2 text-xs hover:bg-gray-50 rounded px-1 -mx-1 py-0.5"
+           title="Find all ideas from this source">
           <div class="flex-1 truncate">{{ prog }}</div>
           <div class="w-20 bg-gray-100 h-2 rounded overflow-hidden">
             <div class="bg-indigo-400 h-full"
                  style="width: {{ (n / cluster.size * 100)|round(0, 'floor')|int }}%"></div>
           </div>
           <div class="w-10 text-right text-gray-500">{{ n }}</div>
-        </div>
+        </a>
         {% endif %}
         {% endfor %}
       </div>
@@ -287,14 +300,13 @@
       {% if members %}
       <div class="divide-y">
         {% for r in members %}
-        <div class="px-5 py-3 hover:bg-gray-50">
+        <a href="/ideas/{{ r.id }}" class="block px-5 py-3 hover:bg-gray-50 focus:bg-gray-50 focus:outline-none">
           <div class="flex items-start justify-between gap-3">
             <div class="flex-1 min-w-0">
               <div class="flex items-center gap-2 flex-wrap">
-                <a href="/ideas/{{ r.id }}"
-                   class="font-medium text-gray-900 hover:text-indigo-700">
+                <span class="font-medium text-gray-900">
                   {{ r.company or (r.one_liner[:60] ~ '…' if r.one_liner and r.one_liner|length > 60 else r.one_liner) or '(untitled)' }}
-                </a>
+                </span>
                 <span class="text-xs text-gray-400">{{ r.year_founded or '' }}</span>
                 <span class="text-xs px-1.5 py-0.5 rounded bg-gray-100 text-gray-600">
                   {{ r.program }}
@@ -324,11 +336,12 @@
               </div>
             </div>
             {% if r.company_website %}
-            <a href="{{ r.company_website }}" target="_blank"
-               class="text-xs text-indigo-600 hover:text-indigo-800 flex-shrink-0">↗</a>
+            <span onclick="event.stopPropagation(); event.preventDefault(); window.open('{{ r.company_website }}', '_blank');"
+                  class="text-xs text-indigo-600 hover:text-indigo-800 flex-shrink-0 cursor-pointer"
+                  title="Open company website">↗</span>
             {% endif %}
           </div>
-        </div>
+        </a>
         {% endfor %}
       </div>
       {% include 'partials/pagination.html' %}
