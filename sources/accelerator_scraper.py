@@ -899,6 +899,134 @@ def save_company_ideas(db, records: List[CompanyIdea]) -> int:
 
 
 # ---------------------------------------------------------------------------
+# Polsia — Ben Cera's autonomous AI platform (1,100+ AI-run companies).
+# No public "list all" endpoint, but /api/public/live/dashboard surfaces
+# the most-recent ~30-50 unique companies via several arrays. We
+# cross-reference them and harvest one row per unique slug. Repeated
+# snapshots (e.g. via cron) grow the corpus over time.
+# ---------------------------------------------------------------------------
+
+class PolsiaScraper(AcceleratorScraper):
+    program_name = "Polsia"
+    crawl_delay = 2.0
+    API = "https://polsia.com/api/public/live/dashboard"
+    _SLUG_RE = re.compile(r"https?://([a-z0-9][a-z0-9-]*)\.polsia\.app", re.I)
+
+    def _fetch_json(self, url: str) -> Optional[dict]:
+        try:
+            r = self.session.get(url, headers=self.headers, timeout=30)
+            if r.status_code == 200:
+                return r.json()
+            logger.warning("Polsia: %s -> %s", url, r.status_code)
+        except Exception as e:  # noqa: BLE001
+            logger.warning("Polsia fetch %s: %s", url, e)
+        return None
+
+    def scrape(self, on_record: OnRecord = None) -> List[CompanyIdea]:
+        data = self._fetch_json(self.API)
+        if not data:
+            return []
+
+        # 1. Anchor on full company entries (have id/name/slug/app_url).
+        companies_by_slug: Dict[str, dict] = {}
+        for c in (data.get("companies") or []):
+            slug = (c.get("slug") or "").lower()
+            if slug:
+                companies_by_slug[slug] = {
+                    "name": c.get("name"),
+                    "slug": slug,
+                    "url": c.get("app_url"),
+                    "id": c.get("id"),
+                    "created_at": c.get("created_at"),
+                }
+
+        # 2. Augment with slugs harvested from app URLs scattered in
+        #    other arrays (links, tweets, etc.). For these we only have
+        #    the slug + URL, sometimes a title.
+        for ln in (data.get("links") or []):
+            url = ln.get("url") or ""
+            m = self._SLUG_RE.match(url)
+            if not m:
+                continue
+            slug = m.group(1).lower()
+            if slug not in companies_by_slug:
+                companies_by_slug[slug] = {
+                    "name": ln.get("title") or slug,
+                    "slug": slug,
+                    "url": url,
+                    "id": None,
+                    "created_at": ln.get("created_at"),
+                }
+
+        # 3. Pull descriptions from documents/reports/tweets where the
+        #    polsia.app URL matches a slug we already have.
+        for d in (data.get("documents") or []):
+            content = (d.get("content") or "")[:1500]
+            # Documents reference company by company_label only — best we
+            # can do is capture the doc as enrichment for any slug whose
+            # title appears in the content.
+            for slug, c in companies_by_slug.items():
+                if slug in content.lower() and not c.get("description"):
+                    c["description"] = self._clean(content[:500])
+                    break
+
+        # Tweets sometimes include the polsia.app subdomain in the text.
+        for t in (data.get("tweets") or []):
+            text = t.get("text") or ""
+            m = self._SLUG_RE.search(text)
+            if not m:
+                continue
+            slug = m.group(1).lower()
+            if slug not in companies_by_slug:
+                companies_by_slug[slug] = {
+                    "name": slug.capitalize(),
+                    "slug": slug,
+                    "url": f"https://{slug}.polsia.app",
+                    "id": None,
+                    "created_at": t.get("posted_at"),
+                }
+            # Use the tweet text as a tagline if no description yet
+            if not companies_by_slug[slug].get("description"):
+                # First sentence of the tweet
+                first_sent = re.split(r"(?<=[.!?])\s", text, maxsplit=1)[0]
+                if 20 < len(first_sent) < 250:
+                    companies_by_slug[slug]["description"] = self._clean(first_sent)
+
+        logger.info("Polsia: %d unique companies in this snapshot",
+                    len(companies_by_slug))
+
+        out: List[CompanyIdea] = []
+        for slug, c in companies_by_slug.items():
+            year = None
+            if c.get("created_at"):
+                try:
+                    year = int(c["created_at"][:4])
+                except Exception:  # noqa: BLE001
+                    pass
+            rec = CompanyIdea(
+                program=self.program_name,
+                company=c.get("name") or slug,
+                one_liner=c.get("description"),
+                tags=["ai-native", "polsia-autonomous"],
+                company_website=c.get("url"),
+                year_founded=year,
+                source_url=f"https://polsia.com/c/{slug}",
+                raw={
+                    "polsia_id": c.get("id"),
+                    "polsia_slug": slug,
+                    "polsia_app_url": c.get("url"),
+                    "snapshot_at": data.get("dailyMetrics", {}).get("recorded_at"),
+                },
+            )
+            out.append(rec)
+            if on_record:
+                on_record(rec)
+        if self.max_records:
+            out = out[: self.max_records]
+        return out
+
+
+# ---------------------------------------------------------------------------
 # Khosla Ventures — public portfolio listing on khoslaventures.com.
 # 130 companies in the static HTML, each as a `<a class="company-slide">`
 # with website href, image alt = company name, and inner text = tagline.
@@ -1167,6 +1295,7 @@ SCRAPERS = {
     "tiny":       TinyComScraper,
     "claude":     ClaudeCustomersScraper,
     "khosla":     KhoslaVenturesScraper,
+    "polsia":     PolsiaScraper,
 }
 
 
