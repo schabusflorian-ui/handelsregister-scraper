@@ -393,6 +393,65 @@ def run_local_checks(report: Report, db_path: str) -> None:
         return f"FTS MATCH 'invoice' → {n} rows"
     report.run("9 fts", "FTS search returns hits", _fts_search_works)
 
+    # --- STAGE 12: multi-signal stealth tracker ---------------------------
+    # Verifies the signals pipeline: schema is in place, adapters have
+    # produced rows across multiple sources, the joiner has rolled them up,
+    # and multi-signal entities actually exist (the whole value prop).
+    def _signals_tables():
+        expected = ["signals", "stealth_entities"]
+        present = {r[0] for r in cur.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name IN ('signals','stealth_entities')")}
+        missing = [t for t in expected if t not in present]
+        if missing:
+            return ("fail", f"signals tables missing: {missing}")
+        return "signals + stealth_entities tables present"
+    report.run("12 signals", "schema in place", _signals_tables)
+
+    def _signals_populated():
+        n = cur.execute("SELECT COUNT(*) FROM signals").fetchone()[0]
+        assert n > 0, "signals table empty — adapters haven't run"
+        return f"{n:,} signals ingested"
+    report.run("12 signals", "signals populated", _signals_populated)
+
+    def _signals_multi_source():
+        rows = cur.execute(
+            "SELECT signal_type, COUNT(*) FROM signals GROUP BY signal_type"
+        ).fetchall()
+        types = {r[0]: r[1] for r in rows}
+        if len(types) < 2:
+            return ("warn", f"only {len(types)} signal type(s): {list(types)}")
+        return "/".join(f"{t}:{n:,}" for t, n in types.items())
+    report.run("12 signals", "multiple signal sources", _signals_multi_source)
+
+    def _entities_resolved():
+        n_sig  = cur.execute("SELECT COUNT(*) FROM signals WHERE stealth_entity_id IS NULL").fetchone()[0]
+        n_ent  = cur.execute("SELECT COUNT(*) FROM stealth_entities").fetchone()[0]
+        if n_ent == 0:
+            return ("fail", "no stealth_entities — joiner hasn't run")
+        if n_sig > 0:
+            return ("warn", f"{n_sig} unresolved signals (joiner needs re-run)")
+        return f"{n_ent:,} entities, all signals resolved"
+    report.run("12 signals", "joiner has resolved signals", _entities_resolved)
+
+    def _multi_signal_entities():
+        n2 = cur.execute("SELECT COUNT(*) FROM stealth_entities WHERE signal_count >= 2").fetchone()[0]
+        n3 = cur.execute("SELECT COUNT(*) FROM stealth_entities WHERE signal_count >= 3").fetchone()[0]
+        if n2 == 0:
+            return ("warn", "no multi-signal entities — joiner matched nothing across sources")
+        return f"{n2:,} with 2+ signals, {n3:,} with 3+"
+    report.run("12 signals", "cross-source matches found", _multi_signal_entities)
+
+    def _composite_score_sane():
+        row = cur.execute(
+            "SELECT MIN(composite_score), MAX(composite_score), AVG(composite_score) "
+            "  FROM stealth_entities WHERE signal_count > 0"
+        ).fetchone()
+        assert row[1] is not None, "no scored entities"
+        assert 0 <= row[0] <= 100, f"min_score {row[0]} out of range"
+        assert 0 <= row[1] <= 100, f"max_score {row[1]} out of range"
+        return f"score range [{row[0]:.1f}, {row[1]:.1f}], avg {row[2]:.1f}"
+    report.run("12 signals", "composite scores in [0,100]", _composite_score_sane)
+
     conn.close()
 
 
@@ -513,6 +572,33 @@ def run_remote_checks(report: Report, base_url: str) -> None:
         return f"'voice' → {data['total']:,} hits"
     report.run("11 agent-api", f"{base_url} /ideas/api/search.json", _api_search)
 
+    def _api_search_filters():
+        # Regression guard: search.json must honour filter params, not just q.
+        # Pre-fix this returned full unfiltered results.
+        _, b1 = _fetch("/ideas/api/search.json?q=voice&limit=3")
+        _, b2 = _fetch("/ideas/api/search.json?q=voice&program=Show%20HN&limit=3")
+        _, b3 = _fetch("/ideas/api/search.json?q=voice&program=Show%20HN&solo=1&limit=3")
+        d1, d2, d3 = json.loads(b1), json.loads(b2), json.loads(b3)
+        assert d2["total"] < d1["total"], (
+            f"program filter didn't narrow: voice={d1['total']}, "
+            f"voice+Show HN={d2['total']}"
+        )
+        assert d3["total"] < d2["total"], (
+            f"solo filter didn't narrow: voice+Show HN={d2['total']}, "
+            f"+solo={d3['total']}"
+        )
+        if d3["results"]:
+            assert d3["results"][0]["program"] == "Show HN", (
+                f"first result not Show HN: {d3['results'][0]['program']}"
+            )
+            assert d3["results"][0]["solo_buildable"] == 1, (
+                f"first result not solo: {d3['results'][0]['solo_buildable']}"
+            )
+        return f"q={d1['total']:,} → +program={d2['total']:,} → +solo={d3['total']:,}"
+    report.run("11 agent-api",
+               f"{base_url} /ideas/api/search.json (filter parity)",
+               _api_search_filters)
+
     def _api_gaps():
         _, body = _fetch("/ideas/api/gaps.json?limit=3")
         data = json.loads(body)
@@ -578,6 +664,76 @@ def run_remote_checks(report: Report, base_url: str) -> None:
         return f"idea-card/{idea_id} returns card payload"
     report.run("11 agent-api", f"{base_url} /ideas/api/idea-card/{{id}}",
                _api_idea_card)
+
+    # ------------------------------------------------------------------
+    # 12 signals UI + API
+    # ------------------------------------------------------------------
+    def _signals_page():
+        code, body = _fetch("/signals")
+        assert code == 200, f"returned {code}"
+        body_s = body.decode("utf-8", errors="replace")
+        assert "Signals" in body_s, "missing h1"
+        assert "composite_score" in body_s, "missing scoring copy"
+        return f"{len(body)/1024:.0f} KB HTML, renders filters + table"
+    report.run("12 signals", f"{base_url} /signals", _signals_page)
+
+    def _signals_api_schema():
+        code, body = _fetch("/signals/api/schema.json")
+        assert code == 200, f"returned {code}"
+        data = json.loads(body)
+        for k in ("signal_types", "signal_weights", "scoring", "endpoints"):
+            assert k in data, f"schema missing {k}"
+        return f"self-describes {len(data['signal_types'])} signal types"
+    report.run("12 signals", f"{base_url} /signals/api/schema.json",
+               _signals_api_schema)
+
+    def _signals_api_entities():
+        _, body = _fetch("/signals/api/entities.json?per_page=5&min_score=0&min_signals=1")
+        data = json.loads(body)
+        for k in ("total", "entities"):
+            assert k in data, f"missing {k}"
+        if data["entities"]:
+            e = data["entities"][0]
+            for k in ("id", "primary_name", "signal_count", "composite_score", "signal_types"):
+                assert k in e, f"entity missing {k}"
+        return f"{data['total']:,} entities total, returning {len(data['entities'])}"
+    report.run("12 signals", f"{base_url} /signals/api/entities.json",
+               _signals_api_entities)
+
+    def _signals_api_entity_detail():
+        _, body = _fetch("/signals/api/entities.json?per_page=1&min_score=0&min_signals=1")
+        rows = json.loads(body).get("entities") or []
+        if not rows:
+            return ("warn", "no entities to deref")
+        eid = rows[0]["id"]
+        code, body = _fetch(f"/signals/api/entity/{eid}.json")
+        assert code == 200
+        data = json.loads(body)
+        assert "entity" in data and "signals" in data
+        return f"entity/{eid}: {len(data['signals'])} signal(s)"
+    report.run("12 signals", f"{base_url} /signals/api/entity/{{id}}.json",
+               _signals_api_entity_detail)
+
+    def _signals_people_page():
+        code, body = _fetch("/signals/people?per_page=5&min_founder_conf=0")
+        assert code == 200, f"returned {code}"
+        body_s = body.decode("utf-8", errors="replace")
+        assert "People" in body_s, "missing h1"
+        assert "founder_confidence" in body_s, "missing scoring copy"
+        return f"{len(body)/1024:.0f} KB HTML, person-centric view"
+    report.run("12 signals", f"{base_url} /signals/people", _signals_people_page)
+
+    def _signals_people_api():
+        code, body = _fetch("/signals/api/people.json?per_page=5&min_founder_conf=0")
+        assert code == 200
+        data = json.loads(body)
+        assert "people" in data and "total" in data
+        for p in data["people"]:
+            for k in ("founder_confidence", "primary_linkedin", "signal_types"):
+                assert k in p, f"person missing {k}"
+        return f"{data['total']:,} people, returning {len(data['people'])}"
+    report.run("12 signals", f"{base_url} /signals/api/people.json",
+               _signals_people_api)
 
 
 # ---------------------------------------------------------------------------

@@ -1,0 +1,219 @@
+{% extends "base.html" %}
+
+{% block title %}Signals — Stealth tracker{% endblock %}
+
+{% block head %}
+<link rel="alternate" type="application/json"
+      href="/signals/api/entities.json?{{ request.url.query }}"
+      title="JSON for this view">
+<link rel="alternate" type="application/json"
+      href="/signals/api/schema.json" title="API contract">
+{% endblock %}
+
+{% block header %}
+<header class="bg-white shadow">
+  <div class="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+    <div class="flex items-start justify-between flex-wrap gap-4">
+      <div>
+        <h1 class="text-3xl font-bold tracking-tight text-gray-900">Signals</h1>
+        <p class="mt-1 text-sm text-gray-500">
+          Multi-signal stealth tracker. Entities are ranked by
+          <code class="rounded bg-gray-100 px-1">composite_score</code> —
+          cross-source matches (LinkedIn + Handelsregister + news + crt.sh + GitHub)
+          rank far above any single source alone.
+        </p>
+      </div>
+      <div class="flex gap-4 text-sm">
+        <div class="rounded bg-indigo-50 px-3 py-2">
+          <div class="font-semibold text-indigo-900">{{ "{:,}".format(stats.total) }}</div>
+          <div class="text-indigo-700">entities</div>
+        </div>
+        <div class="rounded bg-emerald-50 px-3 py-2">
+          <div class="font-semibold text-emerald-900">{{ "{:,}".format(stats.multi) }}</div>
+          <div class="text-emerald-700">2+ signals</div>
+        </div>
+        <div class="rounded bg-purple-50 px-3 py-2">
+          <div class="font-semibold text-purple-900">{{ "{:,}".format(stats.triple) }}</div>
+          <div class="text-purple-700">3+ signals</div>
+        </div>
+        <div class="rounded bg-amber-50 px-3 py-2">
+          <div class="font-semibold text-amber-900">{{ "{:,}".format(stats.last_30d) }}</div>
+          <div class="text-amber-700">last 30d</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</header>
+{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-7xl py-6 sm:px-6 lg:px-8">
+
+  <!-- Filters -->
+  <div class="px-4 sm:px-0 mb-4">
+    <form method="get" class="bg-white rounded-lg shadow p-4 flex flex-wrap items-end gap-3">
+      <div class="min-w-0 flex-1">
+        <label for="q" class="block text-xs font-medium text-gray-700">Search</label>
+        <input type="text" name="q" id="q" value="{{ filters.q or '' }}"
+               placeholder="name, domain, github"
+               class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+      </div>
+      <div>
+        <label for="sector" class="block text-xs font-medium text-gray-700">Sector</label>
+        <select name="sector" id="sector"
+                class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+          <option value="">— any —</option>
+          {% for s in sectors %}
+            <option value="{{ s }}" {% if filters.sector == s %}selected{% endif %}>{{ s }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label for="signal_type" class="block text-xs font-medium text-gray-700">Signal type</label>
+        <select name="signal_type" id="signal_type"
+                class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+          <option value="">— any —</option>
+          {% for t in signal_types %}
+            <option value="{{ t }}" {% if filters.signal_type == t %}selected{% endif %}>{{ t }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label for="min_score" class="block text-xs font-medium text-gray-700">Min score</label>
+        <input type="number" name="min_score" id="min_score" min="0" max="100"
+               value="{{ filters.min_score if filters.min_score is not none else 30 }}"
+               class="mt-1 block w-24 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+      </div>
+      <div>
+        <label for="min_signals" class="block text-xs font-medium text-gray-700">Min signals</label>
+        <input type="number" name="min_signals" id="min_signals" min="1" max="10"
+               value="{{ filters.min_signals if filters.min_signals is not none else 2 }}"
+               class="mt-1 block w-20 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+      </div>
+      <div>
+        <label for="sort" class="block text-xs font-medium text-gray-700">Sort</label>
+        <select name="sort" id="sort"
+                class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+          <option value="score"   {% if filters.sort == 'score' %}selected{% endif %}>Score</option>
+          <option value="signals" {% if filters.sort == 'signals' %}selected{% endif %}>Signal count</option>
+          <option value="last"    {% if filters.sort == 'last' %}selected{% endif %}>Most recent</option>
+        </select>
+      </div>
+      <div class="flex gap-2">
+        <button type="submit"
+                class="inline-flex items-center rounded-md border border-transparent bg-indigo-600 px-3 py-2 text-sm font-medium text-white shadow-sm hover:bg-indigo-700">
+          Apply
+        </button>
+        <a href="/signals" class="inline-flex items-center rounded-md border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 bg-white hover:bg-gray-50">Reset</a>
+      </div>
+    </form>
+  </div>
+
+  <!-- Results count + People link + JSON link -->
+  <div class="px-4 sm:px-0 mb-2 flex items-center justify-between text-sm text-gray-600">
+    <div>
+      Showing <b>{{ entities|length }}</b> of <b>{{ "{:,}".format(total) }}</b> matching entities.
+    </div>
+    <div>
+      <a href="/signals/people" class="text-indigo-600 hover:underline mr-4">People view ▸</a>
+      <a href="/signals/api/entities.json?{{ request.url.query }}" class="text-indigo-600 hover:underline">
+        JSON ▸
+      </a>
+      <a href="/signals/api/schema.json" class="text-indigo-600 hover:underline ml-3">
+        API docs ▸
+      </a>
+    </div>
+  </div>
+
+  <!-- Table -->
+  <div class="px-4 sm:px-0">
+    <div class="overflow-hidden shadow ring-1 ring-black ring-opacity-5 rounded-lg bg-white">
+      <table class="min-w-full divide-y divide-gray-300">
+        <thead class="bg-gray-50">
+          <tr>
+            <th class="px-3 py-3 text-left text-xs font-semibold text-gray-900">Score</th>
+            <th class="px-3 py-3 text-left text-xs font-semibold text-gray-900">Entity</th>
+            <th class="px-3 py-3 text-left text-xs font-semibold text-gray-900">Signals</th>
+            <th class="px-3 py-3 text-left text-xs font-semibold text-gray-900">Sectors</th>
+            <th class="px-3 py-3 text-left text-xs font-semibold text-gray-900">Last seen</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-200">
+          {% for e in entities %}
+          <tr class="hover:bg-indigo-50/50">
+            <td class="px-3 py-2 whitespace-nowrap">
+              <span class="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold
+                {% if e.composite_score >= 80 %}bg-emerald-100 text-emerald-800
+                {% elif e.composite_score >= 60 %}bg-indigo-100 text-indigo-800
+                {% elif e.composite_score >= 40 %}bg-amber-100 text-amber-800
+                {% else %}bg-gray-100 text-gray-700{% endif %}">
+                {{ "%.0f"|format(e.composite_score) }}
+              </span>
+            </td>
+            <td class="px-3 py-2">
+              <div class="flex flex-col">
+                <a href="/signals/entity/{{ e.id }}" class="font-medium text-indigo-700 hover:underline">
+                  {{ e.primary_name or '(unknown)' }}
+                </a>
+                <div class="text-xs text-gray-500 flex gap-3 flex-wrap">
+                  {% if e.primary_domain %}
+                    <a href="https://{{ e.primary_domain }}" target="_blank" rel="noopener">
+                      {{ e.primary_domain }}
+                    </a>
+                  {% endif %}
+                  {% if e.primary_github %}
+                    <a href="https://github.com/{{ e.primary_github }}" target="_blank" rel="noopener">
+                      gh:{{ e.primary_github }}
+                    </a>
+                  {% endif %}
+                  {% if e.primary_linkedin %}
+                    <a href="{{ e.primary_linkedin }}" target="_blank" rel="noopener">LinkedIn</a>
+                  {% endif %}
+                </div>
+              </div>
+            </td>
+            <td class="px-3 py-2 whitespace-nowrap">
+              <div class="flex items-center gap-1 flex-wrap">
+                <span class="rounded bg-gray-100 px-2 py-0.5 text-xs font-semibold">{{ e.signal_count }}×</span>
+                {% for t in e.signal_types_list %}
+                  <span class="rounded-full bg-gray-50 text-gray-700 border border-gray-200 px-2 py-0.5 text-[11px]">{{ t }}</span>
+                {% endfor %}
+              </div>
+            </td>
+            <td class="px-3 py-2">
+              <div class="flex gap-1 flex-wrap">
+                {% for s in e.sector_tags_list %}
+                  <span class="rounded bg-indigo-50 text-indigo-700 px-1.5 py-0.5 text-[11px]">{{ s }}</span>
+                {% endfor %}
+              </div>
+            </td>
+            <td class="px-3 py-2 text-xs text-gray-500 whitespace-nowrap">
+              {{ (e.last_signal_at or '')[:10] }}
+            </td>
+          </tr>
+          {% else %}
+          <tr><td colspan="5" class="px-3 py-8 text-center text-gray-500 italic">No entities match these filters.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Pagination -->
+  {% if total_pages > 1 %}
+  <nav class="mt-4 flex items-center justify-between px-4 sm:px-0">
+    <div class="text-xs text-gray-500">Page {{ page }} of {{ total_pages }}</div>
+    <div class="flex gap-1">
+      {% set qs = request.url.query | replace('page=' ~ page, '') %}
+      {% if page > 1 %}
+        <a href="?{{ qs }}&page={{ page - 1 }}" class="rounded border border-gray-300 bg-white px-3 py-1 text-xs text-gray-700 hover:bg-gray-50">← Prev</a>
+      {% endif %}
+      {% if page < total_pages %}
+        <a href="?{{ qs }}&page={{ page + 1 }}" class="rounded border border-gray-300 bg-white px-3 py-1 text-xs text-gray-700 hover:bg-gray-50">Next →</a>
+      {% endif %}
+    </div>
+  </nav>
+  {% endif %}
+
+</div>
+{% endblock %}
