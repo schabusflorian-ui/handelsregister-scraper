@@ -41,9 +41,7 @@ import argparse
 import json
 import logging
 import re
-import sys
 from collections import Counter
-from datetime import datetime
 from typing import Dict, List, Optional, Tuple
 
 import numpy as np
@@ -149,11 +147,13 @@ def backfill_year_founded(db: Database) -> int:
                             "investment_year_or_founding"):
                     v = raw.get(key)
                     if isinstance(v, int) and 1970 <= v <= 2035:
-                        y = v; break
+                        y = v
+                        break
                     if isinstance(v, str):
                         m = _YEAR_ANY_RE.search(v)
                         if m:
-                            y = int(m.group()); break
+                            y = int(m.group())
+                            break
             except Exception:  # noqa: BLE001
                 pass
         if y:
@@ -558,13 +558,13 @@ def print_report(db: Database, top_n: int = 30) -> None:
         "SELECT era_class, COUNT(*) AS n FROM idea_clusters "
         "WHERE cluster_id != -1 GROUP BY era_class ORDER BY n DESC"
     ).fetchall()
-    print(f"\n=== Clustering summary ===")
+    print("\n=== Clustering summary ===")
     print(f"  rows clustered : {stats['total']}")
     print(f"  clusters       : {stats['clusters'] - 1}  (plus 1 noise bucket)")
     print(f"  noise (-1)     : {stats['noise']} ({stats['noise']/stats['total']*100:.0f}%)")
     print(f"  year coverage  : {year_stats['with_year']}/{year_stats['total']} "
           f"({year_stats['with_year']/year_stats['total']*100:.0f}%)")
-    print(f"  era mix        : " +
+    print("  era mix        : " +
           ", ".join(f"{r['era_class']}:{r['n']}" for r in era_mix))
 
     # Top-N parents by size — show each with its sub-clusters indented
@@ -599,8 +599,8 @@ def print_report(db: Database, top_n: int = 30) -> None:
         """
     ).fetchall()
     if rebuild:
-        print(f"\n\n=== AI-rebuild candidates "
-              f"(old-skewed clusters, low recent activity) ===")
+        print("\n\n=== AI-rebuild candidates "
+              "(old-skewed clusters, low recent activity) ===")
         for r in rebuild:
             print(_render_cluster_row(r, cur))
 
@@ -614,7 +614,7 @@ def print_report(db: Database, top_n: int = 30) -> None:
         """
     ).fetchall()
     if hot:
-        print(f"\n\n=== Hot clusters (≥50% founded 2023+, n≥10) ===")
+        print("\n\n=== Hot clusters (≥50% founded 2023+, n≥10) ===")
         for r in hot:
             print(_render_cluster_row(r, cur))
 

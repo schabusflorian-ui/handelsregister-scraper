@@ -12,7 +12,20 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
 from web.dependencies import WEB_DIR, get_db
-from web.routers import admin, api, capital_events, companies, dashboard, export, founders, ideas, investors, jobs, news, stealth
+from web.routers import (
+    admin,
+    api,
+    capital_events,
+    companies,
+    dashboard,
+    export,
+    founders,
+    ideas,
+    investors,
+    jobs,
+    news,
+    stealth,
+)
 
 app = FastAPI(title="Handelsregister Scraper", description="Startup Discovery Platform")
 

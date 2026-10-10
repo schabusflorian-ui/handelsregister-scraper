@@ -20,8 +20,7 @@ import json
 import logging
 import re
 import sqlite3
-from datetime import datetime, timezone
-from typing import Iterable, List, Optional, Tuple
+from typing import List, Optional
 
 from .common import ensure_json, iso_now, normalize_domain
 
@@ -50,7 +49,8 @@ def _company_sector_tags(row: sqlite3.Row) -> List[str]:
     out = []
     for t in tags:
         if t and t not in seen:
-            out.append(t); seen.add(t)
+            out.append(t)
+            seen.add(t)
     return out
 
 

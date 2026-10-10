@@ -9,14 +9,12 @@ SQL meet, and bugs here corrupt entity aggregates silently.
 """
 
 import json
-import sqlite3
 
 import pytest
 
 from persistence.database import Database
 from signals.common import iso_now
 from signals.joiner import run_joiner
-
 
 # ---------------------------------------------------------------------------
 # Fixtures

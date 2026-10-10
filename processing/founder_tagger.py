@@ -17,7 +17,6 @@ import json
 import re
 from typing import Dict, List, Optional, Tuple
 
-
 # ============================================================
 # Company tier classification
 # ============================================================

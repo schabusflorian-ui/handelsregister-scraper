@@ -19,7 +19,6 @@ from datetime import datetime, timezone
 from typing import Iterable, Optional
 from urllib.parse import urlparse
 
-
 # ---------------------------------------------------------------------------
 # Signal catalogue + weights
 # ---------------------------------------------------------------------------

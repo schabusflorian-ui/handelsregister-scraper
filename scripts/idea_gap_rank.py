@@ -45,12 +45,11 @@ import math
 import sys
 from collections import Counter, defaultdict
 from pathlib import Path
-from typing import Dict, List, Optional, Set, Tuple
+from typing import Dict, List, Optional
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from persistence.database import Database  # noqa: E402
-
 
 DDL = """
 CREATE TABLE IF NOT EXISTS idea_gap_ranking (

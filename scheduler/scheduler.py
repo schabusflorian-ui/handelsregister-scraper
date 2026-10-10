@@ -32,13 +32,13 @@ from scheduler.jobs.backfill_job import BackfillJob
 from scheduler.jobs.csv_export_job import CSVExportJob
 from scheduler.jobs.discovery_job import DiscoveryJob
 from scheduler.jobs.enrichment_job import EnrichmentJob
+from scheduler.jobs.founder_matcher import find_emerged_founders, link_founder_to_company
 from scheduler.jobs.investor_detection_job import InvestorDetectionJob
 from scheduler.jobs.news_job import NewsMonitoringJob
 from scheduler.jobs.officer_linkedin_job import OfficerLinkedInEnrichmentJob
 from scheduler.jobs.registration_scan_job import RegistrationScanJob
 from scheduler.jobs.website_job import WebsiteFinderJob
 from scheduler.jobs.website_scrape_job import WebsiteScrapeJob
-from scheduler.jobs.founder_matcher import find_emerged_founders, link_founder_to_company
 from scheduler.rate_limiter import PersistentRateLimiter
 
 logger = logging.getLogger(__name__)
@@ -99,7 +99,7 @@ class HandelsregisterScheduler:
             jobstores=jobstores,
             executors=executors,
             job_defaults=job_defaults,
-            timezone="UTC",
+            timezone="timezone.utc",
         )
 
         self._running = False
@@ -678,7 +678,7 @@ class HandelsregisterScheduler:
             replace_existing=True,
         )
 
-        # Backfill job: twice daily at 3 AM and 3 PM UTC (use more of the budget)
+        # Backfill job: twice daily at 3 AM and 3 PM timezone.utc (use more of the budget)
         self.scheduler.add_job(
             self._run_backfill_job,
             trigger=CronTrigger(hour="3,15", minute=0),
@@ -687,7 +687,7 @@ class HandelsregisterScheduler:
             replace_existing=True,
         )
 
-        # Enrichment job: daily at 4 AM UTC (after backfill)
+        # Enrichment job: daily at 4 AM timezone.utc (after backfill)
         self.scheduler.add_job(
             self._run_enrichment_job,
             trigger=CronTrigger(hour=4, minute=0),
@@ -696,7 +696,7 @@ class HandelsregisterScheduler:
             replace_existing=True,
         )
 
-        # Announcement monitoring job: daily at 5 AM UTC (after enrichment)
+        # Announcement monitoring job: daily at 5 AM timezone.utc (after enrichment)
         self.scheduler.add_job(
             self._run_announcement_job,
             trigger=CronTrigger(hour=5, minute=0),
@@ -705,7 +705,7 @@ class HandelsregisterScheduler:
             replace_existing=True,
         )
 
-        # CSV export job: daily at 6 AM UTC (after all data jobs)
+        # CSV export job: daily at 6 AM timezone.utc (after all data jobs)
         self.scheduler.add_job(
             self._run_csv_export_job,
             trigger=CronTrigger(hour=6, minute=0),
@@ -714,7 +714,7 @@ class HandelsregisterScheduler:
             replace_existing=True,
         )
 
-        # Investor detection job: daily at 7 AM UTC (after CSV export)
+        # Investor detection job: daily at 7 AM timezone.utc (after CSV export)
         # Scans capital events, officers, and announcements for VC involvement
         self.scheduler.add_job(
             self._run_investor_detection_job,
@@ -724,7 +724,7 @@ class HandelsregisterScheduler:
             replace_existing=True,
         )
 
-        # News monitoring job: daily at 8 AM UTC (no API calls, just RSS)
+        # News monitoring job: daily at 8 AM timezone.utc (no API calls, just RSS)
         self.scheduler.add_job(
             self._run_news_monitoring_job,
             trigger=CronTrigger(hour=8, minute=0),
@@ -744,7 +744,7 @@ class HandelsregisterScheduler:
             replace_existing=True,
         )
 
-        # Website scrape job: daily at 10 AM UTC (after website finder)
+        # Website scrape job: daily at 10 AM timezone.utc (after website finder)
         # Scrapes found websites for company descriptions, tech keywords, etc.
         self.scheduler.add_job(
             self._run_website_scrape_job,
@@ -754,7 +754,7 @@ class HandelsregisterScheduler:
             replace_existing=True,
         )
 
-        # Officer LinkedIn enrichment job: daily at 11 AM UTC (after website scrape)
+        # Officer LinkedIn enrichment job: daily at 11 AM timezone.utc (after website scrape)
         # Searches for officer LinkedIn profiles via DDG, extracts career data from snippets
         self.scheduler.add_job(
             self._run_officer_linkedin_job,
@@ -764,7 +764,7 @@ class HandelsregisterScheduler:
             replace_existing=True,
         )
 
-        # Founder emergence detection: daily at 12 PM UTC (after officer LinkedIn)
+        # Founder emergence detection: daily at 12 PM timezone.utc (after officer LinkedIn)
         # Matches stealth founders against newly registered company officers
         self.scheduler.add_job(
             self._run_founder_emergence_job,
@@ -791,9 +791,9 @@ class HandelsregisterScheduler:
         # At 5 rows × 3/hour = 15 rows/hour baseline, plus idle budget from
         # other jobs → effective ~30-40 rows/hour. Will work through the
         # 2,800-row backlog in ~3-7 days of continuous running.
-        # Ideas pipeline: daily at 14:00 UTC. Slot picked because it sits in
-        # the dead zone after morning Handelsregister jobs (4–12 UTC) and
-        # before the next backfill burst at 15 UTC. Each pipeline step is
+        # Ideas pipeline: daily at 14:00 timezone.utc. Slot picked because it sits in
+        # the dead zone after morning Handelsregister jobs (4–12 timezone.utc) and
+        # before the next backfill burst at 15 timezone.utc. Each pipeline step is
         # isolated, so credit exhaustion in the LLM step doesn't block the
         # downstream gap-ranking + UMAP refresh.
         self.scheduler.add_job(
@@ -804,10 +804,10 @@ class HandelsregisterScheduler:
             replace_existing=True,
         )
 
-        # Signals pipeline: daily at 13:00 UTC. Slot picked because it
-        # sits after the morning Handelsregister jobs (4-12 UTC) so new
+        # Signals pipeline: daily at 13:00 timezone.utc. Slot picked because it
+        # sits after the morning Handelsregister jobs (4-12 timezone.utc) so new
         # company registrations get picked up on the same day, but before
-        # the ideas pipeline at 14 UTC. External sources (crt.sh, GitHub)
+        # the ideas pipeline at 14 timezone.utc. External sources (crt.sh, GitHub)
         # tolerate failure — the joiner always runs at the end.
         self.scheduler.add_job(
             self._run_signals_pipeline_job,

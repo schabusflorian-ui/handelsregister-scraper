@@ -28,7 +28,7 @@ import sqlite3
 from datetime import datetime, timezone
 from typing import List, Optional
 
-from .common import ensure_json, iso_now, normalize_name
+from .common import ensure_json, iso_now
 
 logger = logging.getLogger(__name__)
 

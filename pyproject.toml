@@ -71,6 +71,7 @@ ignore = [
     "F841",   # unused variable — often intentional in unpacking
     "UP006",  # use builtin type for generics — requires runtime support
     "UP007",  # use X | Y for union — requires Python 3.10+ runtime
+    "UP017",  # datetime.UTC alias — requires Python 3.11+ runtime (we support >=3.9)
     "UP035",  # deprecated typing imports — requires Python 3.9+ builtins
     "UP045",  # use X | None for Optional — requires Python 3.10+ runtime
 ]

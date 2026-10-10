@@ -39,7 +39,7 @@ import re
 import sys
 from collections import Counter
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import List, Optional, Tuple
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
@@ -50,7 +50,6 @@ from scheduler.jobs.idea_llm_extract_job import (  # noqa: E402
     MECHANISM_VOCAB,
     SECTOR_VOCAB,
 )
-
 
 DDL = """
 CREATE TABLE IF NOT EXISTS tag_alias (

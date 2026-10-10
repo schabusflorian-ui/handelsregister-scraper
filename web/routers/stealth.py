@@ -22,7 +22,7 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 
-from signals.common import SIGNAL_WEIGHTS, SIGNAL_TYPES
+from signals.common import SIGNAL_TYPES, SIGNAL_WEIGHTS
 from web.dependencies import get_db, templates
 
 router = APIRouter()

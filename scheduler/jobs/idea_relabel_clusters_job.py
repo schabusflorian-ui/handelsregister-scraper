@@ -342,7 +342,7 @@ def report(db_path: str) -> None:
         "SELECT COUNT(*) FROM idea_clusters "
         "WHERE cluster_id != -1 AND llm_label IS NOT NULL AND llm_label != ''"
     ).fetchone()[0]
-    print(f"\n=== idea_clusters labels ===")
+    print("\n=== idea_clusters labels ===")
     print(f"  {labeled} / {tot} clusters relabeled "
           f"({labeled/tot*100:.0f}%)" if tot else "  none")
     for r in cur.execute(

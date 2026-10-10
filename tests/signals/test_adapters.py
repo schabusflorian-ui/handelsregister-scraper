@@ -9,9 +9,8 @@ determine signal-to-noise ratio in production.
 import pytest
 
 from persistence.database import Database
-from signals.adapters import _guess_entity, _NEWS_FUNDING_PATTERNS, adapt_news
+from signals.adapters import _NEWS_FUNDING_PATTERNS, _guess_entity, adapt_news
 from signals.officer_adapter import _clean_person_name, _is_distinctive_name
-
 
 # ---------------------------------------------------------------------------
 # News entity extraction

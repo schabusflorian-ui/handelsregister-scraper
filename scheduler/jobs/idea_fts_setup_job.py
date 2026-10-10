@@ -14,6 +14,7 @@ Safe to re-run — drops + recreates. Also populates from current rows.
 """
 
 from __future__ import annotations
+
 import argparse
 import logging
 

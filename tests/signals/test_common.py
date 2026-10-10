@@ -22,7 +22,6 @@ from signals.common import (
     recency_multiplier,
 )
 
-
 # ---------------------------------------------------------------------------
 # normalize_domain
 # ---------------------------------------------------------------------------
@@ -187,7 +186,6 @@ class TestRecencyMultiplier:
 
 class TestCompositeScore:
     def setup_method(self):
-        from datetime import timedelta
         self.fresh = (datetime.now(timezone.utc)).isoformat()
 
     def test_empty_scores_zero(self):

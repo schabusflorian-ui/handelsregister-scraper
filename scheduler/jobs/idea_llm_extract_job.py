@@ -300,7 +300,8 @@ def _row_to_user_content(row: dict) -> str:
 
 # --- API call --------------------------------------------------------------
 
-def _extract_one(client, row: dict, max_retries: int = 4) -> Dict[str, object]:
+def _extract_one(client, row: dict, max_retries: int = 4,
+                 model: Optional[str] = None) -> Dict[str, object]:
     import anthropic
 
     user_content = _row_to_user_content(row)
@@ -309,7 +310,7 @@ def _extract_one(client, row: dict, max_retries: int = 4) -> Dict[str, object]:
         attempts += 1
         try:
             resp = client.messages.create(
-                model=MODEL,
+                model=model or MODEL,
                 max_tokens=MAX_OUTPUT_TOKENS,
                 system=[
                     {"type": "text", "text": SYSTEM_PROMPT,
@@ -374,7 +375,9 @@ def _ensure_schema(db: Database) -> None:
 
 def _fetch_targets(db: Database, limit: Optional[int], refresh: bool,
                    sample_diverse: bool,
-                   program_like: Optional[str] = None) -> List[dict]:
+                   program_like: Optional[str] = None,
+                   rich_only: bool = False,
+                   min_desc_chars: int = 300) -> List[dict]:
     cur = db.conn.cursor()
     clauses: List[str] = []
     params: List = []
@@ -391,6 +394,19 @@ def _fetch_targets(db: Database, limit: Optional[int], refresh: bool,
         # SQL LIKE pattern — e.g. 'Reddit r/%' or 'Show HN'.
         clauses.append("ci.program LIKE ?")
         params.append(program_like)
+    if rich_only:
+        # Only extract rows where the LLM has enough signal to produce a
+        # useful extraction: either the scraped text is long enough to
+        # describe a product, OR we've already fetched website content
+        # for this row. Drive-by "Show HN: I made X" posts with no body
+        # are excluded — they'd produce mediocre tags + burn tokens.
+        clauses.append(
+            f"(LENGTH(ci.long_description) >= {int(min_desc_chars)} "
+            "OR ci.normalized_website IN ("
+            "  SELECT normalized_website FROM website_enrichment"
+            "   WHERE meta_description IS NOT NULL OR hero_text IS NOT NULL"
+            "))"
+        )
     where = ("WHERE " + " AND ".join(clauses)) if clauses else ""
     order = ""
     if sample_diverse:
@@ -426,7 +442,8 @@ def _fetch_targets(db: Database, limit: Optional[int], refresh: bool,
     return rows
 
 
-def _save(db: Database, row_id: int, data: Dict[str, object]) -> None:
+def _save(db: Database, row_id: int, data: Dict[str, object],
+          model: Optional[str] = None) -> None:
     tok = data.get("_tokens", {}) or {}
     err = data.get("error")
     with _LOCK:
@@ -457,7 +474,7 @@ def _save(db: Database, row_id: int, data: Dict[str, object]) -> None:
              data.get("ai_first_reasoning"),
              data.get("moat_type"),
              data.get("niche_specificity"),
-             MODEL,
+             model or MODEL,
              tok.get("input"), tok.get("output"), tok.get("cache_read"),
              err,
              datetime.now().isoformat()),
@@ -484,13 +501,22 @@ def _make_client():
 
 def run(db_path: str, limit: Optional[int], workers: int, refresh: bool,
         sample_diverse: bool, verbose_sample: bool,
-        program_like: Optional[str] = None) -> None:
+        program_like: Optional[str] = None,
+        model: Optional[str] = None,
+        rich_only: bool = False,
+        min_desc_chars: int = 300) -> None:
     client = _make_client()
+    effective_model = model or MODEL
 
     db = Database(db_path)
     _ensure_schema(db)
-    rows = _fetch_targets(db, limit, refresh, sample_diverse, program_like)
-    logger.info("extraction: %d rows to process (workers=%d)", len(rows), workers)
+    rows = _fetch_targets(db, limit, refresh, sample_diverse, program_like,
+                          rich_only=rich_only,
+                          min_desc_chars=min_desc_chars)
+    logger.info("extraction: %d rows to process (workers=%d, model=%s, "
+                "rich_only=%s, min_desc_chars=%d)",
+                len(rows), workers, effective_model,
+                rich_only, min_desc_chars)
     if not rows:
         return
 
@@ -500,14 +526,15 @@ def run(db_path: str, limit: Optional[int], workers: int, refresh: bool,
     results_for_print: List[Tuple[dict, dict]] = []
 
     with ThreadPoolExecutor(max_workers=workers) as pool:
-        futs = {pool.submit(_extract_one, client, r): r for r in rows}
+        futs = {pool.submit(_extract_one, client, r, model=effective_model): r
+                for r in rows}
         for fut in as_completed(futs):
             row = futs[fut]
             try:
                 data = fut.result()
             except Exception as e:  # noqa: BLE001
                 data = {"error": f"crash:{type(e).__name__}"}
-            _save(db, row["id"], data)
+            _save(db, row["id"], data, model=effective_model)
             done += 1
             if not data.get("error"):
                 ok += 1
@@ -588,6 +615,14 @@ def main():
     p.add_argument("--program-like", default=None,
                    help="Only process programs matching this SQL LIKE "
                         "pattern (e.g. 'Reddit r/%%' or 'Show HN')")
+    p.add_argument("--model", default=None,
+                   help=f"Anthropic model ID to use (default: {MODEL}).")
+    p.add_argument("--rich-only", action="store_true",
+                   help="Only extract rows with long_description >= "
+                        "--min-desc-chars OR a website_enrichment hit. "
+                        "Skips drive-by posts with no body text.")
+    p.add_argument("--min-desc-chars", type=int, default=300,
+                   help="Threshold for --rich-only (default: 300).")
     p.add_argument("--report-only", action="store_true")
     args = p.parse_args()
 
@@ -608,7 +643,10 @@ def main():
 
     run(args.db, args.limit, args.workers, args.refresh,
         args.sample_diverse, args.verbose_sample,
-        program_like=args.program_like)
+        program_like=args.program_like,
+        model=args.model,
+        rich_only=args.rich_only,
+        min_desc_chars=args.min_desc_chars)
 
 
 if __name__ == "__main__":

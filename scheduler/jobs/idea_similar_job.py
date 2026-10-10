@@ -30,7 +30,6 @@ from __future__ import annotations
 import argparse
 import logging
 import time
-from typing import List
 
 import numpy as np
 

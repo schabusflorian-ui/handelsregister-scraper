@@ -23,7 +23,7 @@ import json
 import logging
 import re
 from datetime import datetime, timezone
-from typing import Dict, Iterable, Optional, Set
+from typing import Optional, Set
 
 from .common import (
     composite_score,
@@ -32,7 +32,6 @@ from .common import (
     normalize_domain,
     normalize_github,
     normalize_name,
-    recency_multiplier,
 )
 
 logger = logging.getLogger(__name__)

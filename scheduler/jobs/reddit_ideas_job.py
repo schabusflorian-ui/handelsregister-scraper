@@ -22,7 +22,6 @@ import logging
 from dataclasses import asdict
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional
 
 from persistence.database import Database
 from sources.accelerator_scraper import CompanyIdea, save_company_ideas
@@ -98,7 +97,7 @@ def main():
             logger.info("Reddit: resuming per-sub from last_seen:")
             for sub, ts in per_sub_ts.items():
                 logger.info(
-                    "  r/%s  last=%d (%s UTC)",
+                    "  r/%s  last=%d (%s timezone.utc)",
                     sub,
                     ts,
                     datetime.fromtimestamp(ts, timezone.utc).isoformat(),

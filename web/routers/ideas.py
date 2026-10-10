@@ -21,7 +21,7 @@ import re
 import time
 from typing import Dict, List, Optional
 
-from fastapi import APIRouter, File, Header, HTTPException, Request, UploadFile
+from fastapi import APIRouter, File, HTTPException, Request, UploadFile
 from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel, Field
 
@@ -589,8 +589,11 @@ async def ideas_api_search(
     customer_size: Optional[str] = None,
     solo: Optional[str] = None,
     ai_first: Optional[str] = None,
-    year_min: Optional[int] = None,
-    year_max: Optional[int] = None,
+    # year_min/year_max accept str (not int) because the HTML form submits
+    # empty strings when the field is blank. FastAPI's int parser would
+    # 422 on those. Parse manually below.
+    year_min: Optional[str] = None,
+    year_max: Optional[str] = None,
     limit: int = 50,
     offset: int = 0,
 ):
@@ -612,17 +615,22 @@ async def ideas_api_search(
     try:
         _ensure_views(db)
 
+        # Coerce year filters from str → int|None. HTML form submits empty
+        # strings for blank inputs; FastAPI's int parser would 422 on those.
+        year_min_int = int(year_min) if year_min and year_min.strip().lstrip("-").isdigit() else None
+        year_max_int = int(year_max) if year_max and year_max.strip().lstrip("-").isdigit() else None
+
         any_filter = any([
             q and q.strip(), program, mechanism, sector, era, business_model,
             moat, niche, customer_size, solo, ai_first,
-            year_min is not None, year_max is not None,
+            year_min_int is not None, year_max_int is not None,
         ])
         active_filters = {
             "q": q or None, "program": program, "mechanism": mechanism,
             "sector": sector, "era": era, "business_model": business_model,
             "moat": moat, "niche": niche, "customer_size": customer_size,
             "solo": solo, "ai_first": ai_first,
-            "year_min": year_min, "year_max": year_max,
+            "year_min": year_min_int, "year_max": year_max_int,
         }
         active_filters = {k: v for k, v in active_filters.items() if v not in (None, "")}
 
@@ -638,7 +646,7 @@ async def ideas_api_search(
 
         where_sql, params = _build_search_filter(
             q, program, mechanism, sector, era, business_model,
-            moat, niche, customer_size, solo, ai_first, year_min, year_max,
+            moat, niche, customer_size, solo, ai_first, year_min_int, year_max_int,
         )
         cur = db.conn.cursor()
         total_row = cur.execute(
@@ -1178,8 +1186,10 @@ async def ideas_search(
     customer_size: Optional[str] = None,
     solo: Optional[str] = None,
     ai_first: Optional[str] = None,
-    year_min: Optional[int] = None,
-    year_max: Optional[int] = None,
+    # year_min/year_max accept str (not int) because the HTML form submits
+    # empty strings for blank fields. Parse manually below.
+    year_min: Optional[str] = None,
+    year_max: Optional[str] = None,
     page: int = 1,
     per_page: int = 25,
 ):
@@ -1189,6 +1199,8 @@ async def ideas_search(
     era (cluster era_class), business_model, moat_type, niche_specificity,
     customer_size, solo_buildable, ai_first_advantage, year range.
     """
+    year_min_int = int(year_min) if year_min and year_min.strip().lstrip("-").isdigit() else None
+    year_max_int = int(year_max) if year_max and year_max.strip().lstrip("-").isdigit() else None
     db = get_db()
     try:
         _ensure_views(db)
@@ -1196,7 +1208,7 @@ async def ideas_search(
         any_filter = any([
             q and q.strip(), program, mechanism, sector, era, business_model,
             moat, niche, customer_size, solo, ai_first,
-            year_min is not None, year_max is not None,
+            year_min_int is not None, year_max_int is not None,
         ])
 
         rows: List[Dict] = []
@@ -1206,7 +1218,8 @@ async def ideas_search(
         if any_filter:
             where_sql, params = _build_search_filter(
                 q, program, mechanism, sector, era, business_model,
-                moat, niche, customer_size, solo, ai_first, year_min, year_max,
+                moat, niche, customer_size, solo, ai_first,
+                year_min_int, year_max_int,
             )
             cur = db.conn.cursor()
 
@@ -1255,8 +1268,8 @@ async def ideas_search(
             "customer_size": customer_size or "",
             "solo": solo or "",
             "ai_first": ai_first or "",
-            "year_min": str(year_min) if year_min is not None else "",
-            "year_max": str(year_max) if year_max is not None else "",
+            "year_min": str(year_min_int) if year_min_int is not None else "",
+            "year_max": str(year_max_int) if year_max_int is not None else "",
         }
 
         from urllib.parse import urlencode

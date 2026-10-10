@@ -31,8 +31,7 @@ import re
 import time
 from dataclasses import asdict, dataclass, field
 from datetime import datetime
-from typing import Callable, Iterable, List, Optional
-from urllib.parse import urljoin
+from typing import Callable, Dict, List, Optional
 
 OnRecord = Optional[Callable[["CompanyIdea"], None]]
 
@@ -391,9 +390,13 @@ class LuxCapitalScraper(AcceleratorScraper):
                 cut = True
                 continue
             if "publicly listed" in low:
-                status = "public"; cut = True; continue
+                status = "public"
+                cut = True
+                continue
             if "acquired" in low:
-                status = "acquired"; cut = True; continue
+                status = "acquired"
+                cut = True
+                continue
             if cut:
                 # Remaining paragraphs are founders / misc — stop harvesting tags.
                 continue

@@ -26,16 +26,13 @@ from __future__ import annotations
 import argparse
 import glob
 import json
-import os
 import sqlite3
 import sys
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Callable, List, Optional
-from urllib.parse import urlencode
+from typing import Callable, List
 from urllib.request import Request, urlopen
-
 
 PROJECT_ROOT = Path(__file__).parent.parent
 

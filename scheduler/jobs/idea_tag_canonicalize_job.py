@@ -34,7 +34,6 @@ import argparse
 import json
 import logging
 import re
-import sys
 from collections import Counter
 from typing import Dict, List, Optional, Set, Tuple
 
@@ -116,8 +115,8 @@ def semantic_merge(
     themselves."""
     if not vocab:
         return {}
-    from sentence_transformers import SentenceTransformer
     import numpy as np
+    from sentence_transformers import SentenceTransformer
     logger.info("embedding %d unique tags", len(vocab))
     model = SentenceTransformer(model_name)
     X = model.encode(vocab, normalize_embeddings=True, show_progress_bar=False)

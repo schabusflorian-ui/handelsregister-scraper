@@ -32,13 +32,11 @@ from __future__ import annotations
 import argparse
 import logging
 import re
-import sqlite3
-import sys
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta
-from typing import Dict, Iterable, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 from urllib.parse import urlparse
 from urllib.robotparser import RobotFileParser
 

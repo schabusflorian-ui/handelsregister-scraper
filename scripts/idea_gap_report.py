@@ -127,9 +127,9 @@ def _print_matrix(
     top_sects = [s for s, _ in sect_counts.most_common(top)]
 
     print(f"\n=== (mechanism × sector) matrix — top {top} × top {top} ===")
-    print(f"  rows  = mechanism (total uses)")
-    print(f"  cols  = sector    (total uses)")
-    print(f"  cells = co-occurrences; '.' = zero (gap candidate)")
+    print("  rows  = mechanism (total uses)")
+    print("  cols  = sector    (total uses)")
+    print("  cells = co-occurrences; '.' = zero (gap candidate)")
 
     # Header
     col_w = 4
@@ -139,7 +139,7 @@ def _print_matrix(
     for s in top_sects:
         label = s[: col_w - 1]
         print(f" {label:>{col_w - 1}}", end="")
-    print(f"   TOT")
+    print("   TOT")
     print(" " * head_w, end="")
     for s in top_sects:
         print(f" {sect_counts[s]:>{col_w - 1}}", end="")

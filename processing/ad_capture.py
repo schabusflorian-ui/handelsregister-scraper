@@ -216,11 +216,11 @@ def parse_ad_pdf(pdf_bytes: bytes) -> Dict[str, Any]:
 
 
 def capture_ad_for_company(
-    db: "Database",
-    source: "BundesAPISource",
+    db: Database,
+    source: BundesAPISource,
     company_id: int,
-    search_result: "SearchResult",
-    rate_limiter: Optional["PersistentRateLimiter"] = None,
+    search_result: SearchResult,
+    rate_limiter: Optional[PersistentRateLimiter] = None,
 ) -> bool:
     """
     Fetch the AD PDF for one company, parse it, and update the company row.

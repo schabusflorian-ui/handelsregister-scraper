@@ -92,7 +92,7 @@ def main():
         if last_ts:
             since_ts = last_ts
             logger.info(
-                "Show HN: resuming from last_seen_ts=%d (%s UTC)",
+                "Show HN: resuming from last_seen_ts=%d (%s timezone.utc)",
                 since_ts,
                 datetime.fromtimestamp(since_ts, timezone.utc).isoformat(),
             )
@@ -104,7 +104,7 @@ def main():
                 ).timestamp()
             )
             logger.info(
-                "Show HN: first run, fetching last %d days (since %s UTC)",
+                "Show HN: first run, fetching last %d days (since %s timezone.utc)",
                 args.since_days,
                 datetime.fromtimestamp(since_ts, timezone.utc).isoformat(),
             )

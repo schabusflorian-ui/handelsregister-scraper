@@ -26,7 +26,6 @@ import logging
 import re
 import shutil
 import subprocess
-import sys
 from pathlib import Path
 
 # SQLite 3.47+ CLI `.dump` wraps any string containing control characters
@@ -137,7 +136,7 @@ def main():
     # public unless the env var is set on the target).
     import os
     token = os.environ.get("IDEAS_SEED_TOKEN")
-    auth_line = (f"    -H \"X-Seed-Token: $IDEAS_SEED_TOKEN\" \\\n"
+    auth_line = ("    -H \"X-Seed-Token: $IDEAS_SEED_TOKEN\" \\\n"
                  if token else "")
     print(f"\nTo seed Railway:\n"
           f"  curl -fSL -X POST \\\n"

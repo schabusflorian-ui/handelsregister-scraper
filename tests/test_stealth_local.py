@@ -45,7 +45,7 @@ def test_duckduckgo_search():
     return results
 
 
-def test_linkedin_scraping(urls: list):
+def _linkedin_scraping(urls: list):  # not test_ prefix — pytest doesn't collect; called from test_full_discovery
     """Test LinkedIn profile scraping."""
     print("\n" + "=" * 60)
     print("TEST 2: LinkedIn Profile Scraping")
@@ -167,7 +167,7 @@ if __name__ == "__main__":
     # Test 2: LinkedIn Scraping
     try:
         urls = [r.url for r in search_results] if search_results else []
-        profiles = test_linkedin_scraping(urls)
+        profiles = _linkedin_scraping(urls)
     except Exception as e:
         print(f"Scraping test failed: {e}")
         profiles = []

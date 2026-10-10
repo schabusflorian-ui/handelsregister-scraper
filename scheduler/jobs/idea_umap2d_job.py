@@ -24,7 +24,6 @@ from __future__ import annotations
 
 import argparse
 import logging
-from typing import List
 
 import numpy as np
 

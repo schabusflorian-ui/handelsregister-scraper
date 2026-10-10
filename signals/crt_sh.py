@@ -24,12 +24,11 @@ import logging
 import re
 import sqlite3
 import time
-from datetime import datetime, timezone
-from typing import Iterable, List, Optional, Set
-
 import urllib.error
 import urllib.parse
 import urllib.request
+from datetime import datetime, timezone
+from typing import Iterable, List, Optional, Set
 
 from .common import ensure_json, iso_now, normalize_domain
 
@@ -162,7 +161,7 @@ def _is_plausible(domain: str) -> bool:
 
 
 def _parse_cert_time(s: Optional[str]) -> Optional[str]:
-    """crt.sh returns timestamps like '2026-10-01T12:34:56'. Normalize to ISO UTC."""
+    """crt.sh returns timestamps like '2026-10-01T12:34:56'. Normalize to ISO timezone.utc."""
     if not s:
         return None
     s = s.strip()

@@ -252,7 +252,7 @@ class NewsMonitoringJob:
                 "%a, %d %b %Y %H:%M:%S %z",     # RFC 822: "Mon, 01 Jan 2024 12:00:00 +0100"
                 "%a, %d %b %Y %H:%M:%S %Z",     # "Mon, 01 Jan 2024 12:00:00 GMT"
                 "%Y-%m-%dT%H:%M:%S%z",           # ISO 8601 with tz
-                "%Y-%m-%dT%H:%M:%SZ",            # ISO 8601 UTC
+                "%Y-%m-%dT%H:%M:%SZ",            # ISO 8601 timezone.utc
                 "%Y-%m-%d %H:%M:%S",             # Simple datetime
                 "%Y-%m-%d",                       # Simple date
             ]:
