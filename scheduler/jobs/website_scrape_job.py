@@ -350,8 +350,10 @@ class WebsiteScrapeJob:
             logger.info(
                 "Re-scored %s with purpose: AI=%d→%d, climate=%d→%d, class=%s",
                 company["name"],
-                company.get("ai_robotics_score", 0), new_ai,
-                company.get("climate_score", 0), new_climate,
+                company.get("ai_robotics_score", 0),
+                new_ai,
+                company.get("climate_score", 0),
+                new_climate,
                 new_classification,
             )
 

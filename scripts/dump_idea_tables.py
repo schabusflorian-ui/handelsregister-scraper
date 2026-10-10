@@ -26,7 +26,6 @@ import logging
 import re
 import shutil
 import subprocess
-import sys
 from pathlib import Path
 
 # SQLite 3.47+ CLI `.dump` wraps any string containing control characters
@@ -43,7 +42,9 @@ def _decode_unistr(sql: bytes) -> bytes:
         body = m.group(1)
         decoded = _UHEX_RE.sub(lambda x: chr(int(x.group(1), 16)), body)
         return "'" + decoded + "'"
+
     return _UNISTR_RE.sub(_repl, sql.decode("utf-8")).encode("utf-8")
+
 
 logger = logging.getLogger(__name__)
 
@@ -93,8 +94,7 @@ def dump(db_path: Path, out_path: Path) -> int:
     n_unistr = sql.count(b"unistr(")
     if n_unistr:
         sql = _decode_unistr(sql)
-        logger.info("unwrapped %d unistr() calls for SQLite-3.46 compatibility",
-                    n_unistr)
+        logger.info("unwrapped %d unistr() calls for SQLite-3.46 compatibility", n_unistr)
 
     preamble = (
         "PRAGMA foreign_keys=OFF;\n"
@@ -118,16 +118,13 @@ def dump(db_path: Path, out_path: Path) -> int:
 
 
 def main():
-    p = argparse.ArgumentParser(description=__doc__,
-                                formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("--db", default="handelsregister.db",
-                   help="source SQLite DB (default: handelsregister.db)")
-    p.add_argument("--out", default="data/ideas/idea_seed.sql.gz",
-                   help="output path (default: data/ideas/idea_seed.sql.gz)")
+    p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    p.add_argument("--db", default="handelsregister.db", help="source SQLite DB (default: handelsregister.db)")
+    p.add_argument(
+        "--out", default="data/ideas/idea_seed.sql.gz", help="output path (default: data/ideas/idea_seed.sql.gz)"
+    )
     args = p.parse_args()
-    logging.basicConfig(level=logging.INFO,
-                        format="%(asctime)s %(levelname)s %(message)s",
-                        datefmt="%H:%M:%S")
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s", datefmt="%H:%M:%S")
     out_path = Path(args.out)
     out_path.parent.mkdir(parents=True, exist_ok=True)
     dump(Path(args.db), out_path)
@@ -136,18 +133,21 @@ def main():
     # the hint. Otherwise emit an unauthenticated command (the endpoint is
     # public unless the env var is set on the target).
     import os
+
     token = os.environ.get("IDEAS_SEED_TOKEN")
-    auth_line = (f"    -H \"X-Seed-Token: $IDEAS_SEED_TOKEN\" \\\n"
-                 if token else "")
-    print(f"\nTo seed Railway:\n"
-          f"  curl -fSL -X POST \\\n"
-          f"{auth_line}"
-          f"    -F \"file=@{out_path}\" \\\n"
-          f"    https://fabulous-fascination-production-4638.up.railway.app/admin/ideas/seed"
-          + ("\n\n  (IDEAS_SEED_TOKEN found in env — header included above.)"
-             if token else
-             "\n\n  (no IDEAS_SEED_TOKEN in env — set one on Railway + locally "
-             "via .env to enable auth.)"))
+    auth_line = '    -H "X-Seed-Token: $IDEAS_SEED_TOKEN" \\\n' if token else ""
+    print(
+        f"\nTo seed Railway:\n"
+        f"  curl -fSL -X POST \\\n"
+        f"{auth_line}"
+        f'    -F "file=@{out_path}" \\\n'
+        f"    https://fabulous-fascination-production-4638.up.railway.app/admin/ideas/seed"
+        + (
+            "\n\n  (IDEAS_SEED_TOKEN found in env — header included above.)"
+            if token
+            else "\n\n  (no IDEAS_SEED_TOKEN in env — set one on Railway + locally via .env to enable auth.)"
+        )
+    )
 
 
 if __name__ == "__main__":

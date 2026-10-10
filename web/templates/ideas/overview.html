@@ -6,6 +6,16 @@
 <!-- Apache ECharts (via CDN) for heatmap + future visualizations.
      No build step, matches the existing Tailwind + HTMX + Alpine.js pattern. -->
 <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
+
+{# Agent autodiscovery: an LLM crawler hitting this page can find the
+   machine-readable manifest + OpenAPI spec via standard <link rel> tags
+   without needing a hard-coded URL. #}
+<link rel="alternate" type="application/json"
+      href="/ideas/api/index.json"
+      title="Ideas API manifest (for agents)">
+<link rel="alternate" type="application/json"
+      href="/openapi.json"
+      title="OpenAPI 3.1 spec">
 {% endblock %}
 
 {% block header %}
@@ -37,6 +47,13 @@
       </a>
       <a href="/ideas/search" class="hover:text-indigo-700">
         full search →
+      </a>
+      {# Discoverability for agents: the manifest at /ideas/api/index.json
+         lists every JSON endpoint, the data dictionary, and canonical
+         queries. /openapi.json is the standard machine-readable spec. #}
+      <a href="/ideas/api/index.json" class="hover:text-indigo-700 ml-auto font-mono"
+         title="Machine-readable API manifest (for agents)">
+        API ↗
       </a>
     </div>
   </div>

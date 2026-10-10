@@ -249,12 +249,12 @@ class NewsMonitoringJob:
         try:
             # Try common RSS date formats
             for fmt in [
-                "%a, %d %b %Y %H:%M:%S %z",     # RFC 822: "Mon, 01 Jan 2024 12:00:00 +0100"
-                "%a, %d %b %Y %H:%M:%S %Z",     # "Mon, 01 Jan 2024 12:00:00 GMT"
-                "%Y-%m-%dT%H:%M:%S%z",           # ISO 8601 with tz
-                "%Y-%m-%dT%H:%M:%SZ",            # ISO 8601 UTC
-                "%Y-%m-%d %H:%M:%S",             # Simple datetime
-                "%Y-%m-%d",                       # Simple date
+                "%a, %d %b %Y %H:%M:%S %z",  # RFC 822: "Mon, 01 Jan 2024 12:00:00 +0100"
+                "%a, %d %b %Y %H:%M:%S %Z",  # "Mon, 01 Jan 2024 12:00:00 GMT"
+                "%Y-%m-%dT%H:%M:%S%z",  # ISO 8601 with tz
+                "%Y-%m-%dT%H:%M:%SZ",  # ISO 8601 timezone.utc
+                "%Y-%m-%d %H:%M:%S",  # Simple datetime
+                "%Y-%m-%d",  # Simple date
             ]:
                 try:
                     pub_date = datetime.strptime(article.published_date.strip(), fmt)
@@ -328,8 +328,7 @@ class NewsMonitoringJob:
             return row["id"]
 
         # 2. Try with legal form variations: "Enua" should match "Enua GmbH"
-        legal_forms = ["gmbh", "ug", "ag", "se", "kg", "ohg", "e.v.", "eg",
-                        "gmbh & co. kg", "ug (haftungsbeschränkt)"]
+        legal_forms = ["gmbh", "ug", "ag", "se", "kg", "ohg", "e.v.", "eg", "gmbh & co. kg", "ug (haftungsbeschränkt)"]
         for lf in legal_forms:
             # Search "name + legal form"
             row = conn.execute(
@@ -368,9 +367,17 @@ class NewsMonitoringJob:
         suffixes = [
             r"\s+gmbh\s*&\s*co\.?\s*kg\b",
             r"\s+ug\s*\(haftungsbeschränkt\)",
-            r"\s+gmbh\b", r"\s+ug\b", r"\s+ag\b", r"\s+se\b",
-            r"\s+kg\b", r"\s+ohg\b", r"\s+e\.v\.\b", r"\s+eg\b",
-            r"\s+gbr\b", r"\s+inc\.?\b", r"\s+ltd\.?\b",
+            r"\s+gmbh\b",
+            r"\s+ug\b",
+            r"\s+ag\b",
+            r"\s+se\b",
+            r"\s+kg\b",
+            r"\s+ohg\b",
+            r"\s+e\.v\.\b",
+            r"\s+eg\b",
+            r"\s+gbr\b",
+            r"\s+inc\.?\b",
+            r"\s+ltd\.?\b",
         ]
         result = name.strip()
         for suffix in suffixes:
@@ -651,13 +658,14 @@ class NewsMonitoringJob:
                  investment_date, detection_source, confidence, notes)
                 VALUES (?, ?, ?, ?, ?, NULL, ?, ?, ?)
                 """,
-                (company_id, investor_id, round_type, amount, currency or "EUR",
-                 source, confidence, notes),
+                (company_id, investor_id, round_type, amount, currency or "EUR", source, confidence, notes),
             )
             conn.commit()
             logger.info(
                 "Investment recorded from news: company=%d, investor=%d, round=%s",
-                company_id, investor_id, round_type,
+                company_id,
+                investor_id,
+                round_type,
             )
             return True
 

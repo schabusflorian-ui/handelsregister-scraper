@@ -66,45 +66,114 @@ MAX_OUTPUT_TOKENS = 700
 
 MECHANISM_VOCAB = [
     # Business-model primitives
-    "subscription-saas", "usage-based-pricing", "per-seat-pricing",
-    "marketplace-take-rate", "escrow-marketplace", "freemium", "bnpl",
-    "transaction-fee", "licensing", "white-label", "data-broker", "ads",
+    "subscription-saas",
+    "usage-based-pricing",
+    "per-seat-pricing",
+    "marketplace-take-rate",
+    "escrow-marketplace",
+    "freemium",
+    "bnpl",
+    "transaction-fee",
+    "licensing",
+    "white-label",
+    "data-broker",
+    "ads",
     # AI primitives
-    "llm-copilot", "rag-over-docs", "agent-automation", "voice-agent",
-    "image-generation", "predictive-scoring", "anomaly-detection",
-    "recommendation-engine", "ai-summarization", "ai-coding-assistant",
+    "llm-copilot",
+    "rag-over-docs",
+    "agent-automation",
+    "voice-agent",
+    "image-generation",
+    "predictive-scoring",
+    "anomaly-detection",
+    "recommendation-engine",
+    "ai-summarization",
+    "ai-coding-assistant",
     # Distribution primitives
-    "plg-bottom-up", "content-seo", "community-led-growth",
-    "ambassador-referral", "embedded-integration", "api-distribution",
+    "plg-bottom-up",
+    "content-seo",
+    "community-led-growth",
+    "ambassador-referral",
+    "embedded-integration",
+    "api-distribution",
     "app-store",
     # UX / surface primitives
-    "ai-chat-interface", "no-code-builder", "browser-extension",
-    "mobile-first-app", "desktop-app", "slack-bot", "figma-plugin",
+    "ai-chat-interface",
+    "no-code-builder",
+    "browser-extension",
+    "mobile-first-app",
+    "desktop-app",
+    "slack-bot",
+    "figma-plugin",
     "email-automation",
     # Data / moat primitives
-    "proprietary-dataset", "network-effects", "reviews-and-ratings",
-    "benchmarks", "anonymized-aggregation", "hardware-form-factor",
+    "proprietary-dataset",
+    "network-effects",
+    "reviews-and-ratings",
+    "benchmarks",
+    "anonymized-aggregation",
+    "hardware-form-factor",
     # Workflow primitives
-    "vertical-saas-crm", "document-extraction", "invoicing-ap-automation",
-    "expense-reconciliation", "scheduling-automation", "lead-scraping",
-    "contract-review", "compliance-monitoring", "data-pipeline",
-    "observability-monitoring", "qa-testing-automation",
+    "vertical-saas-crm",
+    "document-extraction",
+    "invoicing-ap-automation",
+    "expense-reconciliation",
+    "scheduling-automation",
+    "lead-scraping",
+    "contract-review",
+    "compliance-monitoring",
+    "data-pipeline",
+    "observability-monitoring",
+    "qa-testing-automation",
 ]
 
 SECTOR_VOCAB = [
     # Verticals (who the customer operates in)
-    "legal", "healthcare", "education", "construction", "real-estate",
-    "finance", "insurance", "logistics", "manufacturing", "retail",
-    "food-beverage", "agriculture", "automotive", "aerospace", "defense",
-    "energy", "travel-hospitality", "fashion", "beauty", "fitness-wellness",
-    "media", "entertainment", "gaming", "publishing", "government",
-    "nonprofit", "biotech-pharma",
+    "legal",
+    "healthcare",
+    "education",
+    "construction",
+    "real-estate",
+    "finance",
+    "insurance",
+    "logistics",
+    "manufacturing",
+    "retail",
+    "food-beverage",
+    "agriculture",
+    "automotive",
+    "aerospace",
+    "defense",
+    "energy",
+    "travel-hospitality",
+    "fashion",
+    "beauty",
+    "fitness-wellness",
+    "media",
+    "entertainment",
+    "gaming",
+    "publishing",
+    "government",
+    "nonprofit",
+    "biotech-pharma",
     # Horizontal buyers (functional role inside a company)
-    "sales", "marketing", "hr-recruiting", "finance-ops", "it-security",
-    "devops", "product-design", "data-engineering", "customer-support",
-    "operations", "procurement",
+    "sales",
+    "marketing",
+    "hr-recruiting",
+    "finance-ops",
+    "it-security",
+    "devops",
+    "product-design",
+    "data-engineering",
+    "customer-support",
+    "operations",
+    "procurement",
     # Audience categories
-    "developers", "creators", "sme-smb", "enterprise", "consumer",
+    "developers",
+    "creators",
+    "sme-smb",
+    "enterprise",
+    "consumer",
     "prosumer-freelancers",
 ]
 
@@ -218,45 +287,74 @@ TOOL_SCHEMA = {
     "input_schema": {
         "type": "object",
         "required": [
-            "problem_statement", "customer_verticals", "mechanism_tags",
-            "sector_tags", "customer_size", "business_model",
-            "solo_buildable", "solo_buildable_reasoning",
-            "ai_first_advantage", "ai_first_reasoning",
-            "moat_type", "niche_specificity",
+            "problem_statement",
+            "customer_verticals",
+            "mechanism_tags",
+            "sector_tags",
+            "customer_size",
+            "business_model",
+            "solo_buildable",
+            "solo_buildable_reasoning",
+            "ai_first_advantage",
+            "ai_first_reasoning",
+            "moat_type",
+            "niche_specificity",
         ],
         "properties": {
             "problem_statement": {"type": "string"},
             "customer_verticals": {
-                "type": "array", "items": {"type": "string"},
-                "minItems": 1, "maxItems": 4,
+                "type": "array",
+                "items": {"type": "string"},
+                "minItems": 1,
+                "maxItems": 4,
             },
             "mechanism_tags": {
-                "type": "array", "items": {"type": "string"},
-                "minItems": 1, "maxItems": 5,
+                "type": "array",
+                "items": {"type": "string"},
+                "minItems": 1,
+                "maxItems": 5,
             },
             "sector_tags": {
-                "type": "array", "items": {"type": "string"},
-                "minItems": 1, "maxItems": 3,
+                "type": "array",
+                "items": {"type": "string"},
+                "minItems": 1,
+                "maxItems": 3,
             },
             "customer_size": {
                 "type": "string",
-                "enum": ["consumer", "prosumer", "smb", "mid_market",
-                         "enterprise", "developer"],
+                "enum": ["consumer", "prosumer", "smb", "mid_market", "enterprise", "developer"],
             },
             "business_model": {
                 "type": "string",
-                "enum": ["saas", "service", "marketplace", "api", "hardware",
-                         "agency", "course", "community", "consumer_app",
-                         "hybrid"],
+                "enum": [
+                    "saas",
+                    "service",
+                    "marketplace",
+                    "api",
+                    "hardware",
+                    "agency",
+                    "course",
+                    "community",
+                    "consumer_app",
+                    "hybrid",
+                ],
             },
-            "solo_buildable":             {"type": "boolean"},
-            "solo_buildable_reasoning":   {"type": "string"},
-            "ai_first_advantage":         {"type": "boolean"},
-            "ai_first_reasoning":         {"type": "string"},
+            "solo_buildable": {"type": "boolean"},
+            "solo_buildable_reasoning": {"type": "string"},
+            "ai_first_advantage": {"type": "boolean"},
+            "ai_first_reasoning": {"type": "string"},
             "moat_type": {
                 "type": "string",
-                "enum": ["network", "data", "regulatory", "brand", "capital",
-                         "integration", "domain_expertise", "none"],
+                "enum": [
+                    "network",
+                    "data",
+                    "regulatory",
+                    "brand",
+                    "capital",
+                    "integration",
+                    "domain_expertise",
+                    "none",
+                ],
             },
             "niche_specificity": {
                 "type": "string",
@@ -269,9 +367,9 @@ TOOL_SCHEMA = {
 
 # --- input formatting ------------------------------------------------------
 
+
 def _row_to_user_content(row: dict) -> str:
-    parts = [f"Company: {row['company']}",
-             f"Scouting source: {row['program']}"]
+    parts = [f"Company: {row['company']}", f"Scouting source: {row['program']}"]
     if row.get("batch"):
         parts.append(f"Batch/cohort: {row['batch']}")
     if row.get("year_founded"):
@@ -300,7 +398,8 @@ def _row_to_user_content(row: dict) -> str:
 
 # --- API call --------------------------------------------------------------
 
-def _extract_one(client, row: dict, max_retries: int = 4) -> Dict[str, object]:
+
+def _extract_one(client, row: dict, max_retries: int = 4, model: Optional[str] = None) -> Dict[str, object]:
     import anthropic
 
     user_content = _row_to_user_content(row)
@@ -309,11 +408,10 @@ def _extract_one(client, row: dict, max_retries: int = 4) -> Dict[str, object]:
         attempts += 1
         try:
             resp = client.messages.create(
-                model=MODEL,
+                model=model or MODEL,
                 max_tokens=MAX_OUTPUT_TOKENS,
                 system=[
-                    {"type": "text", "text": SYSTEM_PROMPT,
-                     "cache_control": {"type": "ephemeral"}},
+                    {"type": "text", "text": SYSTEM_PROMPT, "cache_control": {"type": "ephemeral"}},
                 ],
                 tools=[TOOL_SCHEMA],
                 tool_choice={"type": "tool", "name": "record_idea_extraction"},
@@ -324,10 +422,9 @@ def _extract_one(client, row: dict, max_retries: int = 4) -> Dict[str, object]:
                 return {"error": f"no_tool_use (stop_reason={resp.stop_reason})"}
             args = tool_calls[0].input
             args["_tokens"] = {
-                "input":      getattr(resp.usage, "input_tokens", None),
-                "output":     getattr(resp.usage, "output_tokens", None),
-                "cache_read": getattr(resp.usage,
-                                      "cache_read_input_tokens", None),
+                "input": getattr(resp.usage, "input_tokens", None),
+                "output": getattr(resp.usage, "output_tokens", None),
+                "cache_read": getattr(resp.usage, "cache_read_input_tokens", None),
             }
             return args
         except anthropic.APIStatusError as e:
@@ -337,11 +434,11 @@ def _extract_one(client, row: dict, max_retries: int = 4) -> Dict[str, object]:
                 return {"error": f"api_status_{e.status_code}"}
             if attempts >= max_retries:
                 return {"error": f"api_status_{e.status_code}"}
-            time.sleep(min(2 ** attempts + random.random(), 30))
+            time.sleep(min(2**attempts + random.random(), 30))
         except Exception as e:  # noqa: BLE001
             if attempts >= max_retries:
                 return {"error": f"exception:{type(e).__name__}"}
-            time.sleep(min(2 ** attempts + random.random(), 30))
+            time.sleep(min(2**attempts + random.random(), 30))
 
 
 # --- DB helpers ------------------------------------------------------------
@@ -372,9 +469,15 @@ def _ensure_schema(db: Database) -> None:
     db.conn.commit()
 
 
-def _fetch_targets(db: Database, limit: Optional[int], refresh: bool,
-                   sample_diverse: bool,
-                   program_like: Optional[str] = None) -> List[dict]:
+def _fetch_targets(
+    db: Database,
+    limit: Optional[int],
+    refresh: bool,
+    sample_diverse: bool,
+    program_like: Optional[str] = None,
+    rich_only: bool = False,
+    min_desc_chars: int = 300,
+) -> List[dict]:
     cur = db.conn.cursor()
     clauses: List[str] = []
     params: List = []
@@ -383,14 +486,24 @@ def _fetch_targets(db: Database, limit: Optional[int], refresh: bool,
         # (e.g. from past credit-exhaustion or transient 5xx) will be
         # retried automatically on re-run — that's almost always what you
         # want, since the causes are external and transient.
-        clauses.append(
-            "ci.id NOT IN (SELECT company_idea_id FROM idea_extraction "
-            "WHERE error IS NULL)"
-        )
+        clauses.append("ci.id NOT IN (SELECT company_idea_id FROM idea_extraction WHERE error IS NULL)")
     if program_like:
         # SQL LIKE pattern — e.g. 'Reddit r/%' or 'Show HN'.
         clauses.append("ci.program LIKE ?")
         params.append(program_like)
+    if rich_only:
+        # Only extract rows where the LLM has enough signal to produce a
+        # useful extraction: either the scraped text is long enough to
+        # describe a product, OR we've already fetched website content
+        # for this row. Drive-by "Show HN: I made X" posts with no body
+        # are excluded — they'd produce mediocre tags + burn tokens.
+        clauses.append(
+            f"(LENGTH(ci.long_description) >= {int(min_desc_chars)} "
+            "OR ci.normalized_website IN ("
+            "  SELECT normalized_website FROM website_enrichment"
+            "   WHERE meta_description IS NOT NULL OR hero_text IS NOT NULL"
+            "))"
+        )
     where = ("WHERE " + " AND ".join(clauses)) if clauses else ""
     order = ""
     if sample_diverse:
@@ -426,7 +539,7 @@ def _fetch_targets(db: Database, limit: Optional[int], refresh: bool,
     return rows
 
 
-def _save(db: Database, row_id: int, data: Dict[str, object]) -> None:
+def _save(db: Database, row_id: int, data: Dict[str, object], model: Optional[str] = None) -> None:
     tok = data.get("_tokens", {}) or {}
     err = data.get("error")
     with _LOCK:
@@ -442,55 +555,76 @@ def _save(db: Database, row_id: int, data: Dict[str, object]) -> None:
              cache_read_tokens, error, extracted_at)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
-            (row_id,
-             data.get("problem_statement"),
-             json.dumps(_as_list(data.get("customer_verticals"))),
-             json.dumps(_as_list(data.get("mechanism_tags"))),
-             json.dumps(_as_list(data.get("sector_tags"))),
-             data.get("customer_size"),
-             data.get("business_model"),
-             1 if data.get("solo_buildable") else (
-                 0 if data.get("solo_buildable") is False else None),
-             data.get("solo_buildable_reasoning"),
-             1 if data.get("ai_first_advantage") else (
-                 0 if data.get("ai_first_advantage") is False else None),
-             data.get("ai_first_reasoning"),
-             data.get("moat_type"),
-             data.get("niche_specificity"),
-             MODEL,
-             tok.get("input"), tok.get("output"), tok.get("cache_read"),
-             err,
-             datetime.now().isoformat()),
+            (
+                row_id,
+                data.get("problem_statement"),
+                json.dumps(_as_list(data.get("customer_verticals"))),
+                json.dumps(_as_list(data.get("mechanism_tags"))),
+                json.dumps(_as_list(data.get("sector_tags"))),
+                data.get("customer_size"),
+                data.get("business_model"),
+                1 if data.get("solo_buildable") else (0 if data.get("solo_buildable") is False else None),
+                data.get("solo_buildable_reasoning"),
+                1 if data.get("ai_first_advantage") else (0 if data.get("ai_first_advantage") is False else None),
+                data.get("ai_first_reasoning"),
+                data.get("moat_type"),
+                data.get("niche_specificity"),
+                model or MODEL,
+                tok.get("input"),
+                tok.get("output"),
+                tok.get("cache_read"),
+                err,
+                datetime.now().isoformat(),
+            ),
         )
         db.conn.commit()
 
 
 # --- main ------------------------------------------------------------------
 
+
 def _make_client():
     """Anthropic client that accepts either ANTHROPIC_API_KEY or the
     Claude Code OAuth token (CLAUDE_CODE_OAUTH_TOKEN)."""
     import anthropic
+
     api_key = os.getenv("ANTHROPIC_API_KEY") or None
     oauth = os.getenv("CLAUDE_CODE_OAUTH_TOKEN") or None
     if api_key:
         return anthropic.Anthropic(api_key=api_key)
     if oauth:
         return anthropic.Anthropic(auth_token=oauth)
-    raise RuntimeError(
-        "Neither ANTHROPIC_API_KEY nor CLAUDE_CODE_OAUTH_TOKEN is set"
-    )
+    raise RuntimeError("Neither ANTHROPIC_API_KEY nor CLAUDE_CODE_OAUTH_TOKEN is set")
 
 
-def run(db_path: str, limit: Optional[int], workers: int, refresh: bool,
-        sample_diverse: bool, verbose_sample: bool,
-        program_like: Optional[str] = None) -> None:
+def run(
+    db_path: str,
+    limit: Optional[int],
+    workers: int,
+    refresh: bool,
+    sample_diverse: bool,
+    verbose_sample: bool,
+    program_like: Optional[str] = None,
+    model: Optional[str] = None,
+    rich_only: bool = False,
+    min_desc_chars: int = 300,
+) -> None:
     client = _make_client()
+    effective_model = model or MODEL
 
     db = Database(db_path)
     _ensure_schema(db)
-    rows = _fetch_targets(db, limit, refresh, sample_diverse, program_like)
-    logger.info("extraction: %d rows to process (workers=%d)", len(rows), workers)
+    rows = _fetch_targets(
+        db, limit, refresh, sample_diverse, program_like, rich_only=rich_only, min_desc_chars=min_desc_chars
+    )
+    logger.info(
+        "extraction: %d rows to process (workers=%d, model=%s, rich_only=%s, min_desc_chars=%d)",
+        len(rows),
+        workers,
+        effective_model,
+        rich_only,
+        min_desc_chars,
+    )
     if not rows:
         return
 
@@ -500,14 +634,14 @@ def run(db_path: str, limit: Optional[int], workers: int, refresh: bool,
     results_for_print: List[Tuple[dict, dict]] = []
 
     with ThreadPoolExecutor(max_workers=workers) as pool:
-        futs = {pool.submit(_extract_one, client, r): r for r in rows}
+        futs = {pool.submit(_extract_one, client, r, model=effective_model): r for r in rows}
         for fut in as_completed(futs):
             row = futs[fut]
             try:
                 data = fut.result()
             except Exception as e:  # noqa: BLE001
                 data = {"error": f"crash:{type(e).__name__}"}
-            _save(db, row["id"], data)
+            _save(db, row["id"], data, model=effective_model)
             done += 1
             if not data.get("error"):
                 ok += 1
@@ -515,8 +649,7 @@ def run(db_path: str, limit: Optional[int], workers: int, refresh: bool,
                     results_for_print.append((row, data))
             if done % 25 == 0 or done == len(rows):
                 dt = time.monotonic() - t0
-                logger.info("extraction: %d/%d done (%d ok, %d err) in %.1fs",
-                            done, len(rows), ok, done - ok, dt)
+                logger.info("extraction: %d/%d done (%d ok, %d err) in %.1fs", done, len(rows), ok, done - ok, dt)
 
     if verbose_sample:
         _print_sample(results_for_print)
@@ -529,18 +662,18 @@ def _print_sample(results: List[Tuple[dict, dict]]) -> None:
     print(" SAMPLE OUTPUT")
     print("=" * 78)
     for row, data in results:
-        print(f"\n── {row['program']}  ·  {row['company']}  "
-              f"({row.get('batch') or row.get('year_founded') or '-'})")
+        print(f"\n── {row['program']}  ·  {row['company']}  ({row.get('batch') or row.get('year_founded') or '-'})")
         if row.get("one_liner"):
             print(f"   input one-liner: {row['one_liner'][:140]}")
         print(f"   problem:   {data.get('problem_statement')}")
-        print(f"   customer:  {', '.join(data.get('customer_verticals') or [])}  "
-              f"[{data.get('customer_size')}]")
+        print(f"   customer:  {', '.join(data.get('customer_verticals') or [])}  [{data.get('customer_size')}]")
         print(f"   MECH:      {', '.join(data.get('mechanism_tags') or [])}")
         print(f"   SECTOR:    {', '.join(data.get('sector_tags') or [])}")
-        print(f"   model:     {data.get('business_model')}  ·  "
-              f"moat: {data.get('moat_type')}  ·  niche: "
-              f"{data.get('niche_specificity')}")
+        print(
+            f"   model:     {data.get('business_model')}  ·  "
+            f"moat: {data.get('moat_type')}  ·  niche: "
+            f"{data.get('niche_specificity')}"
+        )
         solo = "YES" if data.get("solo_buildable") else "NO"
         ai_first = "YES" if data.get("ai_first_advantage") else "NO"
         print(f"   solo_buildable={solo} — {data.get('solo_buildable_reasoning')}")
@@ -550,9 +683,7 @@ def _print_sample(results: List[Tuple[dict, dict]]) -> None:
 def print_report(db: Database) -> None:
     cur = db.conn.cursor()
     tot = cur.execute("SELECT COUNT(*) AS n FROM idea_extraction").fetchone()["n"]
-    errs = cur.execute(
-        "SELECT COUNT(*) AS n FROM idea_extraction WHERE error IS NOT NULL"
-    ).fetchone()["n"]
+    errs = cur.execute("SELECT COUNT(*) AS n FROM idea_extraction WHERE error IS NOT NULL").fetchone()["n"]
     print(f"\n=== idea_extraction — {tot} rows ({errs} errors) ===")
     if tot == 0:
         return
@@ -579,21 +710,27 @@ def main():
     p.add_argument("--db", default="handelsregister.db")
     p.add_argument("--limit", type=int, default=None)
     p.add_argument("--workers", type=int, default=5)
-    p.add_argument("--refresh", action="store_true",
-                   help="Re-extract rows even if already present")
-    p.add_argument("--sample-diverse", action="store_true",
-                   help="Stratified sample across programs (for --limit runs)")
-    p.add_argument("--verbose-sample", action="store_true",
-                   help="Print each extraction result to stdout")
-    p.add_argument("--program-like", default=None,
-                   help="Only process programs matching this SQL LIKE "
-                        "pattern (e.g. 'Reddit r/%%' or 'Show HN')")
+    p.add_argument("--refresh", action="store_true", help="Re-extract rows even if already present")
+    p.add_argument("--sample-diverse", action="store_true", help="Stratified sample across programs (for --limit runs)")
+    p.add_argument("--verbose-sample", action="store_true", help="Print each extraction result to stdout")
+    p.add_argument(
+        "--program-like",
+        default=None,
+        help="Only process programs matching this SQL LIKE pattern (e.g. 'Reddit r/%%' or 'Show HN')",
+    )
+    p.add_argument("--model", default=None, help=f"Anthropic model ID to use (default: {MODEL}).")
+    p.add_argument(
+        "--rich-only",
+        action="store_true",
+        help="Only extract rows with long_description >= "
+        "--min-desc-chars OR a website_enrichment hit. "
+        "Skips drive-by posts with no body text.",
+    )
+    p.add_argument("--min-desc-chars", type=int, default=300, help="Threshold for --rich-only (default: 300).")
     p.add_argument("--report-only", action="store_true")
     args = p.parse_args()
 
-    logging.basicConfig(level=logging.INFO,
-                        format="%(asctime)s %(levelname)s %(message)s",
-                        datefmt="%H:%M:%S")
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s", datefmt="%H:%M:%S")
 
     if args.report_only:
         db = Database(args.db)
@@ -602,13 +739,21 @@ def main():
         db.conn.close()
         return
 
-    if not (os.getenv("ANTHROPIC_API_KEY")
-            or os.getenv("CLAUDE_CODE_OAUTH_TOKEN")):
+    if not (os.getenv("ANTHROPIC_API_KEY") or os.getenv("CLAUDE_CODE_OAUTH_TOKEN")):
         sys.exit("Neither ANTHROPIC_API_KEY nor CLAUDE_CODE_OAUTH_TOKEN is set")
 
-    run(args.db, args.limit, args.workers, args.refresh,
-        args.sample_diverse, args.verbose_sample,
-        program_like=args.program_like)
+    run(
+        args.db,
+        args.limit,
+        args.workers,
+        args.refresh,
+        args.sample_diverse,
+        args.verbose_sample,
+        program_like=args.program_like,
+        model=args.model,
+        rich_only=args.rich_only,
+        min_desc_chars=args.min_desc_chars,
+    )
 
 
 if __name__ == "__main__":

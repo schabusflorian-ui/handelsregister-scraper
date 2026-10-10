@@ -101,16 +101,16 @@ _PURPOSE_RE = re.compile(
 # tab / hyphen) rather than `\s` — `\s` includes `\n`, which lets the match
 # span multiple lines and pull in the previous "Sitz" line's city.
 _ADDRESS_RE = re.compile(
-    r"^"                                                # line start
+    r"^"  # line start
     r"[ \t]*"
-    r"([A-ZÄÖÜ][A-Za-zÄÖÜäöüß\.\-]{2,}"                # first word of street
-    r"(?:[ \t\-][A-ZÄÖÜa-zäöüß\.]+){0,3}?)"            # optional 0–3 more words
-    r"[ \t]+(\d+[a-zA-Z]?(?:[-/]\d+[a-zA-Z]?)?)"       # house number (95, 12a, 3-5)
+    r"([A-ZÄÖÜ][A-Za-zÄÖÜäöüß\.\-]{2,}"  # first word of street
+    r"(?:[ \t\-][A-ZÄÖÜa-zäöüß\.]+){0,3}?)"  # optional 0–3 more words
+    r"[ \t]+(\d+[a-zA-Z]?(?:[-/]\d+[a-zA-Z]?)?)"  # house number (95, 12a, 3-5)
     r"[ \t]*,[ \t]*"
-    r"(\d{5})"                                          # postal code
+    r"(\d{5})"  # postal code
     r"[ \t]+"
     r"([A-ZÄÖÜ][A-Za-zÄÖÜäöüß\-\.]+(?:[ \t][A-ZÄÖÜa-zäöüß\-\.]+){0,3})"  # city
-    r"[ \t]*$",                                         # line end
+    r"[ \t]*$",  # line end
     re.MULTILINE,
 )
 
@@ -216,11 +216,11 @@ def parse_ad_pdf(pdf_bytes: bytes) -> Dict[str, Any]:
 
 
 def capture_ad_for_company(
-    db: "Database",
-    source: "BundesAPISource",
+    db: Database,
+    source: BundesAPISource,
     company_id: int,
-    search_result: "SearchResult",
-    rate_limiter: Optional["PersistentRateLimiter"] = None,
+    search_result: SearchResult,
+    rate_limiter: Optional[PersistentRateLimiter] = None,
 ) -> bool:
     """
     Fetch the AD PDF for one company, parse it, and update the company row.
@@ -265,7 +265,7 @@ def capture_ad_for_company(
         logger.info(
             "AD captured for %s: %s",
             search_result.name[:40],
-            ", ".join(f"{k}={'…' if k in {'purpose','representation_rules'} else v}" for k, v in updates.items()),
+            ", ".join(f"{k}={'…' if k in {'purpose', 'representation_rules'} else v}" for k, v in updates.items()),
         )
     except Exception as e:  # noqa: BLE001
         logger.debug("update_company failed after AD capture: %s", e)

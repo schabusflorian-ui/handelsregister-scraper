@@ -480,6 +480,114 @@ class Database:
         """)
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_scan_state_court ON scan_state(court_code, registry_type)")
 
+        # ------------------------------------------------------------------
+        # Multi-signal stealth tracking
+        # ------------------------------------------------------------------
+        # Event-level stream — every source (LinkedIn, Handelsregister, news,
+        # crt.sh, GitHub, …) writes rows here. Rows are *immutable facts*;
+        # the joiner job rolls them up into stealth_entities below.
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS signals (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                signal_type TEXT NOT NULL,
+                observed_at TEXT NOT NULL,
+                source_url TEXT,
+
+                -- Entity match keys (any may be NULL)
+                entity_name TEXT,
+                entity_domain TEXT,
+                entity_github TEXT,
+
+                -- Person-level (NULL for pure company signals)
+                person_name TEXT,
+                person_linkedin TEXT,
+
+                -- Context
+                sector_tags TEXT,
+                geo_region TEXT,
+                raw_payload TEXT,
+                confidence REAL DEFAULT 50.0,
+
+                -- Resolved aggregate (populated by joiner)
+                stealth_entity_id INTEGER,
+
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(signal_type, source_url),
+                FOREIGN KEY (stealth_entity_id)
+                    REFERENCES stealth_entities(id) ON DELETE SET NULL
+            )
+        """)
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_signals_type         ON signals(signal_type)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_signals_observed_at  ON signals(observed_at DESC)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_signals_entity_name  ON signals(entity_name)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_signals_entity_dom   ON signals(entity_domain)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_signals_entity_gh    ON signals(entity_github)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_signals_person_li    ON signals(person_linkedin)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_signals_entity_id    ON signals(stealth_entity_id)")
+
+        # Aggregated roll-up — the joiner upserts here. One row per
+        # resolved stealth entity across all signal types.
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS stealth_entities (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                primary_name TEXT NOT NULL,
+                primary_domain TEXT,
+                primary_github TEXT,
+                primary_linkedin TEXT,
+
+                signal_count INTEGER DEFAULT 0,
+                signal_types TEXT,
+                first_signal_at TEXT,
+                last_signal_at TEXT,
+
+                sector_tags TEXT,
+                geo_region TEXT,
+                composite_score REAL DEFAULT 0.0,
+
+                -- Person-centric fields: True when any signal pins a specific
+                -- human (linkedin_stealth, linkedin_transition, founder_match).
+                -- founder_confidence combines role keywords in the headline,
+                -- cross-source corroboration, and the shape of the matched
+                -- company (young + sector-flagged = more likely a real startup).
+                is_person INTEGER DEFAULT 0,
+                founder_confidence REAL DEFAULT 0.0,
+                person_role TEXT,
+
+                starred INTEGER DEFAULT 0,
+                contacted INTEGER DEFAULT 0,
+                notes TEXT,
+
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        cursor.execute(
+            "CREATE INDEX IF NOT EXISTS idx_stealth_entities_score   ON stealth_entities(composite_score DESC)"
+        )
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_stealth_entities_name    ON stealth_entities(primary_name)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_stealth_entities_domain  ON stealth_entities(primary_domain)")
+        cursor.execute(
+            "CREATE INDEX IF NOT EXISTS idx_stealth_entities_last    ON stealth_entities(last_signal_at DESC)"
+        )
+
+        # Idempotent column adds for an older signals schema. MUST run
+        # before any index that references the added columns.
+        existing_cols = {r[1] for r in cursor.execute("PRAGMA table_info(stealth_entities)")}
+        for col, col_type in [
+            ("is_person", "INTEGER DEFAULT 0"),
+            ("founder_confidence", "REAL DEFAULT 0.0"),
+            ("person_role", "TEXT"),
+        ]:
+            if col not in existing_cols:
+                cursor.execute(f"ALTER TABLE stealth_entities ADD COLUMN {col} {col_type}")
+
+        cursor.execute(
+            "CREATE INDEX IF NOT EXISTS idx_stealth_entities_person  ON stealth_entities(is_person, founder_confidence DESC)"
+        )
+        cursor.execute(
+            "CREATE INDEX IF NOT EXISTS idx_stealth_entities_founder ON stealth_entities(founder_confidence DESC)"
+        )
+
         self.conn.commit()
 
         # Migration: add is_early_stage_related column if table exists without it

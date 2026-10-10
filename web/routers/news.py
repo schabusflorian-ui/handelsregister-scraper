@@ -27,9 +27,9 @@ async def news_page(request: Request, alert_type: str = "", page: int = 1, per_p
                 """,
                 (alert_type, per_page, offset),
             ).fetchall()
-            total = db.conn.execute(
-                "SELECT COUNT(*) FROM news_alerts WHERE alert_type = ?", (alert_type,)
-            ).fetchone()[0]
+            total = db.conn.execute("SELECT COUNT(*) FROM news_alerts WHERE alert_type = ?", (alert_type,)).fetchone()[
+                0
+            ]
         else:
             alerts = db.conn.execute(
                 """

@@ -314,9 +314,7 @@ class DiscoveryJob:
         try:
             from processing.ad_capture import capture_ad_for_company
 
-            if capture_ad_for_company(
-                self.db, self.source, company_id, result, self.rate_limiter
-            ):
+            if capture_ad_for_company(self.db, self.source, company_id, result, self.rate_limiter):
                 self._state.requests_used += 1
         except Exception as e:  # noqa: BLE001
             logger.debug("AD capture error for %s: %s", result.name, e)
@@ -325,9 +323,7 @@ class DiscoveryJob:
         try:
             from processing.vo_capture import capture_neueintragung
 
-            if capture_neueintragung(
-                self.db, self.source, company_id, result, self.rate_limiter
-            ):
+            if capture_neueintragung(self.db, self.source, company_id, result, self.rate_limiter):
                 self._state.requests_used += 1
         except Exception as e:  # noqa: BLE001
             logger.debug("VÖ capture error for %s: %s", result.name, e)

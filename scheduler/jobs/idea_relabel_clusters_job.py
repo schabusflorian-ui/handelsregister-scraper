@@ -116,13 +116,9 @@ def _ensure_columns(db: Database) -> None:
     db.conn.commit()
 
 
-def _fetch_targets(db: Database, limit: Optional[int],
-                   refresh: bool) -> List[Dict]:
+def _fetch_targets(db: Database, limit: Optional[int], refresh: bool) -> List[Dict]:
     cur = db.conn.cursor()
-    where = (
-        "WHERE cluster_id != -1 AND size >= 3"
-        + ("" if refresh else " AND (llm_label IS NULL OR llm_label = '')")
-    )
+    where = "WHERE cluster_id != -1 AND size >= 3" + ("" if refresh else " AND (llm_label IS NULL OR llm_label = '')")
     rows = cur.execute(
         f"""
         SELECT cluster_id, size, label, era_class,
@@ -176,8 +172,10 @@ def _build_user_content(cluster: Dict, members: List[Dict]) -> str:
 
     # Parse the JSON columns defensively.
     def _json(s, default):
-        try: return json.loads(s) if s else default
-        except Exception: return default
+        try:
+            return json.loads(s) if s else default
+        except Exception:
+            return default
 
     tags = _json(cluster.get("top_tags"), [])
     if tags:
@@ -210,8 +208,7 @@ def _build_user_content(cluster: Dict, members: List[Dict]) -> str:
     return "\n".join(parts)
 
 
-def _call_claude(client, user_content: str,
-                 max_retries: int = 4) -> Dict[str, object]:
+def _call_claude(client, user_content: str, max_retries: int = 4) -> Dict[str, object]:
     import anthropic
 
     attempts = 0
@@ -221,8 +218,7 @@ def _call_claude(client, user_content: str,
             resp = client.messages.create(
                 model=MODEL,
                 max_tokens=MAX_OUTPUT_TOKENS,
-                system=[{"type": "text", "text": SYSTEM_PROMPT,
-                         "cache_control": {"type": "ephemeral"}}],
+                system=[{"type": "text", "text": SYSTEM_PROMPT, "cache_control": {"type": "ephemeral"}}],
                 tools=[TOOL_SCHEMA],
                 tool_choice={"type": "tool", "name": "record_cluster_label"},
                 messages=[{"role": "user", "content": user_content}],
@@ -242,27 +238,26 @@ def _call_claude(client, user_content: str,
         except anthropic.APIStatusError as e:
             if attempts >= max_retries:
                 return {"error": f"api_{e.status_code}"}
-            time.sleep(min(2 ** attempts + random.random(), 30))
+            time.sleep(min(2**attempts + random.random(), 30))
         except Exception as e:  # noqa: BLE001
             if attempts >= max_retries:
                 return {"error": f"exc:{type(e).__name__}"}
-            time.sleep(min(2 ** attempts + random.random(), 30))
+            time.sleep(min(2**attempts + random.random(), 30))
 
 
 def _save(db: Database, cluster_id: int, data: Dict) -> None:
     with _LOCK:
         cur = db.conn.cursor()
         cur.execute(
-            "UPDATE idea_clusters SET llm_label = ?, llm_description = ?, "
-            "llm_labeled_at = ? WHERE cluster_id = ?",
-            (data.get("short_label"), data.get("description"),
-             datetime.now().isoformat(), cluster_id),
+            "UPDATE idea_clusters SET llm_label = ?, llm_description = ?, llm_labeled_at = ? WHERE cluster_id = ?",
+            (data.get("short_label"), data.get("description"), datetime.now().isoformat(), cluster_id),
         )
         db.conn.commit()
 
 
 def _make_client():
     import anthropic
+
     key = os.getenv("ANTHROPIC_API_KEY") or None
     oauth = os.getenv("CLAUDE_CODE_OAUTH_TOKEN") or None
     if key:
@@ -274,14 +269,13 @@ def _make_client():
 
 # --- main ------------------------------------------------------------------
 
-def run(db_path: str, limit: Optional[int], workers: int, refresh: bool,
-        verbose: bool) -> None:
+
+def run(db_path: str, limit: Optional[int], workers: int, refresh: bool, verbose: bool) -> None:
     client = _make_client()
     db = Database(db_path)
     _ensure_columns(db)
     targets = _fetch_targets(db, limit, refresh)
-    logger.info("relabel: %d clusters to process (workers=%d)",
-                len(targets), workers)
+    logger.info("relabel: %d clusters to process (workers=%d)", len(targets), workers)
     if not targets:
         return
 
@@ -318,16 +312,18 @@ def run(db_path: str, limit: Optional[int], workers: int, refresh: bool,
                 _save(db, c["cluster_id"], data)
                 ok += 1
                 if verbose:
-                    print(f"  #{c['cluster_id']:>5} (n={c['size']:>4}): "
-                          f"{c.get('label')[:40]:<42} -> {data['short_label']}")
+                    print(
+                        f"  #{c['cluster_id']:>5} (n={c['size']:>4}): "
+                        f"{c.get('label')[:40]:<42} -> {data['short_label']}"
+                    )
             else:
                 logger.warning("cluster %s: %s", c["cluster_id"], data["error"])
             done += 1
             if done % 50 == 0 or done == len(targets):
                 dt = time.monotonic() - t0
-                logger.info("relabel: %d/%d (%d ok) in %.1fs (%.1f/s)",
-                            done, len(targets), ok, dt,
-                            done / dt if dt > 0 else 0)
+                logger.info(
+                    "relabel: %d/%d (%d ok) in %.1fs (%.1f/s)", done, len(targets), ok, dt, done / dt if dt > 0 else 0
+                )
     db.conn.close()
 
 
@@ -335,23 +331,18 @@ def report(db_path: str) -> None:
     db = Database(db_path)
     _ensure_columns(db)
     cur = db.conn.cursor()
-    tot = cur.execute(
-        "SELECT COUNT(*) FROM idea_clusters WHERE cluster_id != -1"
-    ).fetchone()[0]
+    tot = cur.execute("SELECT COUNT(*) FROM idea_clusters WHERE cluster_id != -1").fetchone()[0]
     labeled = cur.execute(
-        "SELECT COUNT(*) FROM idea_clusters "
-        "WHERE cluster_id != -1 AND llm_label IS NOT NULL AND llm_label != ''"
+        "SELECT COUNT(*) FROM idea_clusters WHERE cluster_id != -1 AND llm_label IS NOT NULL AND llm_label != ''"
     ).fetchone()[0]
-    print(f"\n=== idea_clusters labels ===")
-    print(f"  {labeled} / {tot} clusters relabeled "
-          f"({labeled/tot*100:.0f}%)" if tot else "  none")
+    print("\n=== idea_clusters labels ===")
+    print(f"  {labeled} / {tot} clusters relabeled ({labeled / tot * 100:.0f}%)" if tot else "  none")
     for r in cur.execute(
         "SELECT cluster_id, size, label, llm_label FROM idea_clusters "
         "WHERE llm_label IS NOT NULL AND llm_label != '' "
         "ORDER BY size DESC LIMIT 10"
     ):
-        print(f"  #{r['cluster_id']:>5}  n={r['size']:>4}  "
-              f"{(r['label'] or '')[:40]:<42} -> {r['llm_label']}")
+        print(f"  #{r['cluster_id']:>5}  n={r['size']:>4}  {(r['label'] or '')[:40]:<42} -> {r['llm_label']}")
     db.conn.close()
 
 
@@ -364,9 +355,7 @@ def main():
     p.add_argument("--verbose", action="store_true")
     p.add_argument("--report-only", action="store_true")
     args = p.parse_args()
-    logging.basicConfig(level=logging.INFO,
-                        format="%(asctime)s %(levelname)s %(message)s",
-                        datefmt="%H:%M:%S")
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s", datefmt="%H:%M:%S")
 
     if args.report_only:
         report(args.db)

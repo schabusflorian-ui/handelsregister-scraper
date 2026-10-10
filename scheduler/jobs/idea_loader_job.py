@@ -76,9 +76,7 @@ def report(db: Database) -> None:
     cur = db.conn.cursor()
 
     print("\n=== company_ideas — totals ===")
-    for row in cur.execute(
-        "SELECT program, COUNT(*) AS n FROM company_ideas GROUP BY program ORDER BY n DESC"
-    ):
+    for row in cur.execute("SELECT program, COUNT(*) AS n FROM company_ideas GROUP BY program ORDER BY n DESC"):
         print(f"  {row['program']:<25} {row['n']:>6}")
     tot = cur.execute("SELECT COUNT(*) AS n FROM company_ideas").fetchone()["n"]
     print(f"  {'TOTAL':<25} {tot:>6}")
@@ -113,8 +111,7 @@ def report(db: Database) -> None:
         ).fetchone()["n"]
         print(f"  {overlap} companies in 2+ programs; first 20:")
         for r in rows:
-            print(f"  {r['normalized_website']:<35} {r['programs_list']} "
-                  f"| {r['names'][:60]}")
+            print(f"  {r['normalized_website']:<35} {r['programs_list']} | {r['names'][:60]}")
 
     print("\n=== coverage sanity ===")
     for col in ("one_liner", "long_description", "company_website", "country"):
@@ -138,16 +135,16 @@ def report(db: Database) -> None:
 
 def main():
     p = argparse.ArgumentParser(description=__doc__)
-    p.add_argument("--glob", default="data/ideas/ideas_*.jsonl",
-                   help="Glob of JSONL files to load (default: data/ideas/ideas_*.jsonl)")
-    p.add_argument("--db", default="handelsregister.db",
-                   help="SQLite database path (default: handelsregister.db)")
+    p.add_argument(
+        "--glob",
+        default="data/ideas/ideas_*.jsonl",
+        help="Glob of JSONL files to load (default: data/ideas/ideas_*.jsonl)",
+    )
+    p.add_argument("--db", default="handelsregister.db", help="SQLite database path (default: handelsregister.db)")
     p.add_argument("--no-report", action="store_true", help="Skip the summary report")
     args = p.parse_args()
 
-    logging.basicConfig(level=logging.INFO,
-                        format="%(asctime)s %(levelname)s %(message)s",
-                        datefmt="%H:%M:%S")
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s", datefmt="%H:%M:%S")
 
     paths = sorted(Path(p) for p in globmod.glob(args.glob))
     if not paths:
@@ -164,8 +161,7 @@ def main():
             n = save_company_ideas(db, recs)
             total_inserted += n
             logger.info("%s: %d records read, %d new inserts", path.name, len(recs), n)
-        logger.info("DONE: %d read, %d new inserts (rest were dupes)",
-                    total_seen, total_inserted)
+        logger.info("DONE: %d read, %d new inserts (rest were dupes)", total_seen, total_inserted)
         if not args.no_report:
             report(db)
     finally:

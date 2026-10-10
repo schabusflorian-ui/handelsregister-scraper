@@ -13,7 +13,7 @@ Cost: 1 rate-limit token per invocation — callers must already have budget.
 from __future__ import annotations
 
 import logging
-from typing import Any, TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 if TYPE_CHECKING:
     from persistence.database import Database
@@ -26,11 +26,11 @@ _OFFICER_TYPES = {"geschaeftsfuehrer", "neueintragung", "prokura"}
 
 
 def capture_neueintragung(
-    db: "Database",
-    source: "BundesAPISource",
+    db: Database,
+    source: BundesAPISource,
     company_id: int,
-    search_result: "SearchResult",
-    rate_limiter: Optional["PersistentRateLimiter"] = None,
+    search_result: SearchResult,
+    rate_limiter: Optional[PersistentRateLimiter] = None,
 ) -> bool:
     """
     Fetch VÖ for a company we just inserted and:

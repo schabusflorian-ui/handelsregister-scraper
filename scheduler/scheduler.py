@@ -12,7 +12,9 @@ Features:
 """
 
 import logging
+import os
 import signal
+import subprocess
 import sys
 from datetime import datetime
 from typing import Any, Dict
@@ -30,13 +32,13 @@ from scheduler.jobs.backfill_job import BackfillJob
 from scheduler.jobs.csv_export_job import CSVExportJob
 from scheduler.jobs.discovery_job import DiscoveryJob
 from scheduler.jobs.enrichment_job import EnrichmentJob
+from scheduler.jobs.founder_matcher import find_emerged_founders, link_founder_to_company
 from scheduler.jobs.investor_detection_job import InvestorDetectionJob
 from scheduler.jobs.news_job import NewsMonitoringJob
 from scheduler.jobs.officer_linkedin_job import OfficerLinkedInEnrichmentJob
 from scheduler.jobs.registration_scan_job import RegistrationScanJob
 from scheduler.jobs.website_job import WebsiteFinderJob
 from scheduler.jobs.website_scrape_job import WebsiteScrapeJob
-from scheduler.jobs.founder_matcher import find_emerged_founders, link_founder_to_company
 from scheduler.rate_limiter import PersistentRateLimiter
 
 logger = logging.getLogger(__name__)
@@ -97,7 +99,7 @@ class HandelsregisterScheduler:
             jobstores=jobstores,
             executors=executors,
             job_defaults=job_defaults,
-            timezone="UTC",
+            timezone="timezone.utc",
         )
 
         self._running = False
@@ -334,7 +336,9 @@ class HandelsregisterScheduler:
 
             logger.info(
                 "Founder emergence: %d potential matches, %d auto-linked, %d for review",
-                len(emerged), auto_linked, len(emerged) - auto_linked,
+                len(emerged),
+                auto_linked,
+                len(emerged) - auto_linked,
             )
 
             self._log_job_completion("founder_emergence", stats, db)
@@ -481,6 +485,147 @@ class HandelsregisterScheduler:
         finally:
             db.close()
 
+    # Ideas pipeline steps, in dependency order. Each step is a separate
+    # subprocess so a failure in one (e.g. LLM credit exhaustion mid-run)
+    # doesn't kill later steps that don't depend on it. tag_normalize and
+    # idea_gap_rank live in scripts/, the scrapers + LLM extract + UMAP
+    # live in scheduler/jobs/.
+    _IDEAS_PIPELINE_STEPS = [
+        ("hn_show", ["scheduler.jobs.hn_show_job"], "Daily HN Show ingest"),
+        ("reddit_ideas", ["scheduler.jobs.reddit_ideas_job"], "Daily Reddit indie/microsaas ingest"),
+        (
+            "llm_extract",
+            ["scheduler.jobs.idea_llm_extract_job", "--workers", "4"],
+            "LLM-extract structured tags for new rows",
+        ),
+        ("tag_normalize", ["scripts.tag_normalize"], "Map invented tags to canonical seed vocab"),
+        ("idea_gap_rank", ["scripts.idea_gap_rank"], "Score (mechanism × sector) recombination gaps"),
+        ("idea_umap2d", ["scheduler.jobs.idea_umap2d_job"], "Refresh 2-D UMAP coords for the idea map"),
+    ]
+
+    # Signals pipeline — refreshes multi-signal stealth tracker.
+    # Order matters: adapters (fast, reshape existing data) first, then
+    # external sources (slow, best-effort), joiner last to roll up
+    # aggregates. Each step is isolated so a crt.sh outage doesn't block
+    # the rest.
+    _SIGNALS_PIPELINE_STEPS = [
+        (
+            "adapt_companies",
+            ["signals.adapters", "--only", "companies"],
+            "Reshape companies into handelsregister_new signals",
+        ),
+        (
+            "adapt_news",
+            ["signals.adapters", "--only", "news"],
+            "Reshape news_articles into news_mention signals (funding verbs only)",
+        ),
+        ("adapt_stealth", ["signals.adapters", "--only", "stealth_founders"], "Reshape LinkedIn stealth + transitions"),
+        (
+            "adapt_officers",
+            ["signals.adapters", "--only", "officers"],
+            "Officer-name cross-reference → founder_match signals",
+        ),
+        ("source_crt_sh", ["signals.crt_sh"], "Poll crt.sh for newly-issued certs on sector keywords"),
+        ("source_github", ["signals.github_source"], "Poll GitHub for newly-created orgs on sector keywords"),
+        ("joiner", ["signals.joiner"], "Resolve signals → stealth_entities + recompute aggregates"),
+    ]
+
+    def _run_ideas_pipeline_job(self):
+        """Daily ideas pipeline: scrape → LLM-extract → refresh derived tables.
+
+        Runs each step as an isolated subprocess so a single failure (LLM
+        credit exhaustion, transient network blip, etc.) doesn't block the
+        steps that come after. Per-step timeouts cap runaway retries.
+
+        Steps are incremental: scrapers skip rows already on disk, the
+        LLM job skips rows already extracted, gap_rank rebuilds in seconds.
+        Total wall-clock when there's new data is ~30-90 minutes; ~1-2
+        minutes on a quiet day.
+        """
+        logger.info("Starting ideas pipeline (%d steps)", len(self._IDEAS_PIPELINE_STEPS))
+
+        # Repo root — relies on the scheduler being launched from the
+        # project root or PYTHONPATH being set, which Railway and the
+        # local Makefile both do.
+        cwd = os.getcwd()
+        env = {**os.environ, "PYTHONPATH": cwd}
+
+        completed = 0
+        failed: list[str] = []
+        for step_id, args, desc in self._IDEAS_PIPELINE_STEPS:
+            cmd = [sys.executable, "-m", *args]
+            try:
+                logger.info("ideas pipeline step %s: %s", step_id, desc)
+                # 1h cap. The LLM extract step on a fresh deploy can take
+                # longer than this when there's a big backlog — that's by
+                # design; the next daily tick picks up the rest.
+                subprocess.run(
+                    cmd,
+                    check=True,
+                    timeout=3600,
+                    cwd=cwd,
+                    env=env,
+                )
+                logger.info("ideas pipeline step %s: ok", step_id)
+                completed += 1
+            except subprocess.TimeoutExpired:
+                logger.error("ideas pipeline step %s: TIMEOUT after 1h", step_id)
+                failed.append(step_id)
+            except subprocess.CalledProcessError as e:
+                logger.error("ideas pipeline step %s: exit %d", step_id, e.returncode)
+                failed.append(step_id)
+            except Exception as e:  # noqa: BLE001
+                logger.exception("ideas pipeline step %s: %s", step_id, e)
+                failed.append(step_id)
+
+        logger.info(
+            "Ideas pipeline finished: %d/%d steps ok%s",
+            completed,
+            len(self._IDEAS_PIPELINE_STEPS),
+            f" (failed: {', '.join(failed)})" if failed else "",
+        )
+
+    def _run_signals_pipeline_job(self):
+        """Daily signals pipeline: adapters → external sources → joiner.
+
+        Each step runs as an isolated subprocess with its own timeout so a
+        flaky external service (crt.sh notorious for 502s) doesn't block
+        downstream steps. The joiner always runs last to roll up aggregates
+        for whatever new signals landed.
+        """
+        logger.info("Starting signals pipeline (%d steps)", len(self._SIGNALS_PIPELINE_STEPS))
+        cwd = os.getcwd()
+        env = {**os.environ, "PYTHONPATH": cwd}
+
+        completed = 0
+        failed: list[str] = []
+        for step_id, args, desc in self._SIGNALS_PIPELINE_STEPS:
+            cmd = [sys.executable, "-m", *args]
+            try:
+                logger.info("signals pipeline step %s: %s", step_id, desc)
+                # 15 min cap per step — adapters finish in seconds; external
+                # sources are the long ones (crt.sh with retries). The joiner
+                # on 10k signals is <30s.
+                subprocess.run(cmd, check=True, timeout=900, cwd=cwd, env=env)
+                logger.info("signals pipeline step %s: ok", step_id)
+                completed += 1
+            except subprocess.TimeoutExpired:
+                logger.error("signals pipeline step %s: TIMEOUT after 15min", step_id)
+                failed.append(step_id)
+            except subprocess.CalledProcessError as e:
+                logger.error("signals pipeline step %s: exit %d", step_id, e.returncode)
+                failed.append(step_id)
+            except Exception as e:  # noqa: BLE001
+                logger.exception("signals pipeline step %s: %s", step_id, e)
+                failed.append(step_id)
+
+        logger.info(
+            "Signals pipeline finished: %d/%d steps ok%s",
+            completed,
+            len(self._SIGNALS_PIPELINE_STEPS),
+            f" (failed: {', '.join(failed)})" if failed else "",
+        )
+
     # Map each job type's stat keys → generic logging columns.
     # Each tuple: (key for companies_found, key for companies_new, key for requests_used)
     _STAT_KEY_MAP: Dict[str, tuple] = {
@@ -538,7 +683,7 @@ class HandelsregisterScheduler:
             replace_existing=True,
         )
 
-        # Backfill job: twice daily at 3 AM and 3 PM UTC (use more of the budget)
+        # Backfill job: twice daily at 3 AM and 3 PM timezone.utc (use more of the budget)
         self.scheduler.add_job(
             self._run_backfill_job,
             trigger=CronTrigger(hour="3,15", minute=0),
@@ -547,7 +692,7 @@ class HandelsregisterScheduler:
             replace_existing=True,
         )
 
-        # Enrichment job: daily at 4 AM UTC (after backfill)
+        # Enrichment job: daily at 4 AM timezone.utc (after backfill)
         self.scheduler.add_job(
             self._run_enrichment_job,
             trigger=CronTrigger(hour=4, minute=0),
@@ -556,7 +701,7 @@ class HandelsregisterScheduler:
             replace_existing=True,
         )
 
-        # Announcement monitoring job: daily at 5 AM UTC (after enrichment)
+        # Announcement monitoring job: daily at 5 AM timezone.utc (after enrichment)
         self.scheduler.add_job(
             self._run_announcement_job,
             trigger=CronTrigger(hour=5, minute=0),
@@ -565,7 +710,7 @@ class HandelsregisterScheduler:
             replace_existing=True,
         )
 
-        # CSV export job: daily at 6 AM UTC (after all data jobs)
+        # CSV export job: daily at 6 AM timezone.utc (after all data jobs)
         self.scheduler.add_job(
             self._run_csv_export_job,
             trigger=CronTrigger(hour=6, minute=0),
@@ -574,7 +719,7 @@ class HandelsregisterScheduler:
             replace_existing=True,
         )
 
-        # Investor detection job: daily at 7 AM UTC (after CSV export)
+        # Investor detection job: daily at 7 AM timezone.utc (after CSV export)
         # Scans capital events, officers, and announcements for VC involvement
         self.scheduler.add_job(
             self._run_investor_detection_job,
@@ -584,7 +729,7 @@ class HandelsregisterScheduler:
             replace_existing=True,
         )
 
-        # News monitoring job: daily at 8 AM UTC (no API calls, just RSS)
+        # News monitoring job: daily at 8 AM timezone.utc (no API calls, just RSS)
         self.scheduler.add_job(
             self._run_news_monitoring_job,
             trigger=CronTrigger(hour=8, minute=0),
@@ -604,7 +749,7 @@ class HandelsregisterScheduler:
             replace_existing=True,
         )
 
-        # Website scrape job: daily at 10 AM UTC (after website finder)
+        # Website scrape job: daily at 10 AM timezone.utc (after website finder)
         # Scrapes found websites for company descriptions, tech keywords, etc.
         self.scheduler.add_job(
             self._run_website_scrape_job,
@@ -614,7 +759,7 @@ class HandelsregisterScheduler:
             replace_existing=True,
         )
 
-        # Officer LinkedIn enrichment job: daily at 11 AM UTC (after website scrape)
+        # Officer LinkedIn enrichment job: daily at 11 AM timezone.utc (after website scrape)
         # Searches for officer LinkedIn profiles via DDG, extracts career data from snippets
         self.scheduler.add_job(
             self._run_officer_linkedin_job,
@@ -624,7 +769,7 @@ class HandelsregisterScheduler:
             replace_existing=True,
         )
 
-        # Founder emergence detection: daily at 12 PM UTC (after officer LinkedIn)
+        # Founder emergence detection: daily at 12 PM timezone.utc (after officer LinkedIn)
         # Matches stealth founders against newly registered company officers
         self.scheduler.add_job(
             self._run_founder_emergence_job,
@@ -651,6 +796,32 @@ class HandelsregisterScheduler:
         # At 5 rows × 3/hour = 15 rows/hour baseline, plus idle budget from
         # other jobs → effective ~30-40 rows/hour. Will work through the
         # 2,800-row backlog in ~3-7 days of continuous running.
+        # Ideas pipeline: daily at 14:00 timezone.utc. Slot picked because it sits in
+        # the dead zone after morning Handelsregister jobs (4–12 timezone.utc) and
+        # before the next backfill burst at 15 timezone.utc. Each pipeline step is
+        # isolated, so credit exhaustion in the LLM step doesn't block the
+        # downstream gap-ranking + UMAP refresh.
+        self.scheduler.add_job(
+            self._run_ideas_pipeline_job,
+            trigger=CronTrigger(hour=14, minute=0),
+            id="ideas_pipeline_job",
+            name="Ideas Pipeline (scrape → extract → rank → map)",
+            replace_existing=True,
+        )
+
+        # Signals pipeline: daily at 13:00 timezone.utc. Slot picked because it
+        # sits after the morning Handelsregister jobs (4-12 timezone.utc) so new
+        # company registrations get picked up on the same day, but before
+        # the ideas pipeline at 14 timezone.utc. External sources (crt.sh, GitHub)
+        # tolerate failure — the joiner always runs at the end.
+        self.scheduler.add_job(
+            self._run_signals_pipeline_job,
+            trigger=CronTrigger(hour=13, minute=0),
+            id="signals_pipeline_job",
+            name="Signals Pipeline (adapters → crt.sh + GitHub → joiner)",
+            replace_existing=True,
+        )
+
         self.scheduler.add_job(
             self._run_ad_backfill_job,
             trigger=IntervalTrigger(minutes=20),
@@ -663,7 +834,8 @@ class HandelsregisterScheduler:
             "Jobs configured: discovery every %d hours, backfill 3AM+3PM, enrichment 4AM, "
             "announcements 5AM, CSV export 6AM, investor detection 7AM, news monitoring 8AM, "
             "website finder 9AM, website scrape 10AM, officer LinkedIn 11AM, "
-            "founder emergence 12PM, registration scan every 4h, AD backfill every 20min",
+            "founder emergence 12PM, signals 1PM, ideas 2PM, "
+            "registration scan every 4h, AD backfill every 20min",
             self.discovery_interval_hours,
         )
 

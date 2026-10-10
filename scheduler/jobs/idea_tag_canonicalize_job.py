@@ -34,7 +34,6 @@ import argparse
 import json
 import logging
 import re
-import sys
 from collections import Counter
 from typing import Dict, List, Optional, Set, Tuple
 
@@ -56,23 +55,71 @@ _COLLAPSE_WS = re.compile(r"\s+")
 # earlier runs (subscription-saa, devop, logistic, sale, analytic, etc.).
 # When a hyphenated tag's final segment is in this set, we do NOT strip the
 # trailing -s. Built conservatively from observation of the live DB.
-_KEEP_PLURAL = frozenset({
-    # Cloud / tech acronyms
-    "saas", "paas", "iaas", "faas", "baas", "daas", "aws", "api", "apis",
-    "css", "js", "news", "rss", "sass", "ops", "mlops", "devops",
-    "aiops", "secops", "dataops", "finops", "gitops",
-    # Disciplines / fields in -ics / -s
-    "analytics", "logistics", "electronics", "optics", "tactics",
-    "ethics", "metrics", "statistics", "economics", "physics",
-    "mathematics", "politics", "graphics", "dynamics", "robotics",
-    "cosmetics", "genetics", "mechanics", "aesthetics", "acoustics",
-    "diagnostics", "pediatrics", "semiconductors",
-    # Business/consumer functions that are canonical in plural form
-    "sales", "sports", "series", "species", "premises",
-    # Audience categories from our seed vocab (plurals are canonical)
-    "developers", "creators", "designers", "founders", "freelancers",
-    "prosumer-freelancers", "operations",
-})
+_KEEP_PLURAL = frozenset(
+    {
+        # Cloud / tech acronyms
+        "saas",
+        "paas",
+        "iaas",
+        "faas",
+        "baas",
+        "daas",
+        "aws",
+        "api",
+        "apis",
+        "css",
+        "js",
+        "news",
+        "rss",
+        "sass",
+        "ops",
+        "mlops",
+        "devops",
+        "aiops",
+        "secops",
+        "dataops",
+        "finops",
+        "gitops",
+        # Disciplines / fields in -ics / -s
+        "analytics",
+        "logistics",
+        "electronics",
+        "optics",
+        "tactics",
+        "ethics",
+        "metrics",
+        "statistics",
+        "economics",
+        "physics",
+        "mathematics",
+        "politics",
+        "graphics",
+        "dynamics",
+        "robotics",
+        "cosmetics",
+        "genetics",
+        "mechanics",
+        "aesthetics",
+        "acoustics",
+        "diagnostics",
+        "pediatrics",
+        "semiconductors",
+        # Business/consumer functions that are canonical in plural form
+        "sales",
+        "sports",
+        "series",
+        "species",
+        "premises",
+        # Audience categories from our seed vocab (plurals are canonical)
+        "developers",
+        "creators",
+        "designers",
+        "founders",
+        "freelancers",
+        "prosumer-freelancers",
+        "operations",
+    }
+)
 
 
 def normalize_string(tag: str) -> Optional[str]:
@@ -94,8 +141,7 @@ def normalize_string(tag: str) -> Optional[str]:
     last_seg = t.rsplit("-", 1)[-1]
     if t in _KEEP_PLURAL or last_seg in _KEEP_PLURAL:
         return t
-    if (t.endswith("s") and not any(t.endswith(e) for e in bad_endings)
-            and len(t) > 3):
+    if t.endswith("s") and not any(t.endswith(e) for e in bad_endings) and len(t) > 3:
         return t[:-1]
     return t
 
@@ -103,6 +149,7 @@ def normalize_string(tag: str) -> Optional[str]:
 # ---------------------------------------------------------------------------
 # Pass 2 — semantic clustering
 # ---------------------------------------------------------------------------
+
 
 def semantic_merge(
     vocab: List[str],
@@ -116,8 +163,9 @@ def semantic_merge(
     themselves."""
     if not vocab:
         return {}
-    from sentence_transformers import SentenceTransformer
     import numpy as np
+    from sentence_transformers import SentenceTransformer
+
     logger.info("embedding %d unique tags", len(vocab))
     model = SentenceTransformer(model_name)
     X = model.encode(vocab, normalize_embeddings=True, show_progress_bar=False)
@@ -130,11 +178,13 @@ def semantic_merge(
 
     # Union-find over (i, j) edges where sims[i, j] >= threshold
     parent = list(range(n))
+
     def find(x: int) -> int:
         while parent[x] != x:
             parent[x] = parent[parent[x]]
             x = parent[x]
         return x
+
     def union(a: int, b: int) -> None:
         ra, rb = find(a), find(b)
         if ra != rb:
@@ -168,12 +218,12 @@ def semantic_merge(
 # Driver
 # ---------------------------------------------------------------------------
 
+
 def collect(db: Database, column: str) -> Tuple[Counter, Dict[int, List[str]]]:
     """Return (counts per canonical-after-string-norm tag, per-row tag lists)."""
     cur = db.conn.cursor()
     rows = cur.execute(
-        f"SELECT company_idea_id, {column} FROM idea_extraction "
-        f"WHERE {column} IS NOT NULL AND error IS NULL"
+        f"SELECT company_idea_id, {column} FROM idea_extraction WHERE {column} IS NOT NULL AND error IS NULL"
     ).fetchall()
     by_row: Dict[int, List[str]] = {}
     counts: Counter = Counter()
@@ -193,9 +243,7 @@ def collect(db: Database, column: str) -> Tuple[Counter, Dict[int, List[str]]]:
     return counts, by_row
 
 
-def apply_mapping(db: Database, column: str,
-                  by_row: Dict[int, List[str]],
-                  mapping: Dict[str, str]) -> int:
+def apply_mapping(db: Database, column: str, by_row: Dict[int, List[str]], mapping: Dict[str, str]) -> int:
     cur = db.conn.cursor()
     updated = 0
     for row_id, tags in by_row.items():
@@ -217,10 +265,7 @@ def apply_mapping(db: Database, column: str,
 
 def backup_once(db: Database) -> None:
     cur = db.conn.cursor()
-    cur.execute(
-        "SELECT name FROM sqlite_master WHERE type='table' "
-        "AND name='idea_extraction_tag_backup'"
-    )
+    cur.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='idea_extraction_tag_backup'")
     if cur.fetchone():
         logger.info("backup table already exists; skipping")
         return
@@ -240,8 +285,7 @@ def backup_once(db: Database) -> None:
     logger.info("backed up %d rows to idea_extraction_tag_backup", n)
 
 
-def report_mapping(label: str, mapping: Dict[str, str],
-                   counts: Counter) -> None:
+def report_mapping(label: str, mapping: Dict[str, str], counts: Counter) -> None:
     # Only show lines where variant != canonical (i.e. something got merged)
     merges = [(v, c) for v, c in mapping.items() if v != c]
     if not merges:
@@ -252,8 +296,7 @@ def report_mapping(label: str, mapping: Dict[str, str],
     prev_canon = None
     for variant, canonical in merges:
         if canonical != prev_canon:
-            total = sum(counts.get(v, 0)
-                        for v, c in mapping.items() if c == canonical)
+            total = sum(counts.get(v, 0) for v, c in mapping.items() if c == canonical)
             print(f"  -> {canonical}   (total n={total})")
             prev_canon = canonical
         print(f"       {variant}   (n={counts.get(variant, 0)})")
@@ -262,17 +305,12 @@ def report_mapping(label: str, mapping: Dict[str, str],
 def main():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--db", default="handelsregister.db")
-    p.add_argument("--threshold", type=float, default=0.88,
-                   help="Cosine threshold for semantic merging")
-    p.add_argument("--dry-run", action="store_true",
-                   help="Print proposed merges; do not modify the DB")
-    p.add_argument("--columns", nargs="+",
-                   default=["mechanism_tags", "sector_tags"])
+    p.add_argument("--threshold", type=float, default=0.88, help="Cosine threshold for semantic merging")
+    p.add_argument("--dry-run", action="store_true", help="Print proposed merges; do not modify the DB")
+    p.add_argument("--columns", nargs="+", default=["mechanism_tags", "sector_tags"])
     args = p.parse_args()
 
-    logging.basicConfig(level=logging.INFO,
-                        format="%(asctime)s %(levelname)s %(message)s",
-                        datefmt="%H:%M:%S")
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s", datefmt="%H:%M:%S")
 
     db = Database(args.db)
     try:
@@ -281,8 +319,7 @@ def main():
         for col in args.columns:
             logger.info("processing %s", col)
             counts, by_row = collect(db, col)
-            logger.info("  %d rows, %d distinct tags after string norm",
-                        len(by_row), len(counts))
+            logger.info("  %d rows, %d distinct tags after string norm", len(by_row), len(counts))
             vocab = [t for t, _ in counts.most_common()]  # freq desc
             mapping = semantic_merge(vocab, counts, threshold=args.threshold)
             report_mapping(col, mapping, counts)

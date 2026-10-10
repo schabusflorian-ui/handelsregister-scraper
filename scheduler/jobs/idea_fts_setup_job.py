@@ -14,6 +14,7 @@ Safe to re-run — drops + recreates. Also populates from current rows.
 """
 
 from __future__ import annotations
+
 import argparse
 import logging
 
@@ -30,13 +31,18 @@ FTS = {
     "idea_extraction_fts": {
         "source": "idea_extraction",
         "rowid_col": "company_idea_id",
-        "columns": ["problem_statement", "solo_buildable_reasoning",
-                    "ai_first_reasoning", "customer_verticals",
-                    "mechanism_tags", "sector_tags"],
+        "columns": [
+            "problem_statement",
+            "solo_buildable_reasoning",
+            "ai_first_reasoning",
+            "customer_verticals",
+            "mechanism_tags",
+            "sector_tags",
+        ],
     },
     "website_enrichment_fts": {
         "source": "website_enrichment",
-        "rowid_col": "rowid",   # no integer PK; use implicit rowid
+        "rowid_col": "rowid",  # no integer PK; use implicit rowid
         "columns": ["title", "meta_description", "hero_h1", "hero_text"],
     },
 }
@@ -55,27 +61,34 @@ def _ddl_for(name: str, cfg: dict) -> list[str]:
         f"DROP TRIGGER IF EXISTS {name}_au",
         f"DROP TRIGGER IF EXISTS {name}_ad",
         f"DROP TABLE IF EXISTS {name}",
-        (f"CREATE VIRTUAL TABLE {name} USING fts5("
-         f"{col_list}, "
-         f"content='{source}', content_rowid='{rowid}', "
-         f"tokenize='porter unicode61')"),
-        (f"INSERT INTO {name}(rowid, {col_list}) "
-         f"SELECT {rowid}, {col_list} FROM {source}"),
+        (
+            f"CREATE VIRTUAL TABLE {name} USING fts5("
+            f"{col_list}, "
+            f"content='{source}', content_rowid='{rowid}', "
+            f"tokenize='porter unicode61')"
+        ),
+        (f"INSERT INTO {name}(rowid, {col_list}) SELECT {rowid}, {col_list} FROM {source}"),
         # Keep FTS in sync with the source table
-        (f"CREATE TRIGGER {name}_ai AFTER INSERT ON {source} BEGIN "
-         f"  INSERT INTO {name}(rowid, {col_list}) "
-         f"  VALUES (new.{rowid}, {col_list_new}); "
-         f"END"),
-        (f"CREATE TRIGGER {name}_au AFTER UPDATE ON {source} BEGIN "
-         f"  INSERT INTO {name}({name}, rowid, {col_list}) "
-         f"  VALUES ('delete', old.{rowid}, {col_list_old}); "
-         f"  INSERT INTO {name}(rowid, {col_list}) "
-         f"  VALUES (new.{rowid}, {col_list_new}); "
-         f"END"),
-        (f"CREATE TRIGGER {name}_ad AFTER DELETE ON {source} BEGIN "
-         f"  INSERT INTO {name}({name}, rowid, {col_list}) "
-         f"  VALUES ('delete', old.{rowid}, {col_list_old}); "
-         f"END"),
+        (
+            f"CREATE TRIGGER {name}_ai AFTER INSERT ON {source} BEGIN "
+            f"  INSERT INTO {name}(rowid, {col_list}) "
+            f"  VALUES (new.{rowid}, {col_list_new}); "
+            f"END"
+        ),
+        (
+            f"CREATE TRIGGER {name}_au AFTER UPDATE ON {source} BEGIN "
+            f"  INSERT INTO {name}({name}, rowid, {col_list}) "
+            f"  VALUES ('delete', old.{rowid}, {col_list_old}); "
+            f"  INSERT INTO {name}(rowid, {col_list}) "
+            f"  VALUES (new.{rowid}, {col_list_new}); "
+            f"END"
+        ),
+        (
+            f"CREATE TRIGGER {name}_ad AFTER DELETE ON {source} BEGIN "
+            f"  INSERT INTO {name}({name}, rowid, {col_list}) "
+            f"  VALUES ('delete', old.{rowid}, {col_list_old}); "
+            f"END"
+        ),
     ]
 
 
@@ -98,9 +111,7 @@ def main():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--db", default="handelsregister.db")
     args = p.parse_args()
-    logging.basicConfig(level=logging.INFO,
-                        format="%(asctime)s %(levelname)s %(message)s",
-                        datefmt="%H:%M:%S")
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s", datefmt="%H:%M:%S")
     run(args.db)
 
 

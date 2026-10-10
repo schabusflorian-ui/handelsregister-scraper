@@ -183,11 +183,7 @@ class PlaywrightDdgScraper:
         if "/static-pages/418" in final_url or "/418" in final_url:
             return True
         lowered = body_excerpt.lower()
-        return (
-            "unexpected error" in lowered
-            or "unusual traffic" in lowered
-            or "captcha" in lowered
-        )
+        return "unexpected error" in lowered or "unusual traffic" in lowered or "captcha" in lowered
 
     # ------------------------------------------------------------------ search
     def search_query(self, query: str, max_pages: int = 1) -> List[SearchResult]:

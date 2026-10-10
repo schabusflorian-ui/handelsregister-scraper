@@ -277,10 +277,7 @@ class BundesAPISource:
                     # Server is telling us to slow down or is flaking.
                     wait = self._compute_backoff(attempt, response)
                     if attempt < self.config.max_retries - 1:
-                        print(
-                            f"Request returned {status} (attempt {attempt + 1}), "
-                            f"backing off {wait:.1f}s..."
-                        )
+                        print(f"Request returned {status} (attempt {attempt + 1}), backing off {wait:.1f}s...")
                         time.sleep(wait)
                         continue
                 # All other statuses — let raise_for_status surface 4xx errors
@@ -290,10 +287,7 @@ class BundesAPISource:
                 last_error = e
                 if attempt < self.config.max_retries - 1:
                     wait = self._compute_backoff(attempt, None)
-                    print(
-                        f"Request failed (attempt {attempt + 1}): {type(e).__name__}, "
-                        f"backing off {wait:.1f}s..."
-                    )
+                    print(f"Request failed (attempt {attempt + 1}): {type(e).__name__}, backing off {wait:.1f}s...")
                     time.sleep(wait)
                 else:
                     raise
@@ -317,7 +311,7 @@ class BundesAPISource:
                     return max(0.0, min(60.0, float(retry_after)))
                 except ValueError:
                     pass  # RFC date format — fall through to exponential
-        base = self.config.retry_delay * (2 ** attempt)
+        base = self.config.retry_delay * (2**attempt)
         return min(60.0, base + random.uniform(0, base * 0.5))
 
     def _initialize_session(self) -> bool:
@@ -1041,8 +1035,9 @@ class BundesAPISource:
 
                 # <dt> category label is authoritative when we recognise it;
                 # fall back to the existing text-based classifier otherwise.
-                announcement_type = self._map_category_to_type(category_raw) or \
-                    self._classify_announcement_type(brief_text)
+                announcement_type = self._map_category_to_type(category_raw) or self._classify_announcement_type(
+                    brief_text
+                )
 
                 announcements.append(
                     Announcement(
@@ -1369,7 +1364,10 @@ class BundesAPISource:
             return (m.group(2), m.group(1).strip())
 
         # Try standalone postal code pattern near address context
-        m = re.search(r"(\d{5})\s+(?:Berlin|München|Hamburg|Köln|Frankfurt|Stuttgart|Düsseldorf|Leipzig|Dresden|Hannover|Nürnberg|Bremen|Essen|Dortmund|Bonn|Mannheim|Augsburg|Wiesbaden|Karlsruhe|Heidelberg|Freiburg|Aachen)", text)
+        m = re.search(
+            r"(\d{5})\s+(?:Berlin|München|Hamburg|Köln|Frankfurt|Stuttgart|Düsseldorf|Leipzig|Dresden|Hannover|Nürnberg|Bremen|Essen|Dortmund|Bonn|Mannheim|Augsburg|Wiesbaden|Karlsruhe|Heidelberg|Freiburg|Aachen)",
+            text,
+        )
         if m:
             return (m.group(1), None)
 

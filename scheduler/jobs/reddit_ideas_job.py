@@ -22,7 +22,6 @@ import logging
 from dataclasses import asdict
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional
 
 from persistence.database import Database
 from sources.accelerator_scraper import CompanyIdea, save_company_ideas
@@ -98,7 +97,7 @@ def main():
             logger.info("Reddit: resuming per-sub from last_seen:")
             for sub, ts in per_sub_ts.items():
                 logger.info(
-                    "  r/%s  last=%d (%s UTC)",
+                    "  r/%s  last=%d (%s timezone.utc)",
                     sub,
                     ts,
                     datetime.fromtimestamp(ts, timezone.utc).isoformat(),
@@ -117,9 +116,7 @@ def main():
             def _write(rec: CompanyIdea):
                 d = asdict(rec)
                 d["scraped_at"] = rec.scraped_at.isoformat()
-                fh.write(
-                    json.dumps(d, default=str, ensure_ascii=False) + "\n"
-                )
+                fh.write(json.dumps(d, default=str, ensure_ascii=False) + "\n")
 
             # Run one scraper per subreddit so we can pass a per-sub
             # stop_before_ts. A single call with mixed stop points wouldn't
@@ -127,9 +124,7 @@ def main():
             # all subs.
             for sub in args.subs:
                 stop_ts = per_sub_ts.get(sub)
-                remaining = (
-                    max(0, args.max - len(all_records)) if args.max else None
-                )
+                remaining = max(0, args.max - len(all_records)) if args.max else None
                 if remaining == 0:
                     break
                 scraper = RedditIdeasScraper(
@@ -153,9 +148,7 @@ def main():
             return
 
         inserted = save_company_ideas(db, all_records)
-        logger.info(
-            "Reddit: %d new rows inserted (rest were duplicates)", inserted
-        )
+        logger.info("Reddit: %d new rows inserted (rest were duplicates)", inserted)
     finally:
         if hasattr(db, "close"):
             db.close()

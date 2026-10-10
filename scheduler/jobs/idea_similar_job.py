@@ -30,7 +30,6 @@ from __future__ import annotations
 import argparse
 import logging
 import time
-from typing import List
 
 import numpy as np
 
@@ -80,11 +79,11 @@ def run(db_path: str, top_k: int, batch: int) -> None:
 
     # --- embed ---
     from sentence_transformers import SentenceTransformer
+
     logger.info("loading %s", EMBED_MODEL)
     model = SentenceTransformer(EMBED_MODEL)
     logger.info("embedding %d texts", len(texts_kept))
-    X = model.encode(texts_kept, batch_size=64, show_progress_bar=True,
-                     normalize_embeddings=True).astype(np.float32)
+    X = model.encode(texts_kept, batch_size=64, show_progress_bar=True, normalize_embeddings=True).astype(np.float32)
     logger.info("X shape: %s", X.shape)
 
     # --- nearest-neighbour via chunked matmul ---
@@ -99,7 +98,7 @@ def run(db_path: str, top_k: int, batch: int) -> None:
     t0 = time.monotonic()
     for i in range(0, N, batch):
         j = min(i + batch, N)
-        chunk = X[i:j] @ X.T                            # (b, N) cosine (X is unit-norm)
+        chunk = X[i:j] @ X.T  # (b, N) cosine (X is unit-norm)
         # Mask self-similarity so each row's own nearest is dropped.
         for k, row_i in enumerate(range(i, j)):
             chunk[k, row_i] = -1.0
@@ -126,12 +125,8 @@ def run(db_path: str, top_k: int, batch: int) -> None:
             for rank in range(top_k):
                 neighbor_i = all_rank_idx[row_i, rank]
                 cur.execute(
-                    "INSERT INTO idea_nearest "
-                    "(company_idea_id, rank, neighbor_id, similarity) "
-                    "VALUES (?, ?, ?, ?)",
-                    (int(src_id), rank + 1,
-                     int(ids[neighbor_i]),
-                     float(all_rank_sim[row_i, rank])),
+                    "INSERT INTO idea_nearest (company_idea_id, rank, neighbor_id, similarity) VALUES (?, ?, ?, ?)",
+                    (int(src_id), rank + 1, int(ids[neighbor_i]), float(all_rank_sim[row_i, rank])),
                 )
 
     n_written = cur.execute("SELECT COUNT(*) FROM idea_nearest").fetchone()[0]
@@ -144,9 +139,7 @@ def report(db_path: str) -> None:
     _ensure_table(db)
     cur = db.conn.cursor()
     n = cur.execute("SELECT COUNT(*) FROM idea_nearest").fetchone()[0]
-    per_row = cur.execute(
-        "SELECT COUNT(DISTINCT company_idea_id) FROM idea_nearest"
-    ).fetchone()[0]
+    per_row = cur.execute("SELECT COUNT(DISTINCT company_idea_id) FROM idea_nearest").fetchone()[0]
     print(f"idea_nearest: {n} rows across {per_row} sources")
     if n == 0:
         db.conn.close()
@@ -173,8 +166,7 @@ def report(db_path: str) -> None:
             """,
             (src_id,),
         ):
-            print(f"    {nb['rank']}. {nb['similarity']:.3f}  "
-                  f"{nb['company']} ({nb['year_founded']})")
+            print(f"    {nb['rank']}. {nb['similarity']:.3f}  {nb['company']} ({nb['year_founded']})")
     db.conn.close()
 
 
@@ -185,9 +177,7 @@ def main():
     p.add_argument("--batch", type=int, default=256)
     p.add_argument("--report-only", action="store_true")
     args = p.parse_args()
-    logging.basicConfig(level=logging.INFO,
-                        format="%(asctime)s %(levelname)s %(message)s",
-                        datefmt="%H:%M:%S")
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s", datefmt="%H:%M:%S")
     if args.report_only:
         report(args.db)
     else:

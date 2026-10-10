@@ -95,9 +95,7 @@ class ShowHNScraper(AcceleratorScraper):
                 logger.warning("Algolia fetch errored: %s", e)
                 break
             if r.status_code != 200:
-                logger.warning(
-                    "Algolia -> %s (filters=%s)", r.status_code, filters
-                )
+                logger.warning("Algolia -> %s (filters=%s)", r.status_code, filters)
                 break
 
             data = r.json()
@@ -115,15 +113,11 @@ class ShowHNScraper(AcceleratorScraper):
                 if self.max_records and len(out) >= self.max_records:
                     return out
 
-            oldest = min(
-                (h.get("created_at_i") or 0) for h in hits
-            )
+            oldest = min((h.get("created_at_i") or 0) for h in hits)
             logger.info(
                 "Show HN: page got %d hits, oldest=%s, total=%d",
                 len(hits),
-                datetime.fromtimestamp(oldest, timezone.utc).isoformat()
-                if oldest
-                else "?",
+                datetime.fromtimestamp(oldest, timezone.utc).isoformat() if oldest else "?",
                 len(out),
             )
 
@@ -145,9 +139,7 @@ class ShowHNScraper(AcceleratorScraper):
         since_ts: Optional[int] = None,
     ) -> List[CompanyIdea]:
         if since_ts is None:
-            since_ts = int(
-                (datetime.now(timezone.utc) - timedelta(days=30)).timestamp()
-            )
+            since_ts = int((datetime.now(timezone.utc) - timedelta(days=30)).timestamp())
         logger.info(
             "Show HN: fetching posts since %s (ts=%d)",
             datetime.fromtimestamp(since_ts, timezone.utc).isoformat(),
@@ -163,16 +155,10 @@ class ShowHNScraper(AcceleratorScraper):
 
         story_text = hit.get("story_text") or None
         if story_text:
-            story_text = self._clean(
-                html.unescape(self._TAG_RE.sub(" ", story_text))
-            )
+            story_text = self._clean(html.unescape(self._TAG_RE.sub(" ", story_text)))
 
         created_at_i = hit.get("created_at_i") or 0
-        batch = (
-            datetime.fromtimestamp(created_at_i, timezone.utc).strftime("%Y-%m")
-            if created_at_i
-            else None
-        )
+        batch = datetime.fromtimestamp(created_at_i, timezone.utc).strftime("%Y-%m") if created_at_i else None
 
         external_url = hit.get("url")
         if external_url and "news.ycombinator.com" in external_url:
@@ -253,17 +239,11 @@ if __name__ == "__main__":
         d = asdict(rec)
         d["scraped_at"] = rec.scraped_at.isoformat()
         if jsonl_fh:
-            jsonl_fh.write(
-                json.dumps(d, default=str, ensure_ascii=False) + "\n"
-            )
+            jsonl_fh.write(json.dumps(d, default=str, ensure_ascii=False) + "\n")
 
     since_ts = args.since_ts
     if since_ts is None:
-        since_ts = int(
-            (
-                datetime.now(timezone.utc) - timedelta(days=args.since_days)
-            ).timestamp()
-        )
+        since_ts = int((datetime.now(timezone.utc) - timedelta(days=args.since_days)).timestamp())
 
     try:
         records = s.scrape(on_record=_write, since_ts=since_ts)
@@ -273,13 +253,6 @@ if __name__ == "__main__":
 
     if not args.jsonl:
         for r in records[:5]:
-            d = {
-                k: v
-                for k, v in asdict(r).items()
-                if k != "scraped_at" and v not in (None, "", [], {})
-            }
+            d = {k: v for k, v in asdict(r).items() if k != "scraped_at" and v not in (None, "", [], {})}
             print(json.dumps(d, default=str, indent=2))
-    print(
-        f"\n=> {len(records)} records from Show HN"
-        + (f"; wrote to {args.jsonl}" if args.jsonl else "")
-    )
+    print(f"\n=> {len(records)} records from Show HN" + (f"; wrote to {args.jsonl}" if args.jsonl else ""))

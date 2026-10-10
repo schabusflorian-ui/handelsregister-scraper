@@ -163,17 +163,18 @@ class ADBackfillJob:
             return False
 
         if not self.rate_limiter.acquire(count=1, block=True, timeout=self.acquire_timeout):
-            logger.warning("AD backfill: rate limit wait timed out; skipping %s",
-                           company["name"])
+            logger.warning("AD backfill: rate limit wait timed out; skipping %s", company["name"])
             return False
 
         try:
-            results = list(self._source.search(
-                register_number=hrb,
-                register_court=court,
-                registry_types=["HRB"],
-                max_results=1,
-            ))
+            results = list(
+                self._source.search(
+                    register_number=hrb,
+                    register_court=court,
+                    registry_types=["HRB"],
+                    max_results=1,
+                )
+            )
         except Exception as e:  # noqa: BLE001
             logger.debug("AD backfill search failed for %s: %s", company["name"], e)
             return False
@@ -183,7 +184,11 @@ class ADBackfillJob:
 
         try:
             return capture_ad_for_company(
-                self.db, self._source, company["id"], results[0], rate_limiter=None,
+                self.db,
+                self._source,
+                company["id"],
+                results[0],
+                rate_limiter=None,
             )
         except Exception as e:  # noqa: BLE001
             logger.debug("AD capture failed for %s: %s", company["name"], e)
@@ -222,20 +227,19 @@ class ADBackfillJob:
             self._state["next_id_ceiling"],
         )
 
-        candidates = self._select_candidates(
-            self._state["next_id_ceiling"], self.max_companies
-        )
+        candidates = self._select_candidates(self._state["next_id_ceiling"], self.max_companies)
         if not candidates:
-            logger.info("AD backfill: no candidates below ceiling=%d",
-                        self._state["next_id_ceiling"])
+            logger.info("AD backfill: no candidates below ceiling=%d", self._state["next_id_ceiling"])
             return run_stats
 
         for co in candidates:
-            logger.info("AD backfill [%d] %s (%s) id=%d",
-                        self._state["processed"] + 1,
-                        co["name"][:50],
-                        co["native_company_number"],
-                        co["id"])
+            logger.info(
+                "AD backfill [%d] %s (%s) id=%d",
+                self._state["processed"] + 1,
+                co["name"][:50],
+                co["native_company_number"],
+                co["id"],
+            )
 
             ok = self._backfill_one(co)
             self._state["processed"] += 1
@@ -260,8 +264,7 @@ class ADBackfillJob:
         self._save_state()
 
         logger.info(
-            "AD backfill job done: %d/%d succeeded this run; "
-            "total succeeded=%d / processed=%d",
+            "AD backfill job done: %d/%d succeeded this run; total succeeded=%d / processed=%d",
             run_stats["ad_succeeded"],
             run_stats["ad_processed"],
             self._state["succeeded"],

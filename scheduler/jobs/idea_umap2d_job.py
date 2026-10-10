@@ -24,7 +24,6 @@ from __future__ import annotations
 
 import argparse
 import logging
-from typing import List
 
 import numpy as np
 
@@ -53,9 +52,7 @@ def run(db_path: str, refresh: bool) -> None:
 
     if not refresh:
         cur = db.conn.cursor()
-        n_missing = cur.execute(
-            "SELECT COUNT(*) FROM company_ideas WHERE umap_x IS NULL"
-        ).fetchone()[0]
+        n_missing = cur.execute("SELECT COUNT(*) FROM company_ideas WHERE umap_x IS NULL").fetchone()[0]
         n_total = cur.execute("SELECT COUNT(*) FROM company_ideas").fetchone()[0]
         if n_missing == 0:
             logger.info("umap_x already populated for all %d rows; use --refresh to recompute", n_total)
@@ -73,15 +70,15 @@ def run(db_path: str, refresh: bool) -> None:
     logger.info("dropped %d empty-text rows; embedding %d texts", dropped, len(rows))
 
     from sentence_transformers import SentenceTransformer
+
     model = SentenceTransformer(EMBED_MODEL)
-    X = model.encode(texts, batch_size=64, show_progress_bar=True,
-                     normalize_embeddings=True)
+    X = model.encode(texts, batch_size=64, show_progress_bar=True, normalize_embeddings=True)
     X = np.asarray(X)
 
     import umap
+
     logger.info("UMAP reducing %d x %d -> n_components=2", X.shape[0], X.shape[1])
-    reducer = umap.UMAP(n_components=2, n_neighbors=15, min_dist=0.1,
-                        metric="cosine", random_state=42)
+    reducer = umap.UMAP(n_components=2, n_neighbors=15, min_dist=0.1, metric="cosine", random_state=42)
     X2 = reducer.fit_transform(X)
 
     # Persist
@@ -94,9 +91,7 @@ def run(db_path: str, refresh: bool) -> None:
                 (float(x), float(y), r["id"]),
             )
 
-    n_populated = cur.execute(
-        "SELECT COUNT(*) FROM company_ideas WHERE umap_x IS NOT NULL"
-    ).fetchone()[0]
+    n_populated = cur.execute("SELECT COUNT(*) FROM company_ideas WHERE umap_x IS NOT NULL").fetchone()[0]
     logger.info("done. %d rows now have umap_x / umap_y", n_populated)
     db.conn.close()
 
@@ -104,12 +99,9 @@ def run(db_path: str, refresh: bool) -> None:
 def main():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--db", default="handelsregister.db")
-    p.add_argument("--refresh", action="store_true",
-                   help="Recompute even for rows that already have umap_x")
+    p.add_argument("--refresh", action="store_true", help="Recompute even for rows that already have umap_x")
     args = p.parse_args()
-    logging.basicConfig(level=logging.INFO,
-                        format="%(asctime)s %(levelname)s %(message)s",
-                        datefmt="%H:%M:%S")
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s", datefmt="%H:%M:%S")
     run(args.db, args.refresh)
 
 
