@@ -336,7 +336,9 @@ class HandelsregisterScheduler:
 
             logger.info(
                 "Founder emergence: %d potential matches, %d auto-linked, %d for review",
-                len(emerged), auto_linked, len(emerged) - auto_linked,
+                len(emerged),
+                auto_linked,
+                len(emerged) - auto_linked,
             )
 
             self._log_job_completion("founder_emergence", stats, db)
@@ -489,19 +491,16 @@ class HandelsregisterScheduler:
     # idea_gap_rank live in scripts/, the scrapers + LLM extract + UMAP
     # live in scheduler/jobs/.
     _IDEAS_PIPELINE_STEPS = [
-        ("hn_show",       ["scheduler.jobs.hn_show_job"],
-         "Daily HN Show ingest"),
-        ("reddit_ideas",  ["scheduler.jobs.reddit_ideas_job"],
-         "Daily Reddit indie/microsaas ingest"),
-        ("llm_extract",   ["scheduler.jobs.idea_llm_extract_job",
-                           "--workers", "4"],
-         "LLM-extract structured tags for new rows"),
-        ("tag_normalize", ["scripts.tag_normalize"],
-         "Map invented tags to canonical seed vocab"),
-        ("idea_gap_rank", ["scripts.idea_gap_rank"],
-         "Score (mechanism × sector) recombination gaps"),
-        ("idea_umap2d",   ["scheduler.jobs.idea_umap2d_job"],
-         "Refresh 2-D UMAP coords for the idea map"),
+        ("hn_show", ["scheduler.jobs.hn_show_job"], "Daily HN Show ingest"),
+        ("reddit_ideas", ["scheduler.jobs.reddit_ideas_job"], "Daily Reddit indie/microsaas ingest"),
+        (
+            "llm_extract",
+            ["scheduler.jobs.idea_llm_extract_job", "--workers", "4"],
+            "LLM-extract structured tags for new rows",
+        ),
+        ("tag_normalize", ["scripts.tag_normalize"], "Map invented tags to canonical seed vocab"),
+        ("idea_gap_rank", ["scripts.idea_gap_rank"], "Score (mechanism × sector) recombination gaps"),
+        ("idea_umap2d", ["scheduler.jobs.idea_umap2d_job"], "Refresh 2-D UMAP coords for the idea map"),
     ]
 
     # Signals pipeline — refreshes multi-signal stealth tracker.
@@ -510,20 +509,25 @@ class HandelsregisterScheduler:
     # aggregates. Each step is isolated so a crt.sh outage doesn't block
     # the rest.
     _SIGNALS_PIPELINE_STEPS = [
-        ("adapt_companies",       ["signals.adapters", "--only", "companies"],
-         "Reshape companies into handelsregister_new signals"),
-        ("adapt_news",            ["signals.adapters", "--only", "news"],
-         "Reshape news_articles into news_mention signals (funding verbs only)"),
-        ("adapt_stealth",         ["signals.adapters", "--only", "stealth_founders"],
-         "Reshape LinkedIn stealth + transitions"),
-        ("adapt_officers",        ["signals.adapters", "--only", "officers"],
-         "Officer-name cross-reference → founder_match signals"),
-        ("source_crt_sh",         ["signals.crt_sh"],
-         "Poll crt.sh for newly-issued certs on sector keywords"),
-        ("source_github",         ["signals.github_source"],
-         "Poll GitHub for newly-created orgs on sector keywords"),
-        ("joiner",                ["signals.joiner"],
-         "Resolve signals → stealth_entities + recompute aggregates"),
+        (
+            "adapt_companies",
+            ["signals.adapters", "--only", "companies"],
+            "Reshape companies into handelsregister_new signals",
+        ),
+        (
+            "adapt_news",
+            ["signals.adapters", "--only", "news"],
+            "Reshape news_articles into news_mention signals (funding verbs only)",
+        ),
+        ("adapt_stealth", ["signals.adapters", "--only", "stealth_founders"], "Reshape LinkedIn stealth + transitions"),
+        (
+            "adapt_officers",
+            ["signals.adapters", "--only", "officers"],
+            "Officer-name cross-reference → founder_match signals",
+        ),
+        ("source_crt_sh", ["signals.crt_sh"], "Poll crt.sh for newly-issued certs on sector keywords"),
+        ("source_github", ["signals.github_source"], "Poll GitHub for newly-created orgs on sector keywords"),
+        ("joiner", ["signals.joiner"], "Resolve signals → stealth_entities + recompute aggregates"),
     ]
 
     def _run_ideas_pipeline_job(self):
@@ -538,8 +542,7 @@ class HandelsregisterScheduler:
         Total wall-clock when there's new data is ~30-90 minutes; ~1-2
         minutes on a quiet day.
         """
-        logger.info("Starting ideas pipeline (%d steps)",
-                    len(self._IDEAS_PIPELINE_STEPS))
+        logger.info("Starting ideas pipeline (%d steps)", len(self._IDEAS_PIPELINE_STEPS))
 
         # Repo root — relies on the scheduler being launched from the
         # project root or PYTHONPATH being set, which Railway and the
@@ -557,18 +560,19 @@ class HandelsregisterScheduler:
                 # longer than this when there's a big backlog — that's by
                 # design; the next daily tick picks up the rest.
                 subprocess.run(
-                    cmd, check=True, timeout=3600,
-                    cwd=cwd, env=env,
+                    cmd,
+                    check=True,
+                    timeout=3600,
+                    cwd=cwd,
+                    env=env,
                 )
                 logger.info("ideas pipeline step %s: ok", step_id)
                 completed += 1
             except subprocess.TimeoutExpired:
-                logger.error("ideas pipeline step %s: TIMEOUT after 1h",
-                             step_id)
+                logger.error("ideas pipeline step %s: TIMEOUT after 1h", step_id)
                 failed.append(step_id)
             except subprocess.CalledProcessError as e:
-                logger.error("ideas pipeline step %s: exit %d",
-                             step_id, e.returncode)
+                logger.error("ideas pipeline step %s: exit %d", step_id, e.returncode)
                 failed.append(step_id)
             except Exception as e:  # noqa: BLE001
                 logger.exception("ideas pipeline step %s: %s", step_id, e)
@@ -576,7 +580,8 @@ class HandelsregisterScheduler:
 
         logger.info(
             "Ideas pipeline finished: %d/%d steps ok%s",
-            completed, len(self._IDEAS_PIPELINE_STEPS),
+            completed,
+            len(self._IDEAS_PIPELINE_STEPS),
             f" (failed: {', '.join(failed)})" if failed else "",
         )
 
@@ -588,8 +593,7 @@ class HandelsregisterScheduler:
         downstream steps. The joiner always runs last to roll up aggregates
         for whatever new signals landed.
         """
-        logger.info("Starting signals pipeline (%d steps)",
-                    len(self._SIGNALS_PIPELINE_STEPS))
+        logger.info("Starting signals pipeline (%d steps)", len(self._SIGNALS_PIPELINE_STEPS))
         cwd = os.getcwd()
         env = {**os.environ, "PYTHONPATH": cwd}
 
@@ -617,7 +621,8 @@ class HandelsregisterScheduler:
 
         logger.info(
             "Signals pipeline finished: %d/%d steps ok%s",
-            completed, len(self._SIGNALS_PIPELINE_STEPS),
+            completed,
+            len(self._SIGNALS_PIPELINE_STEPS),
             f" (failed: {', '.join(failed)})" if failed else "",
         )
 

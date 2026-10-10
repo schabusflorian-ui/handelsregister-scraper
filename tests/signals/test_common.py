@@ -26,6 +26,7 @@ from signals.common import (
 # normalize_domain
 # ---------------------------------------------------------------------------
 
+
 class TestNormalizeDomain:
     def test_strips_scheme_and_www(self):
         assert normalize_domain("https://www.Example.COM/path?q=1") == "example.com"
@@ -35,8 +36,7 @@ class TestNormalizeDomain:
 
     def test_rejects_generic_hosts(self):
         # LinkedIn/GitHub/etc. are too generic to be stealth-entity join keys
-        for u in ("linkedin.com/in/foo", "github.com/bar",
-                  "https://news.ycombinator.com/x", "reddit.com/r/x"):
+        for u in ("linkedin.com/in/foo", "github.com/bar", "https://news.ycombinator.com/x", "reddit.com/r/x"):
             assert normalize_domain(u) is None, f"should reject {u}"
 
     def test_rejects_non_domain_input(self):
@@ -52,13 +52,17 @@ class TestNormalizeDomain:
 # normalize_name
 # ---------------------------------------------------------------------------
 
+
 class TestNormalizeName:
-    @pytest.mark.parametrize("raw,expected", [
-        ("Acme GmbH",                   "acme"),
-        ("ACME Robotics GmbH i.G.",     "acme robotics i g"),  # "i g" survives — expected
-        ("Mu-Zero.AI Technologies, Inc.", "mu zero ai"),
-        ("Fraunhofer-Institut",         "fraunhofer institut"),
-    ])
+    @pytest.mark.parametrize(
+        "raw,expected",
+        [
+            ("Acme GmbH", "acme"),
+            ("ACME Robotics GmbH i.G.", "acme robotics i g"),  # "i g" survives — expected
+            ("Mu-Zero.AI Technologies, Inc.", "mu zero ai"),
+            ("Fraunhofer-Institut", "fraunhofer institut"),
+        ],
+    )
     def test_strips_legal_forms_and_punct(self, raw, expected):
         assert normalize_name(raw) == expected
 
@@ -74,14 +78,18 @@ class TestNormalizeName:
 # normalize_github
 # ---------------------------------------------------------------------------
 
+
 class TestNormalizeGithub:
-    @pytest.mark.parametrize("raw,expected", [
-        ("https://github.com/acme",      "acme"),
-        ("https://www.github.com/ACME",  "acme"),
-        ("@acme",                        "acme"),
-        ("acme/repo",                    "acme"),
-        ("ACME",                         "acme"),
-    ])
+    @pytest.mark.parametrize(
+        "raw,expected",
+        [
+            ("https://github.com/acme", "acme"),
+            ("https://www.github.com/ACME", "acme"),
+            ("@acme", "acme"),
+            ("acme/repo", "acme"),
+            ("ACME", "acme"),
+        ],
+    )
     def test_normalizes_handles(self, raw, expected):
         assert normalize_github(raw) == expected
 
@@ -93,6 +101,7 @@ class TestNormalizeGithub:
 # ---------------------------------------------------------------------------
 # name_similarity — THE critical function for cross-source matching
 # ---------------------------------------------------------------------------
+
 
 class TestNameSimilarity:
     """These are regression tests pinned against real-data false matches
@@ -133,10 +142,8 @@ class TestNameSimilarity:
         # overlap-coefficient bonus kicks in in loose mode. Use "institut"
         # and "foundation" because "labs" is a legal-form variant that
         # gets stripped before matching.
-        assert name_similarity("fraunhofer", "fraunhofer institut foundation",
-                                strict=False) == 1.0
-        assert name_similarity("fraunhofer", "fraunhofer institut foundation",
-                                strict=True) < 0.75
+        assert name_similarity("fraunhofer", "fraunhofer institut foundation", strict=False) == 1.0
+        assert name_similarity("fraunhofer", "fraunhofer institut foundation", strict=True) < 0.75
 
     def test_cross_type_false_match_guard(self):
         # The production bug: "M.C - Ecosystem GmbH" bundling with
@@ -161,9 +168,11 @@ class TestNameSimilarity:
 # recency_multiplier
 # ---------------------------------------------------------------------------
 
+
 class TestRecencyMultiplier:
     def _mk(self, days_ago: int) -> str:
         from datetime import timedelta
+
         return (datetime.now(timezone.utc) - timedelta(days=days_ago)).isoformat()
 
     def test_fresh_is_full_weight(self):
@@ -183,6 +192,7 @@ class TestRecencyMultiplier:
 # ---------------------------------------------------------------------------
 # composite_score — this is the ranking spine
 # ---------------------------------------------------------------------------
+
 
 class TestCompositeScore:
     def setup_method(self):
@@ -205,9 +215,11 @@ class TestCompositeScore:
             ["linkedin_stealth", "handelsregister_new", "crt_domain_new"],
             self.fresh,
         )
-        base = (SIGNAL_WEIGHTS["linkedin_stealth"]
-                + SIGNAL_WEIGHTS["handelsregister_new"]
-                + SIGNAL_WEIGHTS["crt_domain_new"])
+        base = (
+            SIGNAL_WEIGHTS["linkedin_stealth"]
+            + SIGNAL_WEIGHTS["handelsregister_new"]
+            + SIGNAL_WEIGHTS["crt_domain_new"]
+        )
         assert s == pytest.approx(min(100.0, base + 15 + 15))
 
     def test_duplicate_types_dedupe(self):
@@ -223,6 +235,7 @@ class TestCompositeScore:
 
     def test_decay_with_old_signal(self):
         from datetime import timedelta
+
         old = (datetime.now(timezone.utc) - timedelta(days=400)).isoformat()
         fresh_score = composite_score(["linkedin_stealth"], self.fresh)
         old_score = composite_score(["linkedin_stealth"], old)
@@ -233,6 +246,7 @@ class TestCompositeScore:
 # ---------------------------------------------------------------------------
 # serialization helpers
 # ---------------------------------------------------------------------------
+
 
 class TestEnsureJson:
     def test_passthrough_string(self):
@@ -246,6 +260,7 @@ class TestEnsureJson:
 
     def test_dict_serialized(self):
         import json as j
+
         out = ensure_json({"k": 1})
         assert j.loads(out) == {"k": 1}
 

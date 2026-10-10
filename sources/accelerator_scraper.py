@@ -45,29 +45,31 @@ logger = logging.getLogger(__name__)
 # Data model — one row per company
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class CompanyIdea:
     """A startup captured from an accelerator / fund portfolio page."""
 
-    program: str                              # "Y Combinator", "General Catalyst", ...
-    company: str = ""                         # canonical name
-    one_liner: Optional[str] = None           # short pitch / meta description
-    long_description: Optional[str] = None    # full paragraph where available
-    tags: List[str] = field(default_factory=list)   # sector / industry labels
+    program: str  # "Y Combinator", "General Catalyst", ...
+    company: str = ""  # canonical name
+    one_liner: Optional[str] = None  # short pitch / meta description
+    long_description: Optional[str] = None  # full paragraph where available
+    tags: List[str] = field(default_factory=list)  # sector / industry labels
     company_website: Optional[str] = None
-    batch: Optional[str] = None               # "W24", "2021", "Cohort 3" ...
+    batch: Optional[str] = None  # "W24", "2021", "Cohort 3" ...
     country: Optional[str] = None
     year_founded: Optional[int] = None
     team_size: Optional[int] = None
-    status: Optional[str] = None              # "active" | "acquired" | "public" | "dead"
+    status: Optional[str] = None  # "active" | "acquired" | "public" | "dead"
     source_url: str = ""
-    raw: dict = field(default_factory=dict)   # founders, press links, etc.
+    raw: dict = field(default_factory=dict)  # founders, press links, etc.
     scraped_at: datetime = field(default_factory=datetime.now)
 
 
 # ---------------------------------------------------------------------------
 # Base class
 # ---------------------------------------------------------------------------
+
 
 class AcceleratorScraper:
     program_name: str = ""
@@ -118,6 +120,7 @@ class AcceleratorScraper:
 # Y Combinator  — Inertia-embedded JSON on each /companies/<slug>
 # ---------------------------------------------------------------------------
 
+
 class YCombinatorScraper(AcceleratorScraper):
     program_name = "Y Combinator"
     crawl_delay = 2.0
@@ -125,8 +128,7 @@ class YCombinatorScraper(AcceleratorScraper):
     SITEMAP = "https://www.ycombinator.com/companies/sitemap"
 
     _SLUG_RE = re.compile(r"<loc>https://www\.ycombinator\.com/companies/([a-z0-9][a-z0-9-]+)</loc>")
-    _NON_SLUG = {"sitemap", "founders-you-may-know", "women-founders",
-                 "black-founders", "hispanic-latino-founders"}
+    _NON_SLUG = {"sitemap", "founders-you-may-know", "women-founders", "black-founders", "hispanic-latino-founders"}
 
     def _discover_slugs(self) -> List[str]:
         xml = self._fetch(self.SITEMAP)
@@ -154,10 +156,14 @@ class YCombinatorScraper(AcceleratorScraper):
 
         status = None
         ycdc = (company.get("ycdc_status") or "").lower()
-        if "acquired" in ycdc: status = "acquired"
-        elif "public" in ycdc: status = "public"
-        elif "dead" in ycdc or "inactive" in ycdc: status = "dead"
-        elif ycdc: status = "active"
+        if "acquired" in ycdc:
+            status = "acquired"
+        elif "public" in ycdc:
+            status = "public"
+        elif "dead" in ycdc or "inactive" in ycdc:
+            status = "dead"
+        elif ycdc:
+            status = "active"
 
         founders_raw = company.get("founders") or []
         founders_brief = [
@@ -217,6 +223,7 @@ class YCombinatorScraper(AcceleratorScraper):
 # General Catalyst — Webflow CMS pages
 # ---------------------------------------------------------------------------
 
+
 class GeneralCatalystScraper(AcceleratorScraper):
     program_name = "General Catalyst"
     crawl_delay = 2.0
@@ -268,9 +275,9 @@ class GeneralCatalystScraper(AcceleratorScraper):
             # string on camel-case boundaries.
             if not tags:
                 raw = self._clean(sectors_el.get_text()) or ""
-                tags = [self._clean(t) for t in
-                        re.findall(r"[A-Z][a-zA-Z &-]+?(?=[A-Z][a-z]|$)", raw)
-                        if self._clean(t)]
+                tags = [
+                    self._clean(t) for t in re.findall(r"[A-Z][a-zA-Z &-]+?(?=[A-Z][a-z]|$)", raw) if self._clean(t)
+                ]
 
         # Company website — external "Website" link (labelled)
         website = None
@@ -321,6 +328,7 @@ class GeneralCatalystScraper(AcceleratorScraper):
 # Lux Capital — Webflow pages, description in <meta name="description">
 # ---------------------------------------------------------------------------
 
+
 class LuxCapitalScraper(AcceleratorScraper):
     program_name = "Lux Capital"
     crawl_delay = 2.0
@@ -339,8 +347,7 @@ class LuxCapitalScraper(AcceleratorScraper):
 
     def _hero_scope(self, soup: BeautifulSoup) -> BeautifulSoup:
         # Truncate soup at the "Similar companies" heading if present.
-        h2 = soup.find(lambda tag: tag.name in ("h2", "h3") and
-                       self._SIMILAR_HEADER_RE.search(tag.get_text() or ""))
+        h2 = soup.find(lambda tag: tag.name in ("h2", "h3") and self._SIMILAR_HEADER_RE.search(tag.get_text() or ""))
         if not h2:
             return soup
         # Extract all siblings/descendants after h2 to detach them
@@ -410,9 +417,20 @@ class LuxCapitalScraper(AcceleratorScraper):
             href = a["href"]
             if not href.startswith("http"):
                 continue
-            if any(s in href for s in ("luxcapital.com", "twitter.com", "x.com",
-                                       "linkedin.com", "facebook.com", "youtube.com",
-                                       "instagram.com", "apple.com", "google.com")):
+            if any(
+                s in href
+                for s in (
+                    "luxcapital.com",
+                    "twitter.com",
+                    "x.com",
+                    "linkedin.com",
+                    "facebook.com",
+                    "youtube.com",
+                    "instagram.com",
+                    "apple.com",
+                    "google.com",
+                )
+            ):
                 continue
             label = self._clean(a.get_text()) or ""
             if label.lower() in {"website", "visit", "visit site"} or not label:
@@ -456,6 +474,7 @@ class LuxCapitalScraper(AcceleratorScraper):
 # Playground Global — all data on a single /portfolio page
 # ---------------------------------------------------------------------------
 
+
 class PlaygroundGlobalScraper(AcceleratorScraper):
     program_name = "Playground Global"
     crawl_delay = 2.0
@@ -476,6 +495,7 @@ class PlaygroundGlobalScraper(AcceleratorScraper):
             m = self._LOGO_NAME_RE.search(src)
             if m:
                 from urllib.parse import unquote
+
                 return self._clean(unquote(m.group(1)).replace("-", " "))
         for h in ("h3", "h4", "h5"):
             el = card.find(h)
@@ -542,8 +562,9 @@ class PlaygroundGlobalScraper(AcceleratorScraper):
             # Playground renders everything on one URL — append a stable fragment
             # so each row has a unique `source_url` for the DB's UNIQUE constraint.
             website = self._card_website(c)
-            anchor = re.sub(r"[^a-z0-9]+", "-", (name or "").lower()).strip("-") \
-                     or re.sub(r"[^a-z0-9]+", "-", (website or "").lower()).strip("-")
+            anchor = re.sub(r"[^a-z0-9]+", "-", (name or "").lower()).strip("-") or re.sub(
+                r"[^a-z0-9]+", "-", (website or "").lower()
+            ).strip("-")
             rec = CompanyIdea(
                 program=self.program_name,
                 company=name or "",
@@ -565,6 +586,7 @@ class PlaygroundGlobalScraper(AcceleratorScraper):
 # a16z Speedrun — public JSON API (Django REST backend behind speedrun.a16z.com)
 # ---------------------------------------------------------------------------
 
+
 class A16zSpeedrunScraper(AcceleratorScraper):
     """
     Speedrun is a16z's games-and-adjacent games/AI accelerator. The Next.js
@@ -583,8 +605,9 @@ class A16zSpeedrunScraper(AcceleratorScraper):
     COHORTS = ["SR001", "SR002", "SR003", "SR004", "SR005", "SR006"]
 
     def _parse_row(self, row: dict, cohort: str) -> CompanyIdea:
-        industries = [self._clean(i) for i in (row.get("industries") or [])
-                      if self._clean(i) and self._clean(i).upper() != "ALL"]
+        industries = [
+            self._clean(i) for i in (row.get("industries") or []) if self._clean(i) and self._clean(i).upper() != "ALL"
+        ]
         return CompanyIdea(
             program=self.program_name,
             company=row.get("name") or "",
@@ -649,6 +672,7 @@ class A16zSpeedrunScraper(AcceleratorScraper):
 # Sequoia Arc — cohort announcement posts
 # ---------------------------------------------------------------------------
 
+
 class SequoiaArcScraper(AcceleratorScraper):
     """
     Sequoia Arc is Sequoia Capital's pre-seed/seed accelerator.
@@ -673,15 +697,19 @@ class SequoiaArcScraper(AcceleratorScraper):
 
     # (post slug, cohort label) — extend here as new parseable announcements ship
     COHORT_POSTS = [
-        ("vision-grit-growth-introducing-the-next-arc-founders",
-         "Arc Americas 2022"),
-        ("outlier-founders-of-arc-europe",
-         "Arc Europe 2022"),
+        ("vision-grit-growth-introducing-the-next-arc-founders", "Arc Americas 2022"),
+        ("outlier-founders-of-arc-europe", "Arc Europe 2022"),
     ]
     BASE = "https://sequoiacap.com/article"
 
-    _SKIP_HEADINGS = {"share", "related articles", "more articles",
-                      "related topics", "featured articles", "in the press"}
+    _SKIP_HEADINGS = {
+        "share",
+        "related articles",
+        "more articles",
+        "related topics",
+        "featured articles",
+        "in the press",
+    }
 
     def _parse_post(self, slug: str, cohort: str, html_text: str) -> List[CompanyIdea]:
         soup = BeautifulSoup(html_text, "html.parser")
@@ -716,11 +744,13 @@ class SequoiaArcScraper(AcceleratorScraper):
                 if hasattr(sib, "find_all"):
                     for a in sib.find_all("a", href=True):
                         href = a["href"]
-                        if (href.startswith("http") and
-                                "sequoiacap.com" not in href and
-                                "twitter.com" not in href and
-                                "linkedin.com" not in href and
-                                href not in links):
+                        if (
+                            href.startswith("http")
+                            and "sequoiacap.com" not in href
+                            and "twitter.com" not in href
+                            and "linkedin.com" not in href
+                            and href not in links
+                        ):
                             links.append(href)
             if not paras:
                 continue
@@ -729,20 +759,20 @@ class SequoiaArcScraper(AcceleratorScraper):
             if not one_liner.endswith("."):
                 one_liner += "."
             website = links[0] if links else None
-            out.append(CompanyIdea(
-                program=self.program_name,
-                company=name,
-                one_liner=one_liner,
-                long_description=long_desc,
-                tags=[],
-                company_website=website,
-                batch=cohort,
-                country="US" if "Americas" in cohort else (
-                    "EU" if "Europe" in cohort else None),
-                source_url=f"{self.BASE}/{slug}/#{re.sub(r'[^a-z0-9]+', '-', name.lower()).strip('-')}",
-                raw={"post_slug": slug, "prior_name": prior,
-                     "external_links": links},
-            ))
+            out.append(
+                CompanyIdea(
+                    program=self.program_name,
+                    company=name,
+                    one_liner=one_liner,
+                    long_description=long_desc,
+                    tags=[],
+                    company_website=website,
+                    batch=cohort,
+                    country="US" if "Americas" in cohort else ("EU" if "Europe" in cohort else None),
+                    source_url=f"{self.BASE}/{slug}/#{re.sub(r'[^a-z0-9]+', '-', name.lower()).strip('-')}",
+                    raw={"post_slug": slug, "prior_name": prior, "external_links": links},
+                )
+            )
         return out
 
     def scrape(self, on_record: OnRecord = None) -> List[CompanyIdea]:
@@ -758,8 +788,7 @@ class SequoiaArcScraper(AcceleratorScraper):
                 if on_record:
                     on_record(r)
             self._delay()
-        logger.info("Sequoia Arc: %d records across %d posts",
-                    len(out), len(self.COHORT_POSTS))
+        logger.info("Sequoia Arc: %d records across %d posts", len(out), len(self.COHORT_POSTS))
         return out
 
 
@@ -828,6 +857,7 @@ def normalize_website(url: Optional[str]) -> Optional[str]:
         u = "http://" + u
     try:
         from urllib.parse import urlparse
+
         host = urlparse(u).netloc
     except Exception:  # noqa: BLE001
         return None
@@ -881,17 +911,25 @@ def save_company_ideas(db, records: List[CompanyIdea]) -> int:
                  source_url, raw_json, scraped_at)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
-                (r.program, r.company, r.one_liner, r.long_description,
-                 json.dumps(r.tags) if r.tags else None,
-                 json.dumps(norm_tags) if norm_tags else None,
-                 r.company_website,
-                 normalize_website(r.company_website),
-                 normalize_company_name(r.company),
-                 r.batch, r.country, r.year_founded,
-                 r.team_size, r.status, r.source_url,
-                 json.dumps(r.raw) if r.raw else None,
-                 r.scraped_at.isoformat() if isinstance(r.scraped_at, datetime)
-                 else str(r.scraped_at)),
+                (
+                    r.program,
+                    r.company,
+                    r.one_liner,
+                    r.long_description,
+                    json.dumps(r.tags) if r.tags else None,
+                    json.dumps(norm_tags) if norm_tags else None,
+                    r.company_website,
+                    normalize_website(r.company_website),
+                    normalize_company_name(r.company),
+                    r.batch,
+                    r.country,
+                    r.year_founded,
+                    r.team_size,
+                    r.status,
+                    r.source_url,
+                    json.dumps(r.raw) if r.raw else None,
+                    r.scraped_at.isoformat() if isinstance(r.scraped_at, datetime) else str(r.scraped_at),
+                ),
             )
             if cur.rowcount > 0:
                 inserted += 1
@@ -908,6 +946,7 @@ def save_company_ideas(db, records: List[CompanyIdea]) -> int:
 # cross-reference them and harvest one row per unique slug. Repeated
 # snapshots (e.g. via cron) grow the corpus over time.
 # ---------------------------------------------------------------------------
+
 
 class PolsiaScraper(AcceleratorScraper):
     program_name = "Polsia"
@@ -932,7 +971,7 @@ class PolsiaScraper(AcceleratorScraper):
 
         # 1. Anchor on full company entries (have id/name/slug/app_url).
         companies_by_slug: Dict[str, dict] = {}
-        for c in (data.get("companies") or []):
+        for c in data.get("companies") or []:
             slug = (c.get("slug") or "").lower()
             if slug:
                 companies_by_slug[slug] = {
@@ -946,7 +985,7 @@ class PolsiaScraper(AcceleratorScraper):
         # 2. Augment with slugs harvested from app URLs scattered in
         #    other arrays (links, tweets, etc.). For these we only have
         #    the slug + URL, sometimes a title.
-        for ln in (data.get("links") or []):
+        for ln in data.get("links") or []:
             url = ln.get("url") or ""
             m = self._SLUG_RE.match(url)
             if not m:
@@ -963,7 +1002,7 @@ class PolsiaScraper(AcceleratorScraper):
 
         # 3. Pull descriptions from documents/reports/tweets where the
         #    polsia.app URL matches a slug we already have.
-        for d in (data.get("documents") or []):
+        for d in data.get("documents") or []:
             content = (d.get("content") or "")[:1500]
             # Documents reference company by company_label only — best we
             # can do is capture the doc as enrichment for any slug whose
@@ -974,7 +1013,7 @@ class PolsiaScraper(AcceleratorScraper):
                     break
 
         # Tweets sometimes include the polsia.app subdomain in the text.
-        for t in (data.get("tweets") or []):
+        for t in data.get("tweets") or []:
             text = t.get("text") or ""
             m = self._SLUG_RE.search(text)
             if not m:
@@ -995,8 +1034,7 @@ class PolsiaScraper(AcceleratorScraper):
                 if 20 < len(first_sent) < 250:
                     companies_by_slug[slug]["description"] = self._clean(first_sent)
 
-        logger.info("Polsia: %d unique companies in this snapshot",
-                    len(companies_by_slug))
+        logger.info("Polsia: %d unique companies in this snapshot", len(companies_by_slug))
 
         out: List[CompanyIdea] = []
         for slug, c in companies_by_slug.items():
@@ -1036,6 +1074,7 @@ class PolsiaScraper(AcceleratorScraper):
 # Scrapes in one fetch; no detail pages needed.
 # ---------------------------------------------------------------------------
 
+
 class KhoslaVenturesScraper(AcceleratorScraper):
     program_name = "Khosla Ventures"
     crawl_delay = 2.0
@@ -1052,6 +1091,7 @@ class KhoslaVenturesScraper(AcceleratorScraper):
         out: List[CompanyIdea] = []
         seen_hosts = set()
         from urllib.parse import urlparse
+
         for s in slides:
             href = (s.get("href") or "").strip()
             if not href.startswith("http"):
@@ -1092,6 +1132,7 @@ class KhoslaVenturesScraper(AcceleratorScraper):
 # single source in this scraper after YC.
 # ---------------------------------------------------------------------------
 
+
 class IndiePageScraper(AcceleratorScraper):
     program_name = "IndiePage"
     crawl_delay = 2.0
@@ -1103,7 +1144,8 @@ class IndiePageScraper(AcceleratorScraper):
             return []
         m = re.search(
             r'<script id="__NEXT_DATA__"[^>]*>(.+?)</script>',
-            html_text, re.S,
+            html_text,
+            re.S,
         )
         if not m:
             logger.warning("IndiePage: no __NEXT_DATA__ script tag")
@@ -1113,14 +1155,9 @@ class IndiePageScraper(AcceleratorScraper):
         except Exception as e:  # noqa: BLE001
             logger.warning("IndiePage: bad JSON: %s", e)
             return []
-        startups = (data.get("props", {})
-                    .get("pageProps", {})
-                    .get("startups", []) or [])
-        total = (data.get("props", {})
-                 .get("pageProps", {})
-                 .get("startupsTotal"))
-        logger.info("IndiePage: %d startups in payload (total claim=%s)",
-                    len(startups), total)
+        startups = data.get("props", {}).get("pageProps", {}).get("startups", []) or []
+        total = data.get("props", {}).get("pageProps", {}).get("startupsTotal")
+        logger.info("IndiePage: %d startups in payload (total claim=%s)", len(startups), total)
 
         out: List[CompanyIdea] = []
         for s in startups:
@@ -1141,9 +1178,9 @@ class IndiePageScraper(AcceleratorScraper):
                 company_website=url,
                 source_url=f"https://indiepa.ge/startup/{slug}" if slug else self.DISCOVER_URL + f"#{name.lower()}",
                 raw={
-                    "indiepage_id":  s.get("_id"),
-                    "votes":          s.get("votesCounter"),
-                    "founder":        founder or None,
+                    "indiepage_id": s.get("_id"),
+                    "votes": s.get("votesCounter"),
+                    "founder": founder or None,
                     "founder_handle": user.get("username") if isinstance(user, dict) else None,
                 },
             )
@@ -1160,6 +1197,7 @@ class IndiePageScraper(AcceleratorScraper):
 # digital businesses. Only company name (sometimes) + outbound URL — light
 # data, but fills a unique "indie rollup" angle.
 # ---------------------------------------------------------------------------
+
 
 class TinyComScraper(AcceleratorScraper):
     program_name = "Tiny.com"
@@ -1180,6 +1218,7 @@ class TinyComScraper(AcceleratorScraper):
             if not href.startswith("http"):
                 continue
             from urllib.parse import urlparse
+
             host = urlparse(href).hostname or ""
             host = host.replace("www.", "")
             # Derive a name from the host (metalab.com -> "Metalab")
@@ -1217,6 +1256,7 @@ class TinyComScraper(AcceleratorScraper):
 # Anthropic / Claude customers — 39 customer stories on claude.com/customers.
 # Each has a company name, vertical, and a problem/outcome write-up.
 # ---------------------------------------------------------------------------
+
 
 class ClaudeCustomersScraper(AcceleratorScraper):
     program_name = "Claude Customers"
@@ -1257,8 +1297,16 @@ class ClaudeCustomersScraper(AcceleratorScraper):
             # The company name is typically the first word(s) before a verb.
             # Use a heuristic: first " is " or " uses " or " builds " split.
             company = headline
-            for split in (" is building", " is using", " uses ", " builds ",
-                          " accelerates", " automates", " powers", " transforms"):
+            for split in (
+                " is building",
+                " is using",
+                " uses ",
+                " builds ",
+                " accelerates",
+                " automates",
+                " powers",
+                " transforms",
+            ):
                 if split in headline.lower():
                     company = headline.split(split, 1)[0].strip()
                     break
@@ -1288,33 +1336,29 @@ class ClaudeCustomersScraper(AcceleratorScraper):
 
 
 SCRAPERS = {
-    "yc":         YCombinatorScraper,
-    "gc":         GeneralCatalystScraper,
-    "lux":        LuxCapitalScraper,
+    "yc": YCombinatorScraper,
+    "gc": GeneralCatalystScraper,
+    "lux": LuxCapitalScraper,
     "playground": PlaygroundGlobalScraper,
-    "speedrun":   A16zSpeedrunScraper,
+    "speedrun": A16zSpeedrunScraper,
     "sequoia_arc": SequoiaArcScraper,
-    "indiepage":  IndiePageScraper,
-    "tiny":       TinyComScraper,
-    "claude":     ClaudeCustomersScraper,
-    "khosla":     KhoslaVenturesScraper,
-    "polsia":     PolsiaScraper,
+    "indiepage": IndiePageScraper,
+    "tiny": TinyComScraper,
+    "claude": ClaudeCustomersScraper,
+    "khosla": KhoslaVenturesScraper,
+    "polsia": PolsiaScraper,
 }
 
 
 if __name__ == "__main__":
     import argparse
-    logging.basicConfig(level=logging.INFO,
-                        format="%(asctime)s %(levelname)s %(message)s",
-                        datefmt="%H:%M:%S")
+
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s", datefmt="%H:%M:%S")
     p = argparse.ArgumentParser()
     p.add_argument("--program", required=True, choices=list(SCRAPERS))
-    p.add_argument("--max", type=int, default=None,
-                   help="Cap records (default: full portfolio)")
-    p.add_argument("--slugs", nargs="*",
-                   help="Explicit slugs for YC / GC / Lux (skip sitemap)")
-    p.add_argument("--jsonl", type=str, default=None,
-                   help="Append every record to this JSONL file as it's scraped")
+    p.add_argument("--max", type=int, default=None, help="Cap records (default: full portfolio)")
+    p.add_argument("--slugs", nargs="*", help="Explicit slugs for YC / GC / Lux (skip sitemap)")
+    p.add_argument("--jsonl", type=str, default=None, help="Append every record to this JSONL file as it's scraped")
     args = p.parse_args()
 
     s = SCRAPERS[args.program](max_records=args.max)
@@ -1339,8 +1383,6 @@ if __name__ == "__main__":
     if not args.jsonl:
         preview = records[:5]
         for r in preview:
-            d = {k: v for k, v in asdict(r).items()
-                 if k != "scraped_at" and v not in (None, "", [], {})}
+            d = {k: v for k, v in asdict(r).items() if k != "scraped_at" and v not in (None, "", [], {})}
             print(json.dumps(d, default=str, indent=2))
-    print(f"\n=> {len(records)} records from {args.program}" +
-          (f" -> {args.jsonl}" if args.jsonl else ""))
+    print(f"\n=> {len(records)} records from {args.program}" + (f" -> {args.jsonl}" if args.jsonl else ""))

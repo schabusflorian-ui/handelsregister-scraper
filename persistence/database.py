@@ -561,24 +561,32 @@ class Database:
                 updated_at TEXT DEFAULT CURRENT_TIMESTAMP
             )
         """)
-        cursor.execute("CREATE INDEX IF NOT EXISTS idx_stealth_entities_score   ON stealth_entities(composite_score DESC)")
+        cursor.execute(
+            "CREATE INDEX IF NOT EXISTS idx_stealth_entities_score   ON stealth_entities(composite_score DESC)"
+        )
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_stealth_entities_name    ON stealth_entities(primary_name)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_stealth_entities_domain  ON stealth_entities(primary_domain)")
-        cursor.execute("CREATE INDEX IF NOT EXISTS idx_stealth_entities_last    ON stealth_entities(last_signal_at DESC)")
+        cursor.execute(
+            "CREATE INDEX IF NOT EXISTS idx_stealth_entities_last    ON stealth_entities(last_signal_at DESC)"
+        )
 
         # Idempotent column adds for an older signals schema. MUST run
         # before any index that references the added columns.
         existing_cols = {r[1] for r in cursor.execute("PRAGMA table_info(stealth_entities)")}
         for col, col_type in [
-            ("is_person",          "INTEGER DEFAULT 0"),
+            ("is_person", "INTEGER DEFAULT 0"),
             ("founder_confidence", "REAL DEFAULT 0.0"),
-            ("person_role",        "TEXT"),
+            ("person_role", "TEXT"),
         ]:
             if col not in existing_cols:
                 cursor.execute(f"ALTER TABLE stealth_entities ADD COLUMN {col} {col_type}")
 
-        cursor.execute("CREATE INDEX IF NOT EXISTS idx_stealth_entities_person  ON stealth_entities(is_person, founder_confidence DESC)")
-        cursor.execute("CREATE INDEX IF NOT EXISTS idx_stealth_entities_founder ON stealth_entities(founder_confidence DESC)")
+        cursor.execute(
+            "CREATE INDEX IF NOT EXISTS idx_stealth_entities_person  ON stealth_entities(is_person, founder_confidence DESC)"
+        )
+        cursor.execute(
+            "CREATE INDEX IF NOT EXISTS idx_stealth_entities_founder ON stealth_entities(founder_confidence DESC)"
+        )
 
         self.conn.commit()
 

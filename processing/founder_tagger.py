@@ -22,30 +22,90 @@ from typing import Dict, List, Optional, Tuple
 # ============================================================
 
 FAANG = {
-    "google", "alphabet", "meta", "facebook", "amazon", "apple",
-    "microsoft", "netflix", "deepmind", "openai",
+    "google",
+    "alphabet",
+    "meta",
+    "facebook",
+    "amazon",
+    "apple",
+    "microsoft",
+    "netflix",
+    "deepmind",
+    "openai",
 }
 
 UNICORNS = {
-    "n26", "revolut", "stripe", "klarna", "adyen", "checkout.com",
-    "celonis", "personio", "flixbus", "wefox", "trade republic",
-    "contentful", "mambu", "scalable capital", "wise", "transferwise",
-    "delivery hero", "hellofresh", "zalando", "auto1", "about you",
-    "spotify", "airbnb", "uber", "shopify", "databricks", "snowflake",
-    "palantir", "figma", "canva", "notion",
+    "n26",
+    "revolut",
+    "stripe",
+    "klarna",
+    "adyen",
+    "checkout.com",
+    "celonis",
+    "personio",
+    "flixbus",
+    "wefox",
+    "trade republic",
+    "contentful",
+    "mambu",
+    "scalable capital",
+    "wise",
+    "transferwise",
+    "delivery hero",
+    "hellofresh",
+    "zalando",
+    "auto1",
+    "about you",
+    "spotify",
+    "airbnb",
+    "uber",
+    "shopify",
+    "databricks",
+    "snowflake",
+    "palantir",
+    "figma",
+    "canva",
+    "notion",
 }
 
 TOP_VCS = {
-    "sequoia", "a16z", "andreessen", "accel", "benchmark", "greylock",
-    "index ventures", "atomico", "balderton", "lakestar", "earlybird",
-    "hv capital", "project a", "cherry ventures", "point nine",
-    "speedinvest", "creandum", "northzone", "y combinator", "yc",
-    "techstars", "entrepreneur first", "ef", "antler",
+    "sequoia",
+    "a16z",
+    "andreessen",
+    "accel",
+    "benchmark",
+    "greylock",
+    "index ventures",
+    "atomico",
+    "balderton",
+    "lakestar",
+    "earlybird",
+    "hv capital",
+    "project a",
+    "cherry ventures",
+    "point nine",
+    "speedinvest",
+    "creandum",
+    "northzone",
+    "y combinator",
+    "yc",
+    "techstars",
+    "entrepreneur first",
+    "ef",
+    "antler",
 }
 
 TOP_CONSULTING = {
-    "mckinsey", "bain", "bcg", "boston consulting", "roland berger",
-    "oliver wyman", "deloitte", "pwc", "kpmg", "accenture",
+    "mckinsey",
+    "bain",
+    "bcg",
+    "boston consulting",
+    "roland berger",
+    "oliver wyman",
+    "deloitte",
+    "pwc",
+    "kpmg",
+    "accenture",
 }
 
 # ============================================================
@@ -151,7 +211,8 @@ def classify_ex_companies(headline: Optional[str], signals: list) -> Tuple[Optio
     if headline:
         for match in re.finditer(
             r"(?:ex[- ])(\w[\w& .]*?)(?:\s*[|,\-–]|\s+(?:Senior|Director|VP|Head|Manager|Engineer|Founder|CEO|CTO|at )|\s*$)",
-            headline, re.IGNORECASE,
+            headline,
+            re.IGNORECASE,
         ):
             company = match.group(1).strip().rstrip(".")
             if company.lower() not in [c.lower() for c in companies_found] and len(company) > 1:
@@ -181,8 +242,7 @@ def classify_ex_companies(headline: Optional[str], signals: list) -> Tuple[Optio
 def classify_sectors(headline: Optional[str], signals: list) -> Optional[List[str]]:
     """Extract sector tags from headline and signals."""
     text = " ".join([headline or ""] + signals).lower()
-    sectors = [sector for sector, pattern in SECTOR_PATTERNS.items()
-               if re.search(pattern, text, re.IGNORECASE)]
+    sectors = [sector for sector, pattern in SECTOR_PATTERNS.items() if re.search(pattern, text, re.IGNORECASE)]
     return sectors or None
 
 
@@ -197,9 +257,15 @@ def classify_stealth_strength(headline: Optional[str], signals: list) -> str:
         return "confirmed"
 
     likely_signals = {
-        "building something", "something new", "working on something",
-        "new venture", "next chapter", "im aufbau", "coming soon",
-        "pre-seed", "exploring opportunities",
+        "building something",
+        "something new",
+        "working on something",
+        "new venture",
+        "next chapter",
+        "im aufbau",
+        "coming soon",
+        "pre-seed",
+        "exploring opportunities",
     }
     if signal_set & likely_signals:
         return "likely"
@@ -262,7 +328,9 @@ def tag_founder(
         "founder_role": classify_role(headline, signals_list),
         "ex_company_tier": ex_tier,
         "ex_companies": json.dumps(ex_companies) if ex_companies else None,
-        "sector_tags": json.dumps(classify_sectors(headline, signals_list)) if classify_sectors(headline, signals_list) else None,
+        "sector_tags": json.dumps(classify_sectors(headline, signals_list))
+        if classify_sectors(headline, signals_list)
+        else None,
         "stealth_strength": classify_stealth_strength(headline, signals_list),
         "data_quality": classify_data_quality(name, headline),
         "geo_region": classify_geo(location),

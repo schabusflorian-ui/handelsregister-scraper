@@ -640,12 +640,19 @@ class NewsMonitor:
             r"\bgenerative\s+(?:ai|ki)\b",
             r"\blarge\s+language\s+model\b",
             r"\bfoundation\s+model\b",
-            r"\brobotik\b", r"\brobotics\b", r"\brobot(?:er)?\b", r"\bcobot\b",
+            r"\brobotik\b",
+            r"\brobotics\b",
+            r"\brobot(?:er)?\b",
+            r"\bcobot\b",
             r"\bautonome\s+(?:systeme|fahrzeuge|fahren)\b",
             r"\bcomputer\s+vision\b",
-            r"\bcleantech\b", r"\bgreentech\b", r"\bclimate\s*tech\b",
-            r"\bwasserstoff\b", r"\bhydrogen\b",
-            r"\bphotovoltaik\b", r"\bsolar(?:energie|energy)\b",
+            r"\bcleantech\b",
+            r"\bgreentech\b",
+            r"\bclimate\s*tech\b",
+            r"\bwasserstoff\b",
+            r"\bhydrogen\b",
+            r"\bphotovoltaik\b",
+            r"\bsolar(?:energie|energy)\b",
             r"\bwindenergie\b",
             r"\belektromobilität\b",
             r"\bKI-\w+",  # KI-Startup, KI-Firma, etc.
@@ -654,8 +661,11 @@ class NewsMonitor:
         weak_patterns = [
             r"\bAI\b",
             r"\bKI\b",
-            r"\bnlp\b", r"\bchatbot\b", r"\bllm\b",
-            r"\bdrohne\b", r"\bdrone\b",
+            r"\bnlp\b",
+            r"\bchatbot\b",
+            r"\bllm\b",
+            r"\bdrohne\b",
+            r"\bdrone\b",
             r"\bsmart\s+factory\b",
             r"\bdata\s+science\b",
             r"\berneuerbare\s+energie\b",
@@ -770,18 +780,20 @@ class NewsMonitor:
                 company = match.group(1).strip()
                 if self._is_valid_company_name(company):
                     amount = float(match.group(2).replace(",", ".")) * 1_000_000
-                    mentions.append(FundingMention(
-                        company_name=company,
-                        investors=self._extract_investors(deal),
-                        amount=amount,
-                        currency="EUR",
-                        round_type=self._extract_round_type(deal),
-                        article_url=article.url,
-                        article_title=article.title,
-                        source=article.source,
-                        extracted_at=datetime.utcnow().isoformat(),
-                        confidence=0.9,
-                    ))
+                    mentions.append(
+                        FundingMention(
+                            company_name=company,
+                            investors=self._extract_investors(deal),
+                            amount=amount,
+                            currency="EUR",
+                            round_type=self._extract_round_type(deal),
+                            article_url=article.url,
+                            article_title=article.title,
+                            source=article.source,
+                            extracted_at=datetime.utcnow().isoformat(),
+                            confidence=0.9,
+                        )
+                    )
 
         return mentions
 
@@ -971,10 +983,25 @@ class NewsMonitor:
         """Strip trailing verbs/articles that got captured by greedy regex."""
         # Common trailing words that aren't part of company names
         trailing_verbs = {
-            "erhält", "sammelt", "bekommt", "sichert", "schließt",
-            "hat", "haben", "will", "wird", "kann", "soll",
-            "raises", "secures", "closes", "announces", "gets",
-            "receives", "launches", "lands",
+            "erhält",
+            "sammelt",
+            "bekommt",
+            "sichert",
+            "schließt",
+            "hat",
+            "haben",
+            "will",
+            "wird",
+            "kann",
+            "soll",
+            "raises",
+            "secures",
+            "closes",
+            "announces",
+            "gets",
+            "receives",
+            "launches",
+            "lands",
         }
         words = name.split()
         # Strip trailing non-name words

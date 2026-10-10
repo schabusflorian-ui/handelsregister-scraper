@@ -32,9 +32,9 @@ from .common import ensure_json, iso_now
 
 logger = logging.getLogger(__name__)
 
-MAX_OFFICER_HITS = 2        # names shared by > this many officers = ambiguous → skip
-MIN_TOKENS       = 2
-MIN_TOKEN_LEN    = 3
+MAX_OFFICER_HITS = 2  # names shared by > this many officers = ambiguous → skip
+MIN_TOKENS = 2
+MIN_TOKEN_LEN = 3
 
 
 _DIRTY_NAME_RX = re.compile(r"[–—|:/\\(){}\[\]]|  +|\.\.\.|\d{3,}")
@@ -85,9 +85,7 @@ def _common_name_keys(cur) -> set:
     common-name blacklist. Keys are lowercase (first_token, last_token)
     tuples using the SAME normalization as _clean_person_name."""
     counts: dict = {}
-    for r in cur.execute(
-        "SELECT name FROM officers WHERE name IS NOT NULL"
-    ):
+    for r in cur.execute("SELECT name FROM officers WHERE name IS NOT NULL"):
         k = _clean_person_name(r["name"])
         if k is None:
             continue
@@ -114,8 +112,9 @@ def _is_startup_shaped(row) -> bool:
     name match carries no signal."""
     try:
         seen = str(row["first_seen_date"] or "")[:10]
-        young = seen >= (datetime.now(timezone.utc).date().replace(
-            year=datetime.now(timezone.utc).year - 2).isoformat())
+        young = seen >= (
+            datetime.now(timezone.utc).date().replace(year=datetime.now(timezone.utc).year - 2).isoformat()
+        )
     except (ValueError, TypeError):
         young = False
     return bool(
@@ -129,8 +128,7 @@ def _is_startup_shaped(row) -> bool:
 def adapt_officers(conn, *, min_founder_confidence: float = 0.3) -> dict:
     cur = conn.cursor()
     common_keys = _common_name_keys(cur)
-    logger.info("officer adapter: %d common (first,last) keys blacklisted",
-                len(common_keys))
+    logger.info("officer adapter: %d common (first,last) keys blacklisted", len(common_keys))
 
     # Build a (first, last) → [officer rows] index once. Cheaper than N
     # fuzzy SQL lookups when we have thousands of founders to probe.
@@ -147,8 +145,7 @@ def adapt_officers(conn, *, min_founder_confidence: float = 0.3) -> dict:
         if k is None or k in common_keys:
             continue
         officer_index.setdefault(k, []).append(r)
-    logger.info("officer adapter: index built for %d distinct names",
-                len(officer_index))
+    logger.info("officer adapter: index built for %d distinct names", len(officer_index))
 
     founders = cur.execute(
         """SELECT id, name, linkedin_url, headline, confidence_score,
@@ -227,13 +224,15 @@ def adapt_officers(conn, *, min_founder_confidence: float = 0.3) -> dict:
                     sf["linkedin_url"],
                     ensure_json(tags),
                     sf["geo_region"] or "DE",
-                    ensure_json({
-                        "founder_id": sf["id"],
-                        "company_id": m["company_id"],
-                        "role": m["role"],
-                        "start_date": m["start_date"],
-                        "headline": sf["headline"],
-                    }),
+                    ensure_json(
+                        {
+                            "founder_id": sf["id"],
+                            "company_id": m["company_id"],
+                            "role": m["role"],
+                            "start_date": m["start_date"],
+                            "headline": sf["headline"],
+                        }
+                    ),
                     conf,
                 ),
             )
@@ -252,6 +251,7 @@ def adapt_officers(conn, *, min_founder_confidence: float = 0.3) -> dict:
 
 def main():
     import argparse
+
     p = argparse.ArgumentParser()
     p.add_argument("--db", default="handelsregister.db")
     args = p.parse_args()

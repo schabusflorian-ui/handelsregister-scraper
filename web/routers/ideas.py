@@ -53,12 +53,12 @@ def _safe_fts_query(q: Optional[str]) -> str:
     words = [w for w in cleaned.split() if w.strip()]
     return " ".join(f"{w}*" for w in words)
 
+
 def _ideas_tables_exist(db) -> bool:
     """Cheap check: are the idea-pipeline tables present at all? On a
     fresh Railway deploy they won't be until scrapers + jobs have run."""
     row = db.conn.execute(
-        "SELECT COUNT(*) FROM sqlite_master "
-        "WHERE type='table' AND name IN ('company_ideas', 'idea_extraction')"
+        "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name IN ('company_ideas', 'idea_extraction')"
     ).fetchone()
     return bool(row and row[0] >= 2)
 
@@ -71,6 +71,7 @@ def _ensure_views(db) -> None:
         return
     try:
         from scheduler.jobs.idea_gap_queries import setup_views
+
         setup_views(db)
     except Exception as e:  # noqa: BLE001
         logger.warning("failed to auto-create views: %s", e)
@@ -87,24 +88,26 @@ def _safe_query(db, sql: str, params: tuple = ()) -> list:
 
 def _query_stats(db) -> Dict[str, int]:
     cur = db.conn.cursor()
+
     def _one(sql: str) -> int:
         try:
             row = cur.execute(sql).fetchone()
             return int(row[0]) if row and row[0] is not None else 0
         except Exception:  # noqa: BLE001
             return 0
+
     return {
-        "ideas":                _one("SELECT COUNT(*) FROM company_ideas"),
-        "extracted":            _one("SELECT COUNT(*) FROM idea_extraction WHERE error IS NULL"),
-        "clusters":             _one("SELECT COUNT(*) FROM idea_clusters WHERE cluster_id != -1 AND parent_cluster_id IS NULL"),
-        "subclusters":          _one("SELECT COUNT(*) FROM idea_clusters WHERE parent_cluster_id IS NOT NULL"),
-        "launch_candidates":    _one("SELECT COUNT(*) FROM v_launch_candidates_loose"),
-        "launch_strict":        _one("SELECT COUNT(*) FROM v_launch_candidates_strict"),
-        "rebuild_candidates":   _one("SELECT COUNT(*) FROM idea_clusters WHERE era_class='rebuild_candidate'"),
-        "hot_clusters":         _one("SELECT COUNT(*) FROM idea_clusters WHERE era_class='hot'"),
-        "mechanisms":           _one("SELECT COUNT(*) FROM v_mechanism_totals"),
-        "sectors":              _one("SELECT COUNT(*) FROM v_sector_totals"),
-        "populated_cells":      _one("SELECT COUNT(*) FROM v_matrix"),
+        "ideas": _one("SELECT COUNT(*) FROM company_ideas"),
+        "extracted": _one("SELECT COUNT(*) FROM idea_extraction WHERE error IS NULL"),
+        "clusters": _one("SELECT COUNT(*) FROM idea_clusters WHERE cluster_id != -1 AND parent_cluster_id IS NULL"),
+        "subclusters": _one("SELECT COUNT(*) FROM idea_clusters WHERE parent_cluster_id IS NOT NULL"),
+        "launch_candidates": _one("SELECT COUNT(*) FROM v_launch_candidates_loose"),
+        "launch_strict": _one("SELECT COUNT(*) FROM v_launch_candidates_strict"),
+        "rebuild_candidates": _one("SELECT COUNT(*) FROM idea_clusters WHERE era_class='rebuild_candidate'"),
+        "hot_clusters": _one("SELECT COUNT(*) FROM idea_clusters WHERE era_class='hot'"),
+        "mechanisms": _one("SELECT COUNT(*) FROM v_mechanism_totals"),
+        "sectors": _one("SELECT COUNT(*) FROM v_sector_totals"),
+        "populated_cells": _one("SELECT COUNT(*) FROM v_matrix"),
     }
 
 
@@ -119,16 +122,22 @@ def _heatmap_data(db, n_mechanisms: int = 25, n_sectors: int = 20) -> Dict:
         "max_n":      maximum cell count (for color scale)
       }
     """
-    mechs: List[str] = [r[0] for r in _safe_query(
-        db,
-        "SELECT mechanism FROM v_mechanism_totals ORDER BY n DESC LIMIT ?",
-        (n_mechanisms,),
-    )]
-    sectors: List[str] = [r[0] for r in _safe_query(
-        db,
-        "SELECT sector FROM v_sector_totals ORDER BY n DESC LIMIT ?",
-        (n_sectors,),
-    )]
+    mechs: List[str] = [
+        r[0]
+        for r in _safe_query(
+            db,
+            "SELECT mechanism FROM v_mechanism_totals ORDER BY n DESC LIMIT ?",
+            (n_mechanisms,),
+        )
+    ]
+    sectors: List[str] = [
+        r[0]
+        for r in _safe_query(
+            db,
+            "SELECT sector FROM v_sector_totals ORDER BY n DESC LIMIT ?",
+            (n_sectors,),
+        )
+    ]
     if not mechs or not sectors:
         return {"mechanisms": [], "sectors": [], "cells": [], "max_n": 0}
 
@@ -139,8 +148,7 @@ def _heatmap_data(db, n_mechanisms: int = 25, n_sectors: int = 20) -> Dict:
     qmarks_s = ",".join("?" * len(sectors))
     rows = _safe_query(
         db,
-        f"SELECT mechanism, sector, n FROM v_matrix "
-        f"WHERE mechanism IN ({qmarks_m}) AND sector IN ({qmarks_s})",
+        f"SELECT mechanism, sector, n FROM v_matrix WHERE mechanism IN ({qmarks_m}) AND sector IN ({qmarks_s})",
         (*mechs, *sectors),
     )
 
@@ -155,7 +163,9 @@ def _heatmap_data(db, n_mechanisms: int = 25, n_sectors: int = 20) -> Dict:
 
 
 def _top_launch_candidates(db, limit: int = 12) -> List[Dict]:
-    rows = _safe_query(db, """
+    rows = _safe_query(
+        db,
+        """
         SELECT ci.id, ci.program, ci.company, ci.year_founded, ci.company_website,
                ie.problem_statement, ie.mechanism_tags, ie.sector_tags,
                ie.customer_size, ie.business_model,
@@ -169,12 +179,16 @@ def _top_launch_candidates(db, limit: int = 12) -> List[Dict]:
            AND ci.company IS NOT NULL AND ci.company != ''
          ORDER BY ci.year_founded DESC, ci.id DESC
          LIMIT ?
-        """, (limit,))
+        """,
+        (limit,),
+    )
     return [dict(r) for r in rows]
 
 
 def _top_rebuild_candidates(db, limit: int = 10) -> List[Dict]:
-    rows = _safe_query(db, """
+    rows = _safe_query(
+        db,
+        """
         SELECT cluster_id, label, size, median_year, count_2023_plus,
                count_pre_2015, count_2015_2022,
                CASE WHEN parent_cluster_id IS NULL THEN 'parent' ELSE 'sub' END AS level
@@ -182,18 +196,23 @@ def _top_rebuild_candidates(db, limit: int = 10) -> List[Dict]:
          WHERE era_class = 'rebuild_candidate'
          ORDER BY size DESC
          LIMIT ?
-        """, (limit,))
+        """,
+        (limit,),
+    )
     return [dict(r) for r in rows]
 
 
 def _era_distribution(db) -> List[Dict]:
-    rows = _safe_query(db, """
+    rows = _safe_query(
+        db,
+        """
         SELECT era_class, COUNT(*) AS n, SUM(size) AS companies
           FROM idea_clusters
          WHERE cluster_id != -1
          GROUP BY era_class
          ORDER BY n DESC
-        """)
+        """,
+    )
     return [dict(r) for r in rows]
 
 
@@ -256,16 +275,14 @@ def _top_ranked_gaps(db, limit: int = 20) -> List[Dict]:
              GROUP BY mechanism, sector
             """
         ).fetchall()
-        votes = {(r["mechanism"], r["sector"]): {"up": r["up"], "down": r["down"]}
-                 for r in vote_rows}
+        votes = {(r["mechanism"], r["sector"]): {"up": r["up"], "down": r["down"]} for r in vote_rows}
     except Exception:  # noqa: BLE001
         votes = {}
 
     out: List[Dict] = []
     for g in gaps:
         gd = dict(g)
-        gd["votes"] = votes.get((gd["mechanism"], gd["sector"]),
-                                {"up": 0, "down": 0})
+        gd["votes"] = votes.get((gd["mechanism"], gd["sector"]), {"up": 0, "down": 0})
         # Pull 3 example companies that use this mechanism *elsewhere* (in
         # any sector other than the gap sector) — concrete proof it works.
         try:
@@ -289,17 +306,21 @@ def _top_ranked_gaps(db, limit: int = 20) -> List[Dict]:
 
 
 def _solo_ai_matrix(db) -> List[Dict]:
-    rows = _safe_query(db, """
+    rows = _safe_query(
+        db,
+        """
         SELECT solo_buildable AS solo, ai_first_advantage AS ai_first,
                COUNT(*) AS n
           FROM idea_extraction
          WHERE error IS NULL AND solo_buildable IS NOT NULL AND ai_first_advantage IS NOT NULL
          GROUP BY solo_buildable, ai_first_advantage
-        """)
+        """,
+    )
     return [dict(r) for r in rows]
 
 
 # --- routes ----------------------------------------------------------------
+
 
 @router.get("/ideas", response_class=HTMLResponse)
 async def ideas_overview(request: Request):
@@ -309,12 +330,12 @@ async def ideas_overview(request: Request):
         _ensure_views(db)
         _ensure_gap_feedback(db)
         context = {
-            "stats":              _query_stats(db),
-            "era_distribution":   _era_distribution(db),
-            "solo_ai_matrix":     _solo_ai_matrix(db),
-            "launch_candidates":  _top_launch_candidates(db, limit=12),
+            "stats": _query_stats(db),
+            "era_distribution": _era_distribution(db),
+            "solo_ai_matrix": _solo_ai_matrix(db),
+            "launch_candidates": _top_launch_candidates(db, limit=12),
             "rebuild_candidates": _top_rebuild_candidates(db, limit=10),
-            "top_gaps":           _top_ranked_gaps(db, limit=20),
+            "top_gaps": _top_ranked_gaps(db, limit=20),
         }
         return templates.TemplateResponse(
             name="ideas/overview.html",
@@ -330,11 +351,11 @@ async def ideas_overview(request: Request):
 # ---------------------------------------------------------------------------
 
 _LAUNCH_FACETS = (
-    ("program",        "ci.program"),
-    ("customer_size",  "ie.customer_size"),
+    ("program", "ci.program"),
+    ("customer_size", "ie.customer_size"),
     ("business_model", "ie.business_model"),
-    ("moat_type",      "ie.moat_type"),
-    ("niche",          "ie.niche_specificity"),
+    ("moat_type", "ie.moat_type"),
+    ("niche", "ie.niche_specificity"),
 )
 
 
@@ -431,6 +452,7 @@ async def ideas_shortlist():
     /ideas/launch-candidates sorted by opportunity_score, page size 50.
     """
     from fastapi.responses import RedirectResponse
+
     return RedirectResponse(
         "/ideas/launch-candidates?sort=score&per_page=50",
         status_code=302,
@@ -463,14 +485,21 @@ async def ideas_launch_candidates(
         _ensure_views(db)
         strict_only = strict == "1"
         where_sql, params = _build_launch_filter(
-            q, program, customer_size, business_model, moat, niche,
-            solo, ai_first, strict_only,
+            q,
+            program,
+            customer_size,
+            business_model,
+            moat,
+            niche,
+            solo,
+            ai_first,
+            strict_only,
         )
 
         # Sort options: score (default — newly added), recent, name.
         sort_sql = {
-            "score":  "ci.opportunity_score DESC NULLS LAST, ci.year_founded DESC NULLS LAST, ci.id DESC",
-            "name":   "ci.company ASC",
+            "score": "ci.opportunity_score DESC NULLS LAST, ci.year_founded DESC NULLS LAST, ci.id DESC",
+            "name": "ci.company ASC",
             "recent": "ci.year_founded DESC NULLS LAST, ci.id DESC",
         }.get(sort or "score", "ci.opportunity_score DESC NULLS LAST, ci.year_founded DESC NULLS LAST, ci.id DESC")
 
@@ -509,12 +538,19 @@ async def ideas_launch_candidates(
         # Rebuild canonical querystring (no &page) so the pagination partial
         # can preserve filters.
         from urllib.parse import urlencode
+
         qs_parts: list[tuple[str, str]] = []
         for k, v in [
-            ("q", q), ("program", program), ("customer_size", customer_size),
-            ("business_model", business_model), ("moat", moat),
-            ("niche", niche), ("solo", solo), ("ai_first", ai_first),
-            ("strict", "1" if strict_only else None), ("sort", sort),
+            ("q", q),
+            ("program", program),
+            ("customer_size", customer_size),
+            ("business_model", business_model),
+            ("moat", moat),
+            ("niche", niche),
+            ("solo", solo),
+            ("ai_first", ai_first),
+            ("strict", "1" if strict_only else None),
+            ("sort", sort),
             ("per_page", str(per_page) if per_page != 25 else None),
         ]:
             if v:
@@ -563,6 +599,7 @@ async def ideas_launch_candidates(
 def _idea_row_dict(row) -> Dict:
     """Common JSON shape for a single idea row, used by multiple endpoints."""
     import json as _j
+
     d = dict(row)
     for k in ("mechanism_tags", "sector_tags", "customer_verticals"):
         v = d.get(k)
@@ -620,33 +657,66 @@ async def ideas_api_search(
         year_min_int = int(year_min) if year_min and year_min.strip().lstrip("-").isdigit() else None
         year_max_int = int(year_max) if year_max and year_max.strip().lstrip("-").isdigit() else None
 
-        any_filter = any([
-            q and q.strip(), program, mechanism, sector, era, business_model,
-            moat, niche, customer_size, solo, ai_first,
-            year_min_int is not None, year_max_int is not None,
-        ])
+        any_filter = any(
+            [
+                q and q.strip(),
+                program,
+                mechanism,
+                sector,
+                era,
+                business_model,
+                moat,
+                niche,
+                customer_size,
+                solo,
+                ai_first,
+                year_min_int is not None,
+                year_max_int is not None,
+            ]
+        )
         active_filters = {
-            "q": q or None, "program": program, "mechanism": mechanism,
-            "sector": sector, "era": era, "business_model": business_model,
-            "moat": moat, "niche": niche, "customer_size": customer_size,
-            "solo": solo, "ai_first": ai_first,
-            "year_min": year_min_int, "year_max": year_max_int,
+            "q": q or None,
+            "program": program,
+            "mechanism": mechanism,
+            "sector": sector,
+            "era": era,
+            "business_model": business_model,
+            "moat": moat,
+            "niche": niche,
+            "customer_size": customer_size,
+            "solo": solo,
+            "ai_first": ai_first,
+            "year_min": year_min_int,
+            "year_max": year_max_int,
         }
         active_filters = {k: v for k, v in active_filters.items() if v not in (None, "")}
 
         if not any_filter:
-            return JSONResponse({
-                "query": q or "",
-                "filters": active_filters,
-                "total": 0,
-                "offset": offset,
-                "limit": limit,
-                "results": [],
-            })
+            return JSONResponse(
+                {
+                    "query": q or "",
+                    "filters": active_filters,
+                    "total": 0,
+                    "offset": offset,
+                    "limit": limit,
+                    "results": [],
+                }
+            )
 
         where_sql, params = _build_search_filter(
-            q, program, mechanism, sector, era, business_model,
-            moat, niche, customer_size, solo, ai_first, year_min_int, year_max_int,
+            q,
+            program,
+            mechanism,
+            sector,
+            era,
+            business_model,
+            moat,
+            niche,
+            customer_size,
+            solo,
+            ai_first,
+            year_min_int,
+            year_max_int,
         )
         cur = db.conn.cursor()
         total_row = cur.execute(
@@ -675,14 +745,16 @@ async def ideas_api_search(
             """,
             (*params, min(limit, 200), offset),
         ).fetchall()
-        return JSONResponse({
-            "query": q or "",
-            "filters": active_filters,
-            "total": int(total),
-            "offset": offset,
-            "limit": min(limit, 200),
-            "results": [_idea_row_dict(r) for r in rows],
-        })
+        return JSONResponse(
+            {
+                "query": q or "",
+                "filters": active_filters,
+                "total": int(total),
+                "offset": offset,
+                "limit": min(limit, 200),
+                "results": [_idea_row_dict(r) for r in rows],
+            }
+        )
     finally:
         db.close()
 
@@ -697,8 +769,10 @@ async def ideas_api_cluster(cluster_id: int, limit: int = 50):
         if c is None:
             raise HTTPException(status_code=404, detail="cluster not found")
         cur = db.conn.cursor()
-        members = [_idea_row_dict(r) for r in cur.execute(
-            """
+        members = [
+            _idea_row_dict(r)
+            for r in cur.execute(
+                """
             SELECT ci.id, ci.program, ci.company, ci.year_founded,
                    ci.one_liner, ci.company_website, ci.cluster_id,
                    ie.problem_statement, ie.mechanism_tags, ie.sector_tags,
@@ -710,8 +784,9 @@ async def ideas_api_cluster(cluster_id: int, limit: int = 50):
              ORDER BY ci.year_founded DESC NULLS LAST, ci.id DESC
              LIMIT ?
             """,
-            (cluster_id, min(limit, 200)),
-        ).fetchall()]
+                (cluster_id, min(limit, 200)),
+            ).fetchall()
+        ]
         return JSONResponse({"cluster": c, "members": members})
     finally:
         db.close()
@@ -765,14 +840,16 @@ async def ideas_api_gap(mechanism: str, sector: str, limit: int = 20):
             min(limit, 50),
         )
 
-        return JSONResponse({
-            "mechanism": mechanism,
-            "sector": sector,
-            "ranking": dict(ranking) if ranking else None,
-            "in_cell": in_cell,
-            "mechanism_proven_elsewhere": mech_elsewhere,
-            "sector_active_with_other_mechanisms": sector_elsewhere,
-        })
+        return JSONResponse(
+            {
+                "mechanism": mechanism,
+                "sector": sector,
+                "ranking": dict(ranking) if ranking else None,
+                "in_cell": in_cell,
+                "mechanism_proven_elsewhere": mech_elsewhere,
+                "sector_active_with_other_mechanisms": sector_elsewhere,
+            }
+        )
     finally:
         db.close()
 
@@ -828,6 +905,7 @@ async def ideas_api_idea(idea_id: int):
 # Map  — /ideas/map  (2-D UMAP scatter, populated by scripts.compute_idea_map)
 # ---------------------------------------------------------------------------
 
+
 @router.get("/ideas/map", response_class=HTMLResponse)
 async def ideas_map(request: Request):
     db = get_db()
@@ -838,8 +916,7 @@ async def ideas_map(request: Request):
         cur = db.conn.cursor()
         try:
             n_coords = cur.execute(
-                "SELECT COUNT(*) FROM company_ideas "
-                "WHERE umap_x IS NOT NULL AND umap_y IS NOT NULL"
+                "SELECT COUNT(*) FROM company_ideas WHERE umap_x IS NOT NULL AND umap_y IS NOT NULL"
             ).fetchone()[0]
         except Exception:  # noqa: BLE001
             n_coords = 0
@@ -894,10 +971,10 @@ async def ideas_api_map(
             match_params.append(int(ai_first))
         if mechanism:
             match_clauses.append("ie.mechanism_tags LIKE ?")
-            match_params.append(f"%\"{mechanism}\"%")
+            match_params.append(f'%"{mechanism}"%')
         if sector:
             match_clauses.append("ie.sector_tags LIKE ?")
-            match_params.append(f"%\"{sector}\"%")
+            match_params.append(f'%"{sector}"%')
         if business_model:
             match_clauses.append("ie.business_model = ?")
             match_params.append(business_model)
@@ -922,7 +999,7 @@ async def ideas_api_map(
                        CASE WHEN {match_expr} THEN 1 ELSE 0 END AS match_flag
                   FROM company_ideas ci
                   {joined}
-                 WHERE {' AND '.join(base_clauses)}
+                 WHERE {" AND ".join(base_clauses)}
                  LIMIT ?
             """
             params = [*match_params, int(limit)]
@@ -945,49 +1022,66 @@ async def ideas_api_map(
         rows = db.conn.execute(sql, params).fetchall()
 
         # Picklists for the filter selects. Static across filters.
-        programs = [r[0] for r in db.conn.execute(
-            "SELECT DISTINCT program FROM company_ideas WHERE program IS NOT NULL ORDER BY program"
-        )]
-        business_models = [r[0] for r in db.conn.execute(
-            "SELECT DISTINCT business_model FROM idea_extraction "
-            "WHERE business_model IS NOT NULL AND business_model != '' "
-            "ORDER BY business_model"
-        )]
-        moat_types = [r[0] for r in db.conn.execute(
-            "SELECT DISTINCT moat_type FROM idea_extraction "
-            "WHERE moat_type IS NOT NULL AND moat_type != '' "
-            "ORDER BY moat_type"
-        )]
-        niche_options = [r[0] for r in db.conn.execute(
-            "SELECT DISTINCT niche_specificity FROM idea_extraction "
-            "WHERE niche_specificity IS NOT NULL AND niche_specificity != '' "
-            "ORDER BY niche_specificity"
-        )]
+        programs = [
+            r[0]
+            for r in db.conn.execute(
+                "SELECT DISTINCT program FROM company_ideas WHERE program IS NOT NULL ORDER BY program"
+            )
+        ]
+        business_models = [
+            r[0]
+            for r in db.conn.execute(
+                "SELECT DISTINCT business_model FROM idea_extraction "
+                "WHERE business_model IS NOT NULL AND business_model != '' "
+                "ORDER BY business_model"
+            )
+        ]
+        moat_types = [
+            r[0]
+            for r in db.conn.execute(
+                "SELECT DISTINCT moat_type FROM idea_extraction "
+                "WHERE moat_type IS NOT NULL AND moat_type != '' "
+                "ORDER BY moat_type"
+            )
+        ]
+        niche_options = [
+            r[0]
+            for r in db.conn.execute(
+                "SELECT DISTINCT niche_specificity FROM idea_extraction "
+                "WHERE niche_specificity IS NOT NULL AND niche_specificity != '' "
+                "ORDER BY niche_specificity"
+            )
+        ]
 
         points = [
-            [float(r["umap_x"]), float(r["umap_y"]),
-             int(r["cluster_id"]) if r["cluster_id"] is not None else -9999,
-             int(r["id"]), r["program"],
-             (r["company"] or "")[:60],
-             r["business_model"] or "",
-             r["moat_type"] or "",
-             r["niche_specificity"] or "",
-             int(r["solo_buildable"]) if r["solo_buildable"] is not None else -1,
-             int(r["ai_first_advantage"]) if r["ai_first_advantage"] is not None else -1,
-             int(r["match_flag"]),
+            [
+                float(r["umap_x"]),
+                float(r["umap_y"]),
+                int(r["cluster_id"]) if r["cluster_id"] is not None else -9999,
+                int(r["id"]),
+                r["program"],
+                (r["company"] or "")[:60],
+                r["business_model"] or "",
+                r["moat_type"] or "",
+                r["niche_specificity"] or "",
+                int(r["solo_buildable"]) if r["solo_buildable"] is not None else -1,
+                int(r["ai_first_advantage"]) if r["ai_first_advantage"] is not None else -1,
+                int(r["match_flag"]),
             ]
             for r in rows
         ]
         match_count = sum(1 for p in points if p[11] == 1)
-        return JSONResponse({
-            "count": len(points),
-            "match_count": match_count,
-            "programs": programs,
-            "business_models": business_models,
-            "moat_types": moat_types,
-            "niche_options": niche_options,
-            "points": points,
-        })
+        return JSONResponse(
+            {
+                "count": len(points),
+                "match_count": match_count,
+                "programs": programs,
+                "business_models": business_models,
+                "moat_types": moat_types,
+                "niche_options": niche_options,
+                "points": points,
+            }
+        )
     finally:
         db.close()
 
@@ -1019,6 +1113,7 @@ async def ideas_api_idea_card(idea_id: int):
         if not row:
             raise HTTPException(status_code=404, detail="not found")
         import json as _j
+
         d = dict(row)
         for k in ("mechanism_tags", "sector_tags"):
             try:
@@ -1038,11 +1133,11 @@ async def ideas_api_idea_card(idea_id: int):
 # (param_name, sql_column). Era is handled separately because it lives on
 # idea_clusters, not idea_extraction.
 _SEARCH_FACETS = (
-    ("program",        "ci.program"),
+    ("program", "ci.program"),
     ("business_model", "ie.business_model"),
-    ("moat",           "ie.moat_type"),
-    ("niche",          "ie.niche_specificity"),
-    ("customer_size",  "ie.customer_size"),
+    ("moat", "ie.moat_type"),
+    ("niche", "ie.niche_specificity"),
+    ("customer_size", "ie.customer_size"),
 )
 
 
@@ -1100,21 +1195,15 @@ def _build_search_filter(
     # JSON-array tag filters (mechanism_tags / sector_tags). SQLite's json_each
     # iterates the array; EXISTS short-circuits as soon as a match is found.
     if mechanism:
-        clauses.append(
-            "EXISTS (SELECT 1 FROM json_each(ie.mechanism_tags) WHERE value = ?)"
-        )
+        clauses.append("EXISTS (SELECT 1 FROM json_each(ie.mechanism_tags) WHERE value = ?)")
         params.append(mechanism)
     if sector:
-        clauses.append(
-            "EXISTS (SELECT 1 FROM json_each(ie.sector_tags) WHERE value = ?)"
-        )
+        clauses.append("EXISTS (SELECT 1 FROM json_each(ie.sector_tags) WHERE value = ?)")
         params.append(sector)
 
     # Era lives on idea_clusters; join via cluster_id.
     if era:
-        clauses.append(
-            "ci.cluster_id IN (SELECT cluster_id FROM idea_clusters WHERE era_class = ?)"
-        )
+        clauses.append("ci.cluster_id IN (SELECT cluster_id FROM idea_clusters WHERE era_class = ?)")
         params.append(era)
 
     # FTS prefix-match across both FTS tables.
@@ -1205,11 +1294,23 @@ async def ideas_search(
     try:
         _ensure_views(db)
 
-        any_filter = any([
-            q and q.strip(), program, mechanism, sector, era, business_model,
-            moat, niche, customer_size, solo, ai_first,
-            year_min_int is not None, year_max_int is not None,
-        ])
+        any_filter = any(
+            [
+                q and q.strip(),
+                program,
+                mechanism,
+                sector,
+                era,
+                business_model,
+                moat,
+                niche,
+                customer_size,
+                solo,
+                ai_first,
+                year_min_int is not None,
+                year_max_int is not None,
+            ]
+        )
 
         rows: List[Dict] = []
         total = 0
@@ -1217,9 +1318,19 @@ async def ideas_search(
 
         if any_filter:
             where_sql, params = _build_search_filter(
-                q, program, mechanism, sector, era, business_model,
-                moat, niche, customer_size, solo, ai_first,
-                year_min_int, year_max_int,
+                q,
+                program,
+                mechanism,
+                sector,
+                era,
+                business_model,
+                moat,
+                niche,
+                customer_size,
+                solo,
+                ai_first,
+                year_min_int,
+                year_max_int,
             )
             cur = db.conn.cursor()
 
@@ -1234,8 +1345,10 @@ async def ideas_search(
             total = int(total_row[0]) if total_row else 0
 
             offset = max(0, (page - 1) * per_page)
-            rows = [dict(r) for r in cur.execute(
-                f"""
+            rows = [
+                dict(r)
+                for r in cur.execute(
+                    f"""
                 SELECT ci.id, ci.program, ci.company, ci.year_founded,
                        ci.one_liner, ci.company_website, ci.cluster_id,
                        ie.problem_statement, ie.mechanism_tags, ie.sector_tags,
@@ -1248,8 +1361,9 @@ async def ideas_search(
                  ORDER BY ci.year_founded DESC NULLS LAST, ci.id DESC
                  LIMIT ? OFFSET ?
                 """,
-                (*params, per_page, offset),
-            )]
+                    (*params, per_page, offset),
+                )
+            ]
 
             facets = _search_facet_counts(db, where_sql, tuple(params))
 
@@ -1273,14 +1387,12 @@ async def ideas_search(
         }
 
         from urllib.parse import urlencode
+
         base_qs = urlencode([(k, v) for k, v in filters.items() if v])
 
         # Pre-compute "remove this one filter" URLs for each active chip.
         # The chip macro reads chip_links[name] as the href.
-        chip_links = {
-            name: urlencode([(k, v) for k, v in filters.items() if v and k != name])
-            for name in filters
-        }
+        chip_links = {name: urlencode([(k, v) for k, v in filters.items() if v and k != name]) for name in filters}
 
         return templates.TemplateResponse(
             name="ideas/search.html",
@@ -1307,6 +1419,7 @@ async def ideas_search(
 # ---------------------------------------------------------------------------
 # Idea detail  — /ideas/{id}
 # ---------------------------------------------------------------------------
+
 
 @router.get("/ideas/{idea_id:int}", response_class=HTMLResponse)
 async def ideas_detail(request: Request, idea_id: int):
@@ -1342,21 +1455,26 @@ async def ideas_detail(request: Request, idea_id: int):
         # Neighbors in the same cluster — cheap "similar" view.
         neighbors: List[Dict] = []
         if row["cluster_id"] is not None and row["cluster_id"] != -1:
-            neighbors = [dict(r) for r in cur.execute(
-                """
+            neighbors = [
+                dict(r)
+                for r in cur.execute(
+                    """
                 SELECT id, company, program, year_founded, one_liner
                   FROM company_ideas
                  WHERE cluster_id = ? AND id != ?
                  ORDER BY year_founded DESC NULLS LAST
                  LIMIT 8
                 """,
-                (row["cluster_id"], idea_id),
-            )]
+                    (row["cluster_id"], idea_id),
+                )
+            ]
 
         # Semantic "similar to this" — from pre-computed idea_nearest,
         # spans the whole corpus (not restricted to one cluster).
-        similar: List[Dict] = [dict(r) for r in cur.execute(
-            """
+        similar: List[Dict] = [
+            dict(r)
+            for r in cur.execute(
+                """
             SELECT n.rank, n.similarity,
                    ci.id, ci.company, ci.program, ci.year_founded,
                    ci.one_liner, ci.opportunity_score,
@@ -1369,8 +1487,9 @@ async def ideas_detail(request: Request, idea_id: int):
              ORDER BY n.rank
              LIMIT 10
             """,
-            (idea_id,),
-        )]
+                (idea_id,),
+            )
+        ]
 
         return templates.TemplateResponse(
             name="ideas/detail.html",
@@ -1384,6 +1503,7 @@ async def ideas_detail(request: Request, idea_id: int):
 # ---------------------------------------------------------------------------
 # Cluster drill-down  — /ideas/clusters/{cluster_id}
 # ---------------------------------------------------------------------------
+
 
 def _load_cluster(db, cluster_id: int) -> Optional[Dict]:
     """Full cluster row with JSON columns parsed + parent's label hydrated.
@@ -1410,6 +1530,7 @@ def _load_cluster(db, cluster_id: int) -> Optional[Dict]:
         return None
     d = dict(row)
     import json as _j
+
     for f in ("top_terms", "top_tags", "representative_ids"):
         try:
             d[f] = _j.loads(d[f]) if d[f] else []
@@ -1511,18 +1632,22 @@ async def ideas_cluster_detail(
         reps: List[Dict] = []
         if rep_ids:
             placeholders = ",".join("?" * len(rep_ids))
-            reps = [dict(r) for r in cur.execute(
-                f"""
+            reps = [
+                dict(r)
+                for r in cur.execute(
+                    f"""
                 SELECT id, company, program, year_founded, one_liner,
                        company_website
                   FROM company_ideas
                  WHERE id IN ({placeholders})
                  LIMIT 8
                 """,
-                rep_ids,
-            )]
+                    rep_ids,
+                )
+            ]
 
         from urllib.parse import urlencode
+
         qs_parts = []
         if q:
             qs_parts.append(("q", q))
@@ -1588,7 +1713,9 @@ def _timeline_data(
     if mode == "era":
         # year × era heatmap via idea_clusters join. Era is small (~5
         # values) so top_n is irrelevant — return all eras.
-        rows = _safe_query(db, """
+        rows = _safe_query(
+            db,
+            """
             SELECT ci.year_founded AS year,
                    COALESCE(c.era_class, 'unknown') AS category,
                    COUNT(*) AS n
@@ -1597,10 +1724,14 @@ def _timeline_data(
              WHERE ci.year_founded IS NOT NULL
                AND ci.year_founded >= ?
              GROUP BY ci.year_founded, COALESCE(c.era_class, 'unknown')
-        """, (year_min,))
+        """,
+            (year_min,),
+        )
     else:
         col = "mechanism_tags" if mode == "mechanism" else "sector_tags"
-        rows = _safe_query(db, f"""
+        rows = _safe_query(
+            db,
+            f"""
             SELECT ci.year_founded AS year,
                    je.value AS category,
                    COUNT(*) AS n
@@ -1611,7 +1742,9 @@ def _timeline_data(
                AND ci.year_founded >= ?
                AND je.value IS NOT NULL AND je.value != ''
              GROUP BY ci.year_founded, je.value
-        """, (year_min,))
+        """,
+            (year_min,),
+        )
 
     if not rows:
         return {"years": [], "categories": [], "cells": [], "max_n": 0}
@@ -1687,10 +1820,10 @@ async def ideas_api_stats():
 
 class GapVote(BaseModel):
     mechanism: str = Field(..., min_length=1, max_length=120)
-    sector:    str = Field(..., min_length=1, max_length=120)
+    sector: str = Field(..., min_length=1, max_length=120)
     # 1 = interesting / keep surfacing; -1 = not interesting; 0 = clear
-    vote:      int = Field(..., ge=-1, le=1)
-    note:      Optional[str] = Field(default=None, max_length=500)
+    vote: int = Field(..., ge=-1, le=1)
+    note: Optional[str] = Field(default=None, max_length=500)
 
 
 @router.post("/ideas/api/gap-feedback")
@@ -1710,10 +1843,8 @@ async def ideas_gap_feedback(payload: GapVote):
         )
         if payload.vote != 0:
             cur.execute(
-                "INSERT INTO gap_feedback (mechanism, sector, vote, note) "
-                "VALUES (?, ?, ?, ?)",
-                (payload.mechanism, payload.sector,
-                 payload.vote, payload.note),
+                "INSERT INTO gap_feedback (mechanism, sector, vote, note) VALUES (?, ?, ?, ?)",
+                (payload.mechanism, payload.sector, payload.vote, payload.note),
             )
         db.conn.commit()
         row = cur.execute(
@@ -1726,11 +1857,13 @@ async def ideas_gap_feedback(payload: GapVote):
             """,
             (payload.mechanism, payload.sector),
         ).fetchone()
-        return JSONResponse({
-            "ok": True,
-            "up":   int(row["up"] or 0) if row else 0,
-            "down": int(row["down"] or 0) if row else 0,
-        })
+        return JSONResponse(
+            {
+                "ok": True,
+                "up": int(row["up"] or 0) if row else 0,
+                "down": int(row["down"] or 0) if row else 0,
+            }
+        )
     finally:
         db.close()
 
@@ -1812,26 +1945,30 @@ async def admin_ideas_seed(request: Request, file: UploadFile = File(...)):
         rebuilt = {}
         try:
             from scheduler.jobs.idea_fts_setup_job import run as run_fts
+
             run_fts(os.environ.get("DATABASE_PATH", "/data/handelsregister.db"))
             rebuilt["fts"] = "ok"
         except Exception as e:  # noqa: BLE001
             rebuilt["fts"] = f"skipped: {e}"
         try:
             from scheduler.jobs.idea_gap_queries import setup_views
+
             setup_views(db)
             rebuilt["views"] = "ok"
         except Exception as e:  # noqa: BLE001
             rebuilt["views"] = f"skipped: {e}"
 
-        return JSONResponse({
-            "ok": True,
-            "filename": file.filename,
-            "upload_bytes": len(raw),
-            "decompressed_bytes": len(sql),
-            "duration_s": round(time.monotonic() - t0, 1),
-            "counts": counts,
-            "rebuilt": rebuilt,
-        })
+        return JSONResponse(
+            {
+                "ok": True,
+                "filename": file.filename,
+                "upload_bytes": len(raw),
+                "decompressed_bytes": len(sql),
+                "duration_s": round(time.monotonic() - t0, 1),
+                "counts": counts,
+                "rebuilt": rebuilt,
+            }
+        )
     finally:
         db.close()
 
@@ -1840,8 +1977,7 @@ async def admin_ideas_seed(request: Request, file: UploadFile = File(...)):
 async def admin_ideas_seed_info():
     """Small self-describing GET so the endpoint is discoverable."""
     return {
-        "hint": "POST a .sql.gz produced by `python3 scripts/dump_idea_tables.py` "
-                "with multipart field name 'file'.",
+        "hint": "POST a .sql.gz produced by `python3 scripts/dump_idea_tables.py` with multipart field name 'file'.",
         "tables": SEED_TABLES,
         "max_bytes": SEED_MAX_BYTES,
         "token_required": _seed_token_required() is not None,
@@ -1851,6 +1987,7 @@ async def admin_ideas_seed_info():
 # ===========================================================================
 # /ideas/api/scatter.json — UMAP 2D map of idea space
 # ===========================================================================
+
 
 @router.get("/ideas/api/scatter.json")
 async def ideas_api_scatter():
@@ -1878,28 +2015,46 @@ async def ideas_api_scatter():
         # Normalize categorical strings into small integers so each row stays
         # cheap — extracted twice (here and in the JS) but the wire format
         # gets ~30% smaller.
-        eras = [r[0] for r in cur.execute(
-            "SELECT DISTINCT era_class FROM idea_clusters "
-            "WHERE era_class IS NOT NULL ORDER BY era_class").fetchall()]
-        programs = [r[0] for r in cur.execute(
-            "SELECT DISTINCT program FROM company_ideas "
-            "WHERE program IS NOT NULL ORDER BY program").fetchall()]
-        bms = [r[0] for r in cur.execute(
-            "SELECT DISTINCT business_model FROM idea_extraction "
-            "WHERE business_model IS NOT NULL AND business_model != '' "
-            "ORDER BY business_model").fetchall()]
-        moats = [r[0] for r in cur.execute(
-            "SELECT DISTINCT moat_type FROM idea_extraction "
-            "WHERE moat_type IS NOT NULL AND moat_type != '' "
-            "ORDER BY moat_type").fetchall()]
-        niches = [r[0] for r in cur.execute(
-            "SELECT DISTINCT niche_specificity FROM idea_extraction "
-            "WHERE niche_specificity IS NOT NULL AND niche_specificity != '' "
-            "ORDER BY niche_specificity").fetchall()]
+        eras = [
+            r[0]
+            for r in cur.execute(
+                "SELECT DISTINCT era_class FROM idea_clusters WHERE era_class IS NOT NULL ORDER BY era_class"
+            ).fetchall()
+        ]
+        programs = [
+            r[0]
+            for r in cur.execute(
+                "SELECT DISTINCT program FROM company_ideas WHERE program IS NOT NULL ORDER BY program"
+            ).fetchall()
+        ]
+        bms = [
+            r[0]
+            for r in cur.execute(
+                "SELECT DISTINCT business_model FROM idea_extraction "
+                "WHERE business_model IS NOT NULL AND business_model != '' "
+                "ORDER BY business_model"
+            ).fetchall()
+        ]
+        moats = [
+            r[0]
+            for r in cur.execute(
+                "SELECT DISTINCT moat_type FROM idea_extraction "
+                "WHERE moat_type IS NOT NULL AND moat_type != '' "
+                "ORDER BY moat_type"
+            ).fetchall()
+        ]
+        niches = [
+            r[0]
+            for r in cur.execute(
+                "SELECT DISTINCT niche_specificity FROM idea_extraction "
+                "WHERE niche_specificity IS NOT NULL AND niche_specificity != '' "
+                "ORDER BY niche_specificity"
+            ).fetchall()
+        ]
 
-        era_idx  = {e: i for i, e in enumerate(eras)}
+        era_idx = {e: i for i, e in enumerate(eras)}
         prog_idx = {p: i for i, p in enumerate(programs)}
-        bm_idx   = {b: i for i, b in enumerate(bms)}
+        bm_idx = {b: i for i, b in enumerate(bms)}
         moat_idx = {m: i for i, m in enumerate(moats)}
         niche_idx = {n: i for i, n in enumerate(niches)}
 
@@ -1919,21 +2074,23 @@ async def ideas_api_scatter():
         rows = []
         for r in rows_raw:
             desc = (r["one_liner"] or "")[:140]
-            rows.append([
-                round(float(r["umap_x"]), 3),
-                round(float(r["umap_y"]), 3),
-                int(r["cluster_id"]) if r["cluster_id"] is not None else -1,
-                era_idx.get(r["era_class"], -1),
-                prog_idx.get(r["program"], -1),
-                int(r["id"]),
-                r["company"][:60] if r["company"] else "",
-                desc,
-                bm_idx.get(r["business_model"], -1),
-                moat_idx.get(r["moat_type"], -1),
-                niche_idx.get(r["niche_specificity"], -1),
-                int(r["solo_buildable"]) if r["solo_buildable"] is not None else -1,
-                int(r["ai_first_advantage"]) if r["ai_first_advantage"] is not None else -1,
-            ])
+            rows.append(
+                [
+                    round(float(r["umap_x"]), 3),
+                    round(float(r["umap_y"]), 3),
+                    int(r["cluster_id"]) if r["cluster_id"] is not None else -1,
+                    era_idx.get(r["era_class"], -1),
+                    prog_idx.get(r["program"], -1),
+                    int(r["id"]),
+                    r["company"][:60] if r["company"] else "",
+                    desc,
+                    bm_idx.get(r["business_model"], -1),
+                    moat_idx.get(r["moat_type"], -1),
+                    niche_idx.get(r["niche_specificity"], -1),
+                    int(r["solo_buildable"]) if r["solo_buildable"] is not None else -1,
+                    int(r["ai_first_advantage"]) if r["ai_first_advantage"] is not None else -1,
+                ]
+            )
 
         # Cluster labels for hover — only include the ones present in rows.
         cids = sorted({row[2] for row in rows if row[2] != -1})
@@ -1946,15 +2103,17 @@ async def ideas_api_scatter():
             ):
                 cluster_map[int(r["cluster_id"])] = r["label"] or f"cluster {r['cluster_id']}"
 
-        return JSONResponse({
-            "rows":        rows,
-            "era_map":     {i: e for i, e in enumerate(eras)},
-            "program_map": {i: p for i, p in enumerate(programs)},
-            "bm_map":      {i: b for i, b in enumerate(bms)},
-            "moat_map":    {i: m for i, m in enumerate(moats)},
-            "niche_map":   {i: n for i, n in enumerate(niches)},
-            "cluster_map": {str(k): v for k, v in cluster_map.items()},
-        })
+        return JSONResponse(
+            {
+                "rows": rows,
+                "era_map": {i: e for i, e in enumerate(eras)},
+                "program_map": {i: p for i, p in enumerate(programs)},
+                "bm_map": {i: b for i, b in enumerate(bms)},
+                "moat_map": {i: m for i, m in enumerate(moats)},
+                "niche_map": {i: n for i, n in enumerate(niches)},
+                "cluster_map": {str(k): v for k, v in cluster_map.items()},
+            }
+        )
     finally:
         db.close()
 
@@ -1963,31 +2122,39 @@ async def ideas_api_scatter():
 # /ideas/clusters/{cluster_id} — drill into one cluster
 # ===========================================================================
 
+
 def _cluster_children(db, cluster_id: int) -> List[Dict]:
-    rows = db.conn.execute("""
+    rows = db.conn.execute(
+        """
         SELECT cluster_id, label, size, era_class,
                median_year, count_2023_plus, count_pre_2015
           FROM idea_clusters
          WHERE parent_cluster_id = ?
          ORDER BY size DESC
-    """, (cluster_id,)).fetchall()
+    """,
+        (cluster_id,),
+    ).fetchall()
     return [dict(r) for r in rows]
 
 
 def _cluster_siblings(db, parent_id: int, current_id: int) -> List[Dict]:
-    rows = db.conn.execute("""
+    rows = db.conn.execute(
+        """
         SELECT cluster_id, label, size, era_class, median_year, count_2023_plus
           FROM idea_clusters
          WHERE parent_cluster_id = ? AND cluster_id != ?
          ORDER BY size DESC
          LIMIT 10
-    """, (parent_id, current_id)).fetchall()
+    """,
+        (parent_id, current_id),
+    ).fetchall()
     return [dict(r) for r in rows]
 
 
 def _cluster_mechanism_sector_breakdown(db, cluster_id: int) -> Dict[str, List]:
     """Top mechanisms + sectors within this cluster's members."""
-    mechs = db.conn.execute("""
+    mechs = db.conn.execute(
+        """
         SELECT c.mechanism AS tag, COUNT(DISTINCT c.company_id) AS n
           FROM v_mechanism_sector_cells c
           JOIN company_ideas ci ON ci.id = c.company_id
@@ -1995,8 +2162,11 @@ def _cluster_mechanism_sector_breakdown(db, cluster_id: int) -> Dict[str, List]:
          GROUP BY c.mechanism
          ORDER BY n DESC
          LIMIT 12
-    """, (cluster_id,)).fetchall()
-    sectors = db.conn.execute("""
+    """,
+        (cluster_id,),
+    ).fetchall()
+    sectors = db.conn.execute(
+        """
         SELECT c.sector AS tag, COUNT(DISTINCT c.company_id) AS n
           FROM v_mechanism_sector_cells c
           JOIN company_ideas ci ON ci.id = c.company_id
@@ -2004,10 +2174,12 @@ def _cluster_mechanism_sector_breakdown(db, cluster_id: int) -> Dict[str, List]:
          GROUP BY c.sector
          ORDER BY n DESC
          LIMIT 12
-    """, (cluster_id,)).fetchall()
+    """,
+        (cluster_id,),
+    ).fetchall()
     return {
         "mechanisms": [dict(r) for r in mechs],
-        "sectors":    [dict(r) for r in sectors],
+        "sectors": [dict(r) for r in sectors],
     }
 
 
@@ -2026,22 +2198,24 @@ async def ideas_api_cluster_sunburst(cluster_id: int):
         children = _cluster_children(db, root_id)
 
         # ECharts sunburst expects nested {name, value, children?}
-        data = [{
-            "name": root["label"] or f"cluster {root_id}",
-            "cluster_id": root_id,
-            "era": root.get("era_class"),
-            "value": root["size"],
-            "children": [
-                {
-                    "name": c["label"] or f"cluster {c['cluster_id']}",
-                    "cluster_id": c["cluster_id"],
-                    "era": c.get("era_class"),
-                    "value": c["size"],
-                    "current": c["cluster_id"] == cluster_id,
-                }
-                for c in children
-            ],
-        }]
+        data = [
+            {
+                "name": root["label"] or f"cluster {root_id}",
+                "cluster_id": root_id,
+                "era": root.get("era_class"),
+                "value": root["size"],
+                "children": [
+                    {
+                        "name": c["label"] or f"cluster {c['cluster_id']}",
+                        "cluster_id": c["cluster_id"],
+                        "era": c.get("era_class"),
+                        "value": c["size"],
+                        "current": c["cluster_id"] == cluster_id,
+                    }
+                    for c in children
+                ],
+            }
+        ]
         return JSONResponse({"data": data, "current_cluster_id": cluster_id})
     finally:
         db.close()
@@ -2060,99 +2234,140 @@ async def ideas_api_cluster_sunburst(cluster_id: int):
 # one-sentence task-oriented description, not a routing summary.
 _API_CATALOG = [
     # ----- core JSON ---------------------------------------------------------
-    {"method": "GET",  "path": "/ideas/api/stats.json",
-     "desc": "Pipeline totals (ideas, extracted, clusters, launch_candidates).",
-     "example": "/ideas/api/stats.json",
-     "returns": "object with scalar counts"},
-    {"method": "GET",  "path": "/ideas/api/schema.json",
-     "desc": "Data dictionary: tables, enum domains, top tag vocabularies, "
-             "column descriptions. Hit this FIRST to orient.",
-     "example": "/ideas/api/schema.json",
-     "returns": "object with 'tables', 'enums', 'vocab', 'columns'"},
-    {"method": "GET",  "path": "/ideas/api/index.json",
-     "desc": "This endpoint. Lists every /ideas/api/* route with examples.",
-     "example": "/ideas/api/index.json",
-     "returns": "object with 'endpoints' array"},
-
+    {
+        "method": "GET",
+        "path": "/ideas/api/stats.json",
+        "desc": "Pipeline totals (ideas, extracted, clusters, launch_candidates).",
+        "example": "/ideas/api/stats.json",
+        "returns": "object with scalar counts",
+    },
+    {
+        "method": "GET",
+        "path": "/ideas/api/schema.json",
+        "desc": "Data dictionary: tables, enum domains, top tag vocabularies, "
+        "column descriptions. Hit this FIRST to orient.",
+        "example": "/ideas/api/schema.json",
+        "returns": "object with 'tables', 'enums', 'vocab', 'columns'",
+    },
+    {
+        "method": "GET",
+        "path": "/ideas/api/index.json",
+        "desc": "This endpoint. Lists every /ideas/api/* route with examples.",
+        "example": "/ideas/api/index.json",
+        "returns": "object with 'endpoints' array",
+    },
     # ----- full-text + drill --------------------------------------------------
-    {"method": "GET",  "path": "/ideas/api/search.json",
-     "desc": "Full-text search across company, problem_statement, tags. "
-             "Hit this to find ideas about a specific topic.",
-     "params": {"q": "required search string", "limit": "default 50"},
-     "example": "/ideas/api/search.json?q=invoice+reconciliation",
-     "returns": "array of hit objects (company, program, year, preview)"},
-    {"method": "GET",  "path": "/ideas/api/idea/{idea_id}.json",
-     "desc": "Full joined row for one company (company_ideas + extraction + "
-             "enrichment + cluster).",
-     "example": "/ideas/api/idea/1820.json",
-     "returns": "single object"},
-    {"method": "GET",  "path": "/ideas/api/idea-card/{idea_id}",
-     "desc": "Compact JSON card for UI preview (subset of idea/{id}).",
-     "example": "/ideas/api/idea-card/1820",
-     "returns": "single object"},
-    {"method": "GET",  "path": "/ideas/api/similar/{idea_id}.json",
-     "desc": "Top-k semantic neighbours for one company across the whole "
-             "corpus (pre-computed, cosine similarity over MiniLM). Use "
-             "this to pivot from any company to closely-related ideas.",
-     "params": {"k": "1-25, default 10"},
-     "example": "/ideas/api/similar/1820.json?k=10",
-     "returns": "object with 'source' + 'neighbors' array"},
-
+    {
+        "method": "GET",
+        "path": "/ideas/api/search.json",
+        "desc": "Full-text search across company, problem_statement, tags. "
+        "Hit this to find ideas about a specific topic.",
+        "params": {"q": "required search string", "limit": "default 50"},
+        "example": "/ideas/api/search.json?q=invoice+reconciliation",
+        "returns": "array of hit objects (company, program, year, preview)",
+    },
+    {
+        "method": "GET",
+        "path": "/ideas/api/idea/{idea_id}.json",
+        "desc": "Full joined row for one company (company_ideas + extraction + enrichment + cluster).",
+        "example": "/ideas/api/idea/1820.json",
+        "returns": "single object",
+    },
+    {
+        "method": "GET",
+        "path": "/ideas/api/idea-card/{idea_id}",
+        "desc": "Compact JSON card for UI preview (subset of idea/{id}).",
+        "example": "/ideas/api/idea-card/1820",
+        "returns": "single object",
+    },
+    {
+        "method": "GET",
+        "path": "/ideas/api/similar/{idea_id}.json",
+        "desc": "Top-k semantic neighbours for one company across the whole "
+        "corpus (pre-computed, cosine similarity over MiniLM). Use "
+        "this to pivot from any company to closely-related ideas.",
+        "params": {"k": "1-25, default 10"},
+        "example": "/ideas/api/similar/1820.json?k=10",
+        "returns": "object with 'source' + 'neighbors' array",
+    },
     # ----- clustering --------------------------------------------------------
-    {"method": "GET",  "path": "/ideas/api/cluster/{cluster_id}.json",
-     "desc": "Cluster metadata + sample members.",
-     "example": "/ideas/api/cluster/30.json",
-     "returns": "object with cluster header + members array"},
-    {"method": "GET",  "path": "/ideas/api/cluster/{cluster_id}/sunburst.json",
-     "desc": "Hierarchical data for an ECharts sunburst (parent + children).",
-     "example": "/ideas/api/cluster/30/sunburst.json",
-     "returns": "object with 'data' (nested tree)"},
-
+    {
+        "method": "GET",
+        "path": "/ideas/api/cluster/{cluster_id}.json",
+        "desc": "Cluster metadata + sample members.",
+        "example": "/ideas/api/cluster/30.json",
+        "returns": "object with cluster header + members array",
+    },
+    {
+        "method": "GET",
+        "path": "/ideas/api/cluster/{cluster_id}/sunburst.json",
+        "desc": "Hierarchical data for an ECharts sunburst (parent + children).",
+        "example": "/ideas/api/cluster/30/sunburst.json",
+        "returns": "object with 'data' (nested tree)",
+    },
     # ----- mechanism × sector matrix + gaps -----------------------------------
-    {"method": "GET",  "path": "/ideas/api/heatmap.json",
-     "desc": "Mechanism × sector heatmap cells for top N of each axis.",
-     "params": {"n_mechanisms": "default 25", "n_sectors": "default 20"},
-     "example": "/ideas/api/heatmap.json?n_mechanisms=30&n_sectors=25",
-     "returns": "object with 'mechanisms', 'sectors', 'cells' (x, y, n)"},
-    {"method": "GET",  "path": "/ideas/api/gaps.json",
-     "desc": "Top scored recombination gaps from idea_gap_ranking.",
-     "example": "/ideas/api/gaps.json",
-     "returns": "array of {mechanism, sector, score, ...}"},
-    {"method": "GET",  "path": "/ideas/api/gap/{mechanism}/{sector}.json",
-     "desc": "Proof rows for a specific (mechanism, sector) gap — companies "
-             "adjacent to the gap in related sectors.",
-     "example": "/ideas/api/gap/llm-copilot/legal.json",
-     "returns": "object with proof rows + neighbours"},
-
+    {
+        "method": "GET",
+        "path": "/ideas/api/heatmap.json",
+        "desc": "Mechanism × sector heatmap cells for top N of each axis.",
+        "params": {"n_mechanisms": "default 25", "n_sectors": "default 20"},
+        "example": "/ideas/api/heatmap.json?n_mechanisms=30&n_sectors=25",
+        "returns": "object with 'mechanisms', 'sectors', 'cells' (x, y, n)",
+    },
+    {
+        "method": "GET",
+        "path": "/ideas/api/gaps.json",
+        "desc": "Top scored recombination gaps from idea_gap_ranking.",
+        "example": "/ideas/api/gaps.json",
+        "returns": "array of {mechanism, sector, score, ...}",
+    },
+    {
+        "method": "GET",
+        "path": "/ideas/api/gap/{mechanism}/{sector}.json",
+        "desc": "Proof rows for a specific (mechanism, sector) gap — companies adjacent to the gap in related sectors.",
+        "example": "/ideas/api/gap/llm-copilot/legal.json",
+        "returns": "object with proof rows + neighbours",
+    },
     # ----- maps + scatter ----------------------------------------------------
-    {"method": "GET",  "path": "/ideas/api/scatter.json",
-     "desc": "Full UMAP 2D scatter — every row with (x, y, cluster_id, era_idx, "
-             "program_idx, id, company, desc). ~20K points, ~2MB.",
-     "example": "/ideas/api/scatter.json",
-     "returns": "object with 'rows', 'era_map', 'program_map', 'cluster_map'"},
-    {"method": "GET",  "path": "/ideas/api/map.json",
-     "desc": "Smaller sampled map (default 100 points, optional program filter).",
-     "example": "/ideas/api/map.json?program=Y+Combinator",
-     "returns": "array of points"},
-
+    {
+        "method": "GET",
+        "path": "/ideas/api/scatter.json",
+        "desc": "Full UMAP 2D scatter — every row with (x, y, cluster_id, era_idx, "
+        "program_idx, id, company, desc). ~20K points, ~2MB.",
+        "example": "/ideas/api/scatter.json",
+        "returns": "object with 'rows', 'era_map', 'program_map', 'cluster_map'",
+    },
+    {
+        "method": "GET",
+        "path": "/ideas/api/map.json",
+        "desc": "Smaller sampled map (default 100 points, optional program filter).",
+        "example": "/ideas/api/map.json?program=Y+Combinator",
+        "returns": "array of points",
+    },
     # ----- feedback (writeable) ----------------------------------------------
-    {"method": "POST", "path": "/ideas/api/gap-feedback",
-     "desc": "Record an up/down vote on a (mechanism, sector) gap.",
-     "body": "{mechanism, sector, vote: 1 | -1, note?}",
-     "example": "POST /ideas/api/gap-feedback",
-     "returns": "object with current up/down counts"},
-
+    {
+        "method": "POST",
+        "path": "/ideas/api/gap-feedback",
+        "desc": "Record an up/down vote on a (mechanism, sector) gap.",
+        "body": "{mechanism, sector, vote: 1 | -1, note?}",
+        "example": "POST /ideas/api/gap-feedback",
+        "returns": "object with current up/down counts",
+    },
     # ----- admin (auth-gated) ------------------------------------------------
-    {"method": "POST", "path": "/admin/ideas/seed",
-     "desc": "Restore the idea tables from a gzipped SQL dump. Requires "
-             "X-Seed-Token header.",
-     "example": "curl -H 'X-Seed-Token: ...' -F file=@dump.sql.gz ...",
-     "returns": "object with per-table row counts"},
-    {"method": "GET",  "path": "/admin/ideas/seed",
-     "desc": "Self-describing hint for the POST above. Shows whether the "
-             "token is required.",
-     "example": "/admin/ideas/seed",
-     "returns": "object with 'tables', 'token_required'"},
+    {
+        "method": "POST",
+        "path": "/admin/ideas/seed",
+        "desc": "Restore the idea tables from a gzipped SQL dump. Requires X-Seed-Token header.",
+        "example": "curl -H 'X-Seed-Token: ...' -F file=@dump.sql.gz ...",
+        "returns": "object with per-table row counts",
+    },
+    {
+        "method": "GET",
+        "path": "/admin/ideas/seed",
+        "desc": "Self-describing hint for the POST above. Shows whether the token is required.",
+        "example": "/admin/ideas/seed",
+        "returns": "object with 'tables', 'token_required'",
+    },
 ]
 
 
@@ -2160,48 +2375,48 @@ _API_CATALOG = [
 # parsing DDL. When a new column is added to idea_extraction /
 # company_ideas / idea_clusters, add a line here.
 _FIELD_DOCS = {
-    "company_ideas.id":                  "Integer primary key. Use in /ideas/{id} and /ideas/api/idea/{id}.json.",
-    "company_ideas.program":             "Source program (YC, GC, Lux, Playground Global, Speedrun, Sequoia Arc, Show HN, Reddit *).",
-    "company_ideas.company":             "Company name; may be empty for Reddit/HN rows where no brand was parsed.",
-    "company_ideas.one_liner":           "Short hand-written pitch from the source scrape.",
-    "company_ideas.long_description":    "Longer paragraph from the source scrape.",
-    "company_ideas.tags_json":           "JSON array of raw source tags.",
-    "company_ideas.company_website":     "As-scraped website URL (not normalized).",
-    "company_ideas.normalized_website":  "Host-only, lowercase, no www/trailing slash. Use for joins.",
-    "company_ideas.batch":               "Cohort label (W24, SR003, Arc Europe 2022, 2026-01 for HN monthly, ...).",
-    "company_ideas.year_founded":        "Integer year. Backfilled from batch label or raw_json where possible.",
-    "company_ideas.country":             "ISO-ish country name.",
-    "company_ideas.cluster_id":          "Leaf cluster id. Noise rows have -1.",
-    "company_ideas.umap_x":              "2D UMAP coordinate (float).",
-    "company_ideas.umap_y":              "2D UMAP coordinate (float).",
-    "company_ideas.opportunity_score":   "0-100 composite launch score. 90+ = top, 75-89 = strong, 60-74 = worth looking, <40 = skip. NULL means no extraction.",
+    "company_ideas.id": "Integer primary key. Use in /ideas/{id} and /ideas/api/idea/{id}.json.",
+    "company_ideas.program": "Source program (YC, GC, Lux, Playground Global, Speedrun, Sequoia Arc, Show HN, Reddit *).",
+    "company_ideas.company": "Company name; may be empty for Reddit/HN rows where no brand was parsed.",
+    "company_ideas.one_liner": "Short hand-written pitch from the source scrape.",
+    "company_ideas.long_description": "Longer paragraph from the source scrape.",
+    "company_ideas.tags_json": "JSON array of raw source tags.",
+    "company_ideas.company_website": "As-scraped website URL (not normalized).",
+    "company_ideas.normalized_website": "Host-only, lowercase, no www/trailing slash. Use for joins.",
+    "company_ideas.batch": "Cohort label (W24, SR003, Arc Europe 2022, 2026-01 for HN monthly, ...).",
+    "company_ideas.year_founded": "Integer year. Backfilled from batch label or raw_json where possible.",
+    "company_ideas.country": "ISO-ish country name.",
+    "company_ideas.cluster_id": "Leaf cluster id. Noise rows have -1.",
+    "company_ideas.umap_x": "2D UMAP coordinate (float).",
+    "company_ideas.umap_y": "2D UMAP coordinate (float).",
+    "company_ideas.opportunity_score": "0-100 composite launch score. 90+ = top, 75-89 = strong, 60-74 = worth looking, <40 = skip. NULL means no extraction.",
     "company_ideas.opportunity_breakdown": "JSON {niche, era, moat, shape, recency} — per-signal contributions to opportunity_score.",
     "idea_extraction.problem_statement": "One-sentence concrete pain the startup solves.",
-    "idea_extraction.customer_verticals":"JSON array of 1-3 specific sub-segments.",
-    "idea_extraction.mechanism_tags":    "JSON array of 2-5 primitives (what it DOES; seed vocab + invented).",
-    "idea_extraction.sector_tags":       "JSON array of 1-3 sectors (WHO / WHERE it applies).",
-    "idea_extraction.customer_size":     "Enum, see schema.enums.customer_size.",
-    "idea_extraction.business_model":    "Enum, see schema.enums.business_model.",
-    "idea_extraction.solo_buildable":    "0/1: could 1-3 people ship this in 12 months?",
-    "idea_extraction.ai_first_advantage":"0/1: would this be meaningfully better built AI-first than pre-2022 approach?",
-    "idea_extraction.moat_type":         "Enum. 'regulatory' and 'capital' disqualify microbusiness shape.",
+    "idea_extraction.customer_verticals": "JSON array of 1-3 specific sub-segments.",
+    "idea_extraction.mechanism_tags": "JSON array of 2-5 primitives (what it DOES; seed vocab + invented).",
+    "idea_extraction.sector_tags": "JSON array of 1-3 sectors (WHO / WHERE it applies).",
+    "idea_extraction.customer_size": "Enum, see schema.enums.customer_size.",
+    "idea_extraction.business_model": "Enum, see schema.enums.business_model.",
+    "idea_extraction.solo_buildable": "0/1: could 1-3 people ship this in 12 months?",
+    "idea_extraction.ai_first_advantage": "0/1: would this be meaningfully better built AI-first than pre-2022 approach?",
+    "idea_extraction.moat_type": "Enum. 'regulatory' and 'capital' disqualify microbusiness shape.",
     "idea_extraction.niche_specificity": "Enum. Narrower is generally more launch-feasible.",
-    "idea_clusters.cluster_id":          "Integer PK. -1 is the noise bucket.",
-    "idea_clusters.parent_cluster_id":   "NULL for top-level clusters; otherwise points at a parent row.",
-    "idea_clusters.size":                "Number of company_ideas rows in this cluster.",
-    "idea_clusters.label":               "Auto-generated TF-IDF label. Prefer llm_label if populated.",
-    "idea_clusters.llm_label":           "Claude-generated human-readable short label (may be NULL if relabel job not yet run).",
-    "idea_clusters.llm_description":     "Claude-generated one-sentence description (may be NULL).",
-    "idea_clusters.era_class":           "Enum: hot | steady | rebuild_candidate | legacy | unknown.",
-    "idea_clusters.median_year":         "Median founding year of members.",
+    "idea_clusters.cluster_id": "Integer PK. -1 is the noise bucket.",
+    "idea_clusters.parent_cluster_id": "NULL for top-level clusters; otherwise points at a parent row.",
+    "idea_clusters.size": "Number of company_ideas rows in this cluster.",
+    "idea_clusters.label": "Auto-generated TF-IDF label. Prefer llm_label if populated.",
+    "idea_clusters.llm_label": "Claude-generated human-readable short label (may be NULL if relabel job not yet run).",
+    "idea_clusters.llm_description": "Claude-generated one-sentence description (may be NULL).",
+    "idea_clusters.era_class": "Enum: hot | steady | rebuild_candidate | legacy | unknown.",
+    "idea_clusters.median_year": "Median founding year of members.",
     "website_enrichment.normalized_website": "PK. Joins to company_ideas.normalized_website.",
-    "website_enrichment.meta_description":   "Homepage <meta name='description'>.",
-    "website_enrichment.hero_h1":            "Homepage <h1>.",
-    "website_enrichment.hero_text":          "First ~2000 chars of cleaned body text.",
-    "idea_nearest.company_idea_id":          "Source company; PK with rank.",
-    "idea_nearest.rank":                     "1-10. 1 = closest neighbour.",
-    "idea_nearest.neighbor_id":              "Neighbour company_idea. Joins back to company_ideas.id.",
-    "idea_nearest.similarity":               "Cosine similarity 0..1 (higher = more similar).",
+    "website_enrichment.meta_description": "Homepage <meta name='description'>.",
+    "website_enrichment.hero_h1": "Homepage <h1>.",
+    "website_enrichment.hero_text": "First ~2000 chars of cleaned body text.",
+    "idea_nearest.company_idea_id": "Source company; PK with rank.",
+    "idea_nearest.rank": "1-10. 1 = closest neighbour.",
+    "idea_nearest.neighbor_id": "Neighbour company_idea. Joins back to company_ideas.id.",
+    "idea_nearest.similarity": "Cosine similarity 0..1 (higher = more similar).",
 }
 
 
@@ -2221,12 +2436,21 @@ _ENUM_DOMAINS = {
         "notes": {"developer": "Primary buyer is a dev (APIs, infra, tooling)"},
     },
     "business_model": {
-        "values": ["saas", "service", "marketplace", "api", "hardware",
-                   "agency", "course", "community", "consumer_app", "hybrid"],
+        "values": [
+            "saas",
+            "service",
+            "marketplace",
+            "api",
+            "hardware",
+            "agency",
+            "course",
+            "community",
+            "consumer_app",
+            "hybrid",
+        ],
     },
     "moat_type": {
-        "values": ["none", "brand", "integration", "domain_expertise",
-                   "data", "network", "regulatory", "capital"],
+        "values": ["none", "brand", "integration", "domain_expertise", "data", "network", "regulatory", "capital"],
         "notes": {
             "none": "No structural moat (often correct for microbusinesses — space is contestable)",
             "regulatory": "Licensing / compliance barrier — disqualifies microbusiness shape",
@@ -2242,7 +2466,10 @@ _ENUM_DOMAINS = {
         },
     },
     "solo_buildable": {"values": [0, 1], "notes": {"1": "A 1-3 person team could ship + operate in 12 months"}},
-    "ai_first_advantage": {"values": [0, 1], "notes": {"1": "Meaningfully better with modern AI than pre-2022 approach"}},
+    "ai_first_advantage": {
+        "values": [0, 1],
+        "notes": {"1": "Meaningfully better with modern AI than pre-2022 approach"},
+    },
 }
 
 
@@ -2251,18 +2478,17 @@ async def ideas_api_index():
     """Machine-readable catalog of every /ideas/api/* endpoint."""
     return {
         "name": "StartupRadar — Ideas API",
-        "description": "Idea discovery pipeline over accelerator cohorts, "
-                       "VC portfolios and microbusiness communities.",
+        "description": "Idea discovery pipeline over accelerator cohorts, VC portfolios and microbusiness communities.",
         "base": "https://fabulous-fascination-production-4638.up.railway.app",
         "openapi": "/openapi.json",
         "data_dictionary": "/ideas/api/schema.json",
         "ui": {
-            "overview":         "/ideas",
+            "overview": "/ideas",
             "launch_shortlist": "/ideas/shortlist",
-            "search":           "/ideas/search",
-            "2d_map":           "/ideas/map",
-            "cluster_drill":    "/ideas/clusters/{cluster_id}",
-            "company_detail":   "/ideas/{idea_id}",
+            "search": "/ideas/search",
+            "2d_map": "/ideas/map",
+            "cluster_drill": "/ideas/clusters/{cluster_id}",
+            "company_detail": "/ideas/{idea_id}",
         },
         "endpoints": _API_CATALOG,
     }
@@ -2282,13 +2508,22 @@ async def ideas_api_schema():
         # Table row counts (only the tables an agent cares about).
         tables_of_interest = [
             ("company_ideas", "One row per scraped idea. Source of truth."),
-            ("idea_extraction", "LLM-extracted structured fields per idea (Haiku 4.5 tool-use). May be absent for rows not yet extracted."),
+            (
+                "idea_extraction",
+                "LLM-extracted structured fields per idea (Haiku 4.5 tool-use). May be absent for rows not yet extracted.",
+            ),
             ("idea_clusters", "HDBSCAN clusters + sub-clusters. cluster_id=-1 is noise."),
             ("website_enrichment", "Homepage meta / hero text per unique domain."),
             ("idea_gap_ranking", "Scored (mechanism × sector) recombination gaps."),
-            ("idea_nearest", "Pre-computed top-10 semantic neighbours per row (260K). Feeds /ideas/api/similar/{id}.json."),
+            (
+                "idea_nearest",
+                "Pre-computed top-10 semantic neighbours per row (260K). Feeds /ideas/api/similar/{id}.json.",
+            ),
             ("tag_alias", "variant → canonical tag mapping from canonicalization."),
-            ("companies", "Handelsregister entities (German company registry). DACH match to company_ideas not yet populated."),
+            (
+                "companies",
+                "Handelsregister entities (German company registry). DACH match to company_ideas not yet populated.",
+            ),
         ]
         tables = []
         for name, desc in tables_of_interest:
@@ -2301,20 +2536,18 @@ async def ideas_api_schema():
         # Top N mechanism + sector vocabularies (what tags actually exist).
         top_mechanisms = [
             {"tag": r[0], "count": int(r[1])}
-            for r in _safe_query(
-                db, "SELECT mechanism, n FROM v_mechanism_totals "
-                    "ORDER BY n DESC LIMIT 100")
+            for r in _safe_query(db, "SELECT mechanism, n FROM v_mechanism_totals ORDER BY n DESC LIMIT 100")
         ]
         top_sectors = [
             {"tag": r[0], "count": int(r[1])}
-            for r in _safe_query(
-                db, "SELECT sector, n FROM v_sector_totals "
-                    "ORDER BY n DESC LIMIT 100")
+            for r in _safe_query(db, "SELECT sector, n FROM v_sector_totals ORDER BY n DESC LIMIT 100")
         ]
 
         # Opportunity score bucket counts.
         score_buckets: Dict[str, int] = {}
-        for r in _safe_query(db, """
+        for r in _safe_query(
+            db,
+            """
             SELECT CASE
                 WHEN opportunity_score >= 90 THEN '90-100 (top)'
                 WHEN opportunity_score >= 75 THEN '75-89 (strong)'
@@ -2324,55 +2557,57 @@ async def ideas_api_schema():
                 ELSE '0-39 (skip)'
             END AS bucket, COUNT(*) AS n
             FROM company_ideas GROUP BY bucket
-        """):
+        """,
+        ):
             score_buckets[r[0]] = int(r[1])
 
         # Program coverage — which sources have LLM extractions.
         programs = []
-        for r in _safe_query(db, """
+        for r in _safe_query(
+            db,
+            """
             SELECT ci.program, COUNT(*) AS total,
                    SUM(CASE WHEN ie.company_idea_id IS NOT NULL
                             AND ie.error IS NULL THEN 1 ELSE 0 END) AS extracted
               FROM company_ideas ci
          LEFT JOIN idea_extraction ie ON ie.company_idea_id = ci.id
              GROUP BY ci.program ORDER BY total DESC
-        """):
-            programs.append({
-                "program": r[0], "rows": int(r[1]),
-                "extracted": int(r[2] or 0),
-            })
+        """,
+        ):
+            programs.append(
+                {
+                    "program": r[0],
+                    "rows": int(r[1]),
+                    "extracted": int(r[2] or 0),
+                }
+            )
 
-        return JSONResponse({
-            "tables":      tables,
-            "programs":    programs,
-            "enums":       _ENUM_DOMAINS,
-            "vocab": {
-                "mechanism_tags": top_mechanisms,
-                "sector_tags":    top_sectors,
-            },
-            "columns":     _FIELD_DOCS,
-            "opportunity_score_buckets": score_buckets,
-            "canonical_queries": {
-                "top_launch_candidates":
-                    "/ideas/api/search.json (or /ideas/launch-candidates?sort=score)",
-                "drill_cluster":
-                    "/ideas/api/cluster/{cluster_id}.json",
-                "specific_gap":
-                    "/ideas/api/gap/{mechanism}/{sector}.json",
-                "ideas_about_a_topic":
-                    "/ideas/api/search.json?q=<your+query>",
-                "similar_to_this_idea":
-                    "/ideas/api/similar/{id}.json  (pre-computed cosine neighbours)",
-                "2d_map_data":
-                    "/ideas/api/scatter.json",
-                "heatmap":
-                    "/ideas/api/heatmap.json",
-            },
-            "how_to_auth": {
-                "read":  "All GET endpoints are public.",
-                "write": "POST /admin/ideas/seed requires X-Seed-Token header matching the IDEAS_SEED_TOKEN env var on the server.",
-            },
-        })
+        return JSONResponse(
+            {
+                "tables": tables,
+                "programs": programs,
+                "enums": _ENUM_DOMAINS,
+                "vocab": {
+                    "mechanism_tags": top_mechanisms,
+                    "sector_tags": top_sectors,
+                },
+                "columns": _FIELD_DOCS,
+                "opportunity_score_buckets": score_buckets,
+                "canonical_queries": {
+                    "top_launch_candidates": "/ideas/api/search.json (or /ideas/launch-candidates?sort=score)",
+                    "drill_cluster": "/ideas/api/cluster/{cluster_id}.json",
+                    "specific_gap": "/ideas/api/gap/{mechanism}/{sector}.json",
+                    "ideas_about_a_topic": "/ideas/api/search.json?q=<your+query>",
+                    "similar_to_this_idea": "/ideas/api/similar/{id}.json  (pre-computed cosine neighbours)",
+                    "2d_map_data": "/ideas/api/scatter.json",
+                    "heatmap": "/ideas/api/heatmap.json",
+                },
+                "how_to_auth": {
+                    "read": "All GET endpoints are public.",
+                    "write": "POST /admin/ideas/seed requires X-Seed-Token header matching the IDEAS_SEED_TOKEN env var on the server.",
+                },
+            }
+        )
     finally:
         db.close()
 
@@ -2380,6 +2615,7 @@ async def ideas_api_schema():
 # ===========================================================================
 # Similar-to-this (pre-computed nearest neighbours)
 # ===========================================================================
+
 
 @router.get("/ideas/api/similar/{idea_id}.json")
 async def ideas_api_similar(idea_id: int, k: int = 10):
@@ -2399,8 +2635,7 @@ async def ideas_api_similar(idea_id: int, k: int = 10):
     db = get_db()
     try:
         src = db.conn.execute(
-            "SELECT id, company, program, year_founded, one_liner, cluster_id "
-            "FROM company_ideas WHERE id = ?",
+            "SELECT id, company, program, year_founded, one_liner, cluster_id FROM company_ideas WHERE id = ?",
             (idea_id,),
         ).fetchone()
         if src is None:
@@ -2425,30 +2660,35 @@ async def ideas_api_similar(idea_id: int, k: int = 10):
             (idea_id, k),
         ).fetchall()
 
-        return JSONResponse({
-            "source": {
-                "id": src["id"], "company": src["company"],
-                "program": src["program"], "year_founded": src["year_founded"],
-                "one_liner": src["one_liner"], "cluster_id": src["cluster_id"],
-            },
-            "neighbors": [
-                {
-                    "rank": r["rank"],
-                    "similarity": round(float(r["similarity"]), 3),
-                    "id": r["id"],
-                    "company": r["company"],
-                    "program": r["program"],
-                    "year_founded": r["year_founded"],
-                    "cluster_id": r["cluster_id"],
-                    "cluster_label": r["llm_label"] or r["cluster_label"],
-                    "one_liner": r["one_liner"],
-                    "problem_statement": r["problem_statement"],
-                    "mechanism_tags": r["mechanism_tags"],
-                    "sector_tags": r["sector_tags"],
-                    "opportunity_score": r["opportunity_score"],
-                }
-                for r in rows
-            ],
-        })
+        return JSONResponse(
+            {
+                "source": {
+                    "id": src["id"],
+                    "company": src["company"],
+                    "program": src["program"],
+                    "year_founded": src["year_founded"],
+                    "one_liner": src["one_liner"],
+                    "cluster_id": src["cluster_id"],
+                },
+                "neighbors": [
+                    {
+                        "rank": r["rank"],
+                        "similarity": round(float(r["similarity"]), 3),
+                        "id": r["id"],
+                        "company": r["company"],
+                        "program": r["program"],
+                        "year_founded": r["year_founded"],
+                        "cluster_id": r["cluster_id"],
+                        "cluster_label": r["llm_label"] or r["cluster_label"],
+                        "one_liner": r["one_liner"],
+                        "problem_statement": r["problem_statement"],
+                        "mechanism_tags": r["mechanism_tags"],
+                        "sector_tags": r["sector_tags"],
+                        "opportunity_score": r["opportunity_score"],
+                    }
+                    for r in rows
+                ],
+            }
+        )
     finally:
         db.close()

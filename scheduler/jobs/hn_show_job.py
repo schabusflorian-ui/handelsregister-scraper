@@ -70,9 +70,7 @@ def main():
         default=30,
         help="Initial lookback window on first run (default: 30 days)",
     )
-    p.add_argument(
-        "--max", type=int, default=None, help="Cap records (default: unlimited)"
-    )
+    p.add_argument("--max", type=int, default=None, help="Cap records (default: unlimited)")
     p.add_argument(
         "--no-load",
         action="store_true",
@@ -97,12 +95,7 @@ def main():
                 datetime.fromtimestamp(since_ts, timezone.utc).isoformat(),
             )
         else:
-            since_ts = int(
-                (
-                    datetime.now(timezone.utc)
-                    - timedelta(days=args.since_days)
-                ).timestamp()
-            )
+            since_ts = int((datetime.now(timezone.utc) - timedelta(days=args.since_days)).timestamp())
             logger.info(
                 "Show HN: first run, fetching last %d days (since %s timezone.utc)",
                 args.since_days,
@@ -121,23 +114,17 @@ def main():
             def _write(rec: CompanyIdea):
                 d = asdict(rec)
                 d["scraped_at"] = rec.scraped_at.isoformat()
-                fh.write(
-                    json.dumps(d, default=str, ensure_ascii=False) + "\n"
-                )
+                fh.write(json.dumps(d, default=str, ensure_ascii=False) + "\n")
 
             records = scraper.scrape(on_record=_write, since_ts=since_ts)
 
-        logger.info(
-            "Show HN: %d records written to %s", len(records), jsonl_path
-        )
+        logger.info("Show HN: %d records written to %s", len(records), jsonl_path)
 
         if args.no_load:
             return
 
         inserted = save_company_ideas(db, records)
-        logger.info(
-            "Show HN: %d new rows inserted (rest were duplicates)", inserted
-        )
+        logger.info("Show HN: %d new rows inserted (rest were duplicates)", inserted)
     finally:
         if hasattr(db, "close"):
             db.close()

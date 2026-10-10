@@ -74,9 +74,7 @@ class RedditIdeasScraper(AcceleratorScraper):
 
     # Reddit expects a descriptive UA identifying the caller. See:
     # https://support.reddithelp.com/hc/en-us/articles/16160319875092
-    DEFAULT_UA = (
-        "handelsregister-idea-scraper/0.1 (contact: schabus.florian@gmail.com)"
-    )
+    DEFAULT_UA = "handelsregister-idea-scraper/0.1 (contact: schabus.florian@gmail.com)"
 
     # Common Reddit title-prefix conventions: "[Launch] Name - ...", "Show: X — ...",
     # or "I built <X>". Only the bracketed-tag case gives us a reliable name.
@@ -160,23 +158,17 @@ class RedditIdeasScraper(AcceleratorScraper):
             if after:
                 params["after"] = after
             try:
-                r = self.session.get(
-                    url, params=params, headers=self.headers, timeout=30
-                )
+                r = self.session.get(url, params=params, headers=self.headers, timeout=30)
             except Exception as e:  # noqa: BLE001
                 logger.warning("Reddit r/%s page %d errored: %s", sub, page, e)
                 break
             if r.status_code == 429:
                 # Rate-limited — back off once, then stop this subreddit.
-                logger.warning(
-                    "Reddit r/%s: 429 rate limit; sleeping 30s and stopping", sub
-                )
+                logger.warning("Reddit r/%s: 429 rate limit; sleeping 30s and stopping", sub)
                 time.sleep(30)
                 break
             if r.status_code != 200:
-                logger.warning(
-                    "Reddit r/%s page %d -> %s", sub, page, r.status_code
-                )
+                logger.warning("Reddit r/%s page %d -> %s", sub, page, r.status_code)
                 break
 
             data = r.json()
@@ -224,20 +216,14 @@ class RedditIdeasScraper(AcceleratorScraper):
 
         selftext = post.get("selftext") or None
         if selftext:
-            selftext = self._clean(
-                html.unescape(self._TAG_RE.sub(" ", selftext))
-            )
+            selftext = self._clean(html.unescape(self._TAG_RE.sub(" ", selftext)))
             # Reddit selftext can be very long; cap at 4000 chars so DB stays
             # sane. Full text remains in the JSONL if anyone needs it.
             if selftext and len(selftext) > 4000:
                 selftext = selftext[:4000] + "…"
 
         created_utc = int(post.get("created_utc") or 0)
-        batch = (
-            datetime.fromtimestamp(created_utc, timezone.utc).strftime("%Y-%m")
-            if created_utc
-            else None
-        )
+        batch = datetime.fromtimestamp(created_utc, timezone.utc).strftime("%Y-%m") if created_utc else None
 
         # url_overridden_by_dest is the external link when it's a link post;
         # self-posts have this pointing back at reddit.com — filter those out.
@@ -354,17 +340,11 @@ if __name__ == "__main__":
         d = asdict(rec)
         d["scraped_at"] = rec.scraped_at.isoformat()
         if jsonl_fh:
-            jsonl_fh.write(
-                json.dumps(d, default=str, ensure_ascii=False) + "\n"
-            )
+            jsonl_fh.write(json.dumps(d, default=str, ensure_ascii=False) + "\n")
 
     stop_before_ts = None
     if args.since_days:
-        stop_before_ts = int(
-            (
-                datetime.now(timezone.utc) - timedelta(days=args.since_days)
-            ).timestamp()
-        )
+        stop_before_ts = int((datetime.now(timezone.utc) - timedelta(days=args.since_days)).timestamp())
 
     try:
         records = s.scrape(
@@ -378,11 +358,7 @@ if __name__ == "__main__":
 
     if not args.jsonl:
         for r in records[:5]:
-            d = {
-                k: v
-                for k, v in asdict(r).items()
-                if k != "scraped_at" and v not in (None, "", [], {})
-            }
+            d = {k: v for k, v in asdict(r).items() if k != "scraped_at" and v not in (None, "", [], {})}
             print(json.dumps(d, default=str, indent=2))
     print(
         f"\n=> {len(records)} records from Reddit ({', '.join(args.subs)})"

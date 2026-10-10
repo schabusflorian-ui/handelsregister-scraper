@@ -69,8 +69,7 @@ CREATE INDEX IF NOT EXISTS idx_enrich_error  ON website_enrichment(error);
 
 
 USER_AGENT = (
-    "Mozilla/5.0 (compatible; IdeaClusterBot/0.1; +https://handelsregister-scraper/ideas) "
-    "Chrome/120.0 Safari/537.36"
+    "Mozilla/5.0 (compatible; IdeaClusterBot/0.1; +https://handelsregister-scraper/ideas) Chrome/120.0 Safari/537.36"
 )
 MAX_BYTES = 1_024_000  # 1 MB cap — marketing homepages are all well under this
 HERO_MAX_CHARS = 2000
@@ -114,10 +113,12 @@ def _robots_allows(url: str, user_agent: str = USER_AGENT, timeout: float = 5.0)
 
 # --- fetch + parse ----------------------------------------------------------
 
+
 def _clean_text(soup: BeautifulSoup) -> str:
     # Strip anything that isn't part of the pitch copy.
-    for tag in soup.find_all(["script", "style", "noscript", "nav", "footer",
-                              "header", "aside", "svg", "iframe", "form"]):
+    for tag in soup.find_all(
+        ["script", "style", "noscript", "nav", "footer", "header", "aside", "svg", "iframe", "form"]
+    ):
         tag.decompose()
     for tag in soup.find_all(attrs={"aria-hidden": "true"}):
         tag.decompose()
@@ -136,9 +137,15 @@ def fetch_one(url: str, timeout: float = 15.0) -> Dict[str, Optional[object]]:
     """Fetch a homepage and extract the four fields we care about."""
     start = time.monotonic()
     out: Dict[str, Optional[object]] = {
-        "fetched_url": url, "final_url": None, "http_status": None,
-        "title": None, "meta_description": None, "hero_h1": None,
-        "hero_text": None, "lang": None, "error": None,
+        "fetched_url": url,
+        "final_url": None,
+        "http_status": None,
+        "title": None,
+        "meta_description": None,
+        "hero_h1": None,
+        "hero_text": None,
+        "lang": None,
+        "error": None,
     }
     try:
         if not _robots_allows(url):
@@ -146,8 +153,7 @@ def fetch_one(url: str, timeout: float = 15.0) -> Dict[str, Optional[object]]:
             return out
         r = requests.get(
             url,
-            headers={"User-Agent": USER_AGENT,
-                     "Accept-Language": "en,de;q=0.8"},
+            headers={"User-Agent": USER_AGENT, "Accept-Language": "en,de;q=0.8"},
             timeout=timeout,
             allow_redirects=True,
             stream=True,
@@ -181,8 +187,7 @@ def fetch_one(url: str, timeout: float = 15.0) -> Dict[str, Optional[object]]:
             content = (m.get("content") or "").strip()
             if not content:
                 continue
-            if name in ("description", "og:description", "twitter:description") \
-                    and not out["meta_description"]:
+            if name in ("description", "og:description", "twitter:description") and not out["meta_description"]:
                 out["meta_description"] = content[:1000]
         html_tag = soup.find("html")
         if html_tag and html_tag.get("lang"):
@@ -201,9 +206,13 @@ def fetch_one(url: str, timeout: float = 15.0) -> Dict[str, Optional[object]]:
         out["error"] = "timeout"
     except requests.exceptions.ConnectionError as e:
         # DNS failures + refused connections land here
-        out["error"] = "dns" if "Name or service not known" in str(e) or \
-                                "nodename nor servname" in str(e) or \
-                                "getaddrinfo" in str(e).lower() else "connection"
+        out["error"] = (
+            "dns"
+            if "Name or service not known" in str(e)
+            or "nodename nor servname" in str(e)
+            or "getaddrinfo" in str(e).lower()
+            else "connection"
+        )
     except Exception as e:  # noqa: BLE001
         out["error"] = f"parse:{type(e).__name__}"
     finally:
@@ -213,6 +222,7 @@ def fetch_one(url: str, timeout: float = 15.0) -> Dict[str, Optional[object]]:
 
 # --- DB coordination --------------------------------------------------------
 
+
 def _ensure_schema(db: Database) -> None:
     cur = db.conn.cursor()
     for stmt in DDL.strip().split(";"):
@@ -221,8 +231,7 @@ def _ensure_schema(db: Database) -> None:
     db.conn.commit()
 
 
-def _targets(db: Database, limit: Optional[int], refresh_days: Optional[int]
-             ) -> List[Tuple[str, str]]:
+def _targets(db: Database, limit: Optional[int], refresh_days: Optional[int]) -> List[Tuple[str, str]]:
     """Return [(normalized_website, url), ...] to enrich."""
     cur = db.conn.cursor()
     if refresh_days is not None:
@@ -270,50 +279,53 @@ def _save(db: Database, norm: str, url: str, data: Dict[str, Optional[object]]) 
              fetched_at, duration_ms)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
-            (norm, url, data.get("final_url"), data.get("http_status"),
-             data.get("title"), data.get("meta_description"),
-             data.get("hero_h1"), data.get("hero_text"),
-             data.get("lang"), data.get("error"),
-             datetime.now().isoformat(), data.get("duration_ms")),
+            (
+                norm,
+                url,
+                data.get("final_url"),
+                data.get("http_status"),
+                data.get("title"),
+                data.get("meta_description"),
+                data.get("hero_h1"),
+                data.get("hero_text"),
+                data.get("lang"),
+                data.get("error"),
+                datetime.now().isoformat(),
+                data.get("duration_ms"),
+            ),
         )
         db.conn.commit()
 
 
 # --- main loop --------------------------------------------------------------
 
-def run(db_path: str, workers: int, limit: Optional[int], timeout: float,
-        refresh_days: Optional[int]) -> None:
+
+def run(db_path: str, workers: int, limit: Optional[int], timeout: float, refresh_days: Optional[int]) -> None:
     db = Database(db_path)
     _ensure_schema(db)
     targets = _targets(db, limit, refresh_days)
-    logger.info("enrichment: %d sites to fetch (workers=%d, timeout=%.0fs)",
-                len(targets), workers, timeout)
+    logger.info("enrichment: %d sites to fetch (workers=%d, timeout=%.0fs)", len(targets), workers, timeout)
     if not targets:
         return
 
     done = 0
     ok = 0
     with ThreadPoolExecutor(max_workers=workers) as pool:
-        future_to_target = {
-            pool.submit(fetch_one, _guess_url(url), timeout): (norm, url)
-            for norm, url in targets
-        }
+        future_to_target = {pool.submit(fetch_one, _guess_url(url), timeout): (norm, url) for norm, url in targets}
         t0 = time.monotonic()
         for fut in as_completed(future_to_target):
             norm, url = future_to_target[fut]
             try:
                 data = fut.result()
             except Exception as e:  # noqa: BLE001
-                data = {"error": f"crash:{type(e).__name__}",
-                        "fetched_url": url, "duration_ms": 0}
+                data = {"error": f"crash:{type(e).__name__}", "fetched_url": url, "duration_ms": 0}
             _save(db, norm, url, data)
             done += 1
             if not data.get("error"):
                 ok += 1
             if done % 50 == 0 or done == len(targets):
                 rate = done / (time.monotonic() - t0) if time.monotonic() > t0 else 0
-                logger.info("enrichment: %d/%d done, %d ok (%.1f/s)",
-                            done, len(targets), ok, rate)
+                logger.info("enrichment: %d/%d done, %d ok (%.1f/s)", done, len(targets), ok, rate)
     report(db)
     db.conn.close()
 
@@ -358,8 +370,10 @@ def report(db: Database) -> None:
         """
     ).fetchone()["n"]
     print(f"\n  company_ideas with no description: {n_idea_no_desc}")
-    print(f"  of those now filled by enrichment: {n_filled_by_enrich} "
-          f"({(n_filled_by_enrich / n_idea_no_desc * 100) if n_idea_no_desc else 0:.0f}%)")
+    print(
+        f"  of those now filled by enrichment: {n_filled_by_enrich} "
+        f"({(n_filled_by_enrich / n_idea_no_desc * 100) if n_idea_no_desc else 0:.0f}%)"
+    )
 
 
 def main():
@@ -368,13 +382,10 @@ def main():
     p.add_argument("--workers", type=int, default=8)
     p.add_argument("--timeout", type=float, default=15.0)
     p.add_argument("--limit", type=int, default=None, help="Cap number of sites this run")
-    p.add_argument("--refresh", type=int, default=None,
-                   help="Re-fetch rows older than N days")
+    p.add_argument("--refresh", type=int, default=None, help="Re-fetch rows older than N days")
     p.add_argument("--report-only", action="store_true")
     args = p.parse_args()
-    logging.basicConfig(level=logging.INFO,
-                        format="%(asctime)s %(levelname)s %(message)s",
-                        datefmt="%H:%M:%S")
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s", datefmt="%H:%M:%S")
     if args.report_only:
         db = Database(args.db)
         _ensure_schema(db)

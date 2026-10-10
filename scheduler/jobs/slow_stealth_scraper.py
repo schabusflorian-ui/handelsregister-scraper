@@ -423,7 +423,10 @@ class SlowStealthScraper:
             (r"\bpreviously\s+(at\s+)?stealth\b", "anti:previously-stealth"),
             (r"\bworked\s+(at|in)\s+stealth\b", "anti:worked-at-stealth"),
             # Employee-language around stealth (not founder)
-            (r"\b(developer|engineer|designer|pm|product manager|recruiter|hr|hiring)\s+at\s+stealth\b", "anti:employee-at-stealth"),
+            (
+                r"\b(developer|engineer|designer|pm|product manager|recruiter|hr|hiring)\s+at\s+stealth\b",
+                "anti:employee-at-stealth",
+            ),
             # Investor/advisor/consultant-only roles with no founder keyword nearby
             (r"\b(angel investor|venture partner|vc partner|general partner|managing partner)\b", "anti:investor-only"),
             (r"\b(advisor|consultant|coach)\b(?!.*founder)(?!.*stealth)", "anti:advisor-only"),
@@ -522,34 +525,35 @@ class SlowStealthScraper:
         #  - "xplore" is also generic — same context guard as schub
         program_patterns = [
             # EWOR — distinctive 4-letter acronym, safe to match directly
-            (r"\bewor\b",                           "prog:ewor",              0.30),
+            (r"\bewor\b", "prog:ewor", 0.30),
             # Entrepreneur First variants
-            (r"\bentrepreneur first\b",             "prog:entrepreneur-first", 0.30),
-            (r"@joinef\b",                          "prog:ef-handle",          0.30),
-            (r"\bef\s+(berlin|london|paris|bangalore|singapore|toronto|nyc|new york)\b",
-                                                    "prog:ef-city",            0.25),
+            (r"\bentrepreneur first\b", "prog:entrepreneur-first", 0.30),
+            (r"@joinef\b", "prog:ef-handle", 0.30),
+            (r"\bef\s+(berlin|london|paris|bangalore|singapore|toronto|nyc|new york)\b", "prog:ef-city", 0.25),
             # EF cohort naming: city-code + 2-digit year (LD25, BE24, PA23, etc).
             # Gated on EF context within 100 chars either side to avoid matching
             # unrelated "LD25" strings (e.g., NJ legislative district 25).
-            (r"\b(?:ld|be|pa|sf|sg|bl|to|ny|ba|tor)\d{2}\b.{0,100}(entrepreneur first|@joinef|\bef\s+(?:berlin|london))",
-                                                    "prog:ef-cohort",          0.15),
-            (r"(entrepreneur first|@joinef|\bef\s+(?:berlin|london)).{0,100}\b(?:ld|be|pa|sf|sg|bl|to|ny|ba|tor)\d{2}\b",
-                                                    "prog:ef-cohort",          0.15),
+            (
+                r"\b(?:ld|be|pa|sf|sg|bl|to|ny|ba|tor)\d{2}\b.{0,100}(entrepreneur first|@joinef|\bef\s+(?:berlin|london))",
+                "prog:ef-cohort",
+                0.15,
+            ),
+            (
+                r"(entrepreneur first|@joinef|\bef\s+(?:berlin|london)).{0,100}\b(?:ld|be|pa|sf|sg|bl|to|ny|ba|tor)\d{2}\b",
+                "prog:ef-cohort",
+                0.15,
+            ),
             # SCHUB by UnternehmerTUM — "schub" alone is German for "push",
             # so we require explicit TUM/UnternehmerTUM context, OR the exact
             # phrase "SCHUB Fellowship" which is unambiguous.
-            (r"\bschub\s+fellowship\b",             "prog:schub",              0.30),
-            (r"\bschub\b.{0,100}\b(unternehmertum|tum)\b",
-                                                    "prog:schub",              0.30),
-            (r"\b(unternehmertum|tum)\b.{0,100}\bschub\b",
-                                                    "prog:schub",              0.30),
+            (r"\bschub\s+fellowship\b", "prog:schub", 0.30),
+            (r"\bschub\b.{0,100}\b(unternehmertum|tum)\b", "prog:schub", 0.30),
+            (r"\b(unternehmertum|tum)\b.{0,100}\bschub\b", "prog:schub", 0.30),
             # UnternehmerTUM XPLORE — same story: "xplore" is too generic alone.
             # Require TUM/UnternehmerTUM context.
-            (r"\bunternehmertum\s+xplore\b",        "prog:xplore",             0.30),
-            (r"\bxplore\b.{0,100}\b(unternehmertum|tum)\b",
-                                                    "prog:xplore",             0.25),
-            (r"\b(unternehmertum|tum)\b.{0,100}\bxplore\b",
-                                                    "prog:xplore",             0.25),
+            (r"\bunternehmertum\s+xplore\b", "prog:xplore", 0.30),
+            (r"\bxplore\b.{0,100}\b(unternehmertum|tum)\b", "prog:xplore", 0.25),
+            (r"\b(unternehmertum|tum)\b.{0,100}\bxplore\b", "prog:xplore", 0.25),
         ]
         program_score = 0.0
         program_hits = set()  # dedupe by label — prevents double-counting EF + EF-city
@@ -592,21 +596,70 @@ class SlowStealthScraper:
         # and was dropping good leads because their location didn't match.
         dach_indicators = [
             # DE — countries + top 20 cities
-            "germany", "deutschland",
-            "berlin", "munich", "münchen", "hamburg", "frankfurt",
-            "cologne", "köln", "stuttgart", "düsseldorf", "dusseldorf",
-            "dortmund", "essen", "leipzig", "bremen", "dresden",
-            "hannover", "nürnberg", "nuremberg", "bonn", "münster", "muenster",
-            "karlsruhe", "mannheim", "augsburg", "wiesbaden", "heidelberg",
-            "freiburg", "mainz", "kiel", "aachen", "regensburg", "potsdam",
+            "germany",
+            "deutschland",
+            "berlin",
+            "munich",
+            "münchen",
+            "hamburg",
+            "frankfurt",
+            "cologne",
+            "köln",
+            "stuttgart",
+            "düsseldorf",
+            "dusseldorf",
+            "dortmund",
+            "essen",
+            "leipzig",
+            "bremen",
+            "dresden",
+            "hannover",
+            "nürnberg",
+            "nuremberg",
+            "bonn",
+            "münster",
+            "muenster",
+            "karlsruhe",
+            "mannheim",
+            "augsburg",
+            "wiesbaden",
+            "heidelberg",
+            "freiburg",
+            "mainz",
+            "kiel",
+            "aachen",
+            "regensburg",
+            "potsdam",
             # AT — country + top 7 cities
-            "austria", "österreich", "oesterreich",
-            "vienna", "wien", "graz", "linz", "salzburg", "innsbruck", "klagenfurt",
+            "austria",
+            "österreich",
+            "oesterreich",
+            "vienna",
+            "wien",
+            "graz",
+            "linz",
+            "salzburg",
+            "innsbruck",
+            "klagenfurt",
             # CH — country + top cities
-            "switzerland", "schweiz", "suisse",
-            "zurich", "zürich", "geneva", "genf", "basel", "zug", "bern",
-            "lausanne", "luzern", "lucerne", "winterthur", "chur", "st. gallen",
-            "st.gallen", "sankt gallen",
+            "switzerland",
+            "schweiz",
+            "suisse",
+            "zurich",
+            "zürich",
+            "geneva",
+            "genf",
+            "basel",
+            "zug",
+            "bern",
+            "lausanne",
+            "luzern",
+            "lucerne",
+            "winterthur",
+            "chur",
+            "st. gallen",
+            "st.gallen",
+            "sankt gallen",
         ]
 
         # Strip DACH terms that came from the search query (DDG echoes them back)
@@ -651,9 +704,7 @@ class SlowStealthScraper:
         # OR who's in a vetted founder program like EWOR / EF / SCHUB, is almost
         # certainly a founder. Without this, they score like job-seekers because
         # the literal word "founder" may be absent from their bio.
-        if founder_score == 0 and (
-            (stealth_score > 0 and has_dach) or program_score > 0
-        ):
+        if founder_score == 0 and ((stealth_score > 0 and has_dach) or program_score > 0):
             if program_score > 0:
                 signals.append("implicit:founder_from_program")
             else:
@@ -696,12 +747,34 @@ class SlowStealthScraper:
 
         # ==================== EX-FAANG / UNICORN BACKGROUND ====================
         companies = [
-            "google", "meta", "facebook", "amazon", "stripe", "microsoft",
-            "apple", "uber", "airbnb", "netflix", "twitter", "linkedin",
+            "google",
+            "meta",
+            "facebook",
+            "amazon",
+            "stripe",
+            "microsoft",
+            "apple",
+            "uber",
+            "airbnb",
+            "netflix",
+            "twitter",
+            "linkedin",
             "salesforce",
-            "n26", "zalando", "delivery hero", "celonis", "personio",
-            "flixbus", "trade republic", "contentful", "mambu", "sennder",
-            "gorillas", "bitpanda", "refurbed", "wefox", "scalable capital",
+            "n26",
+            "zalando",
+            "delivery hero",
+            "celonis",
+            "personio",
+            "flixbus",
+            "trade republic",
+            "contentful",
+            "mambu",
+            "sennder",
+            "gorillas",
+            "bitpanda",
+            "refurbed",
+            "wefox",
+            "scalable capital",
         ]
         for company in companies:
             if (
@@ -970,9 +1043,12 @@ class SlowStealthScraper:
         # Build combined signals JSON
         all_signals = {}
         for attr, key in [
-            ("stealth_signals", "stealth"), ("founder_signals", "founder"),
-            ("transition_signals", "transition"), ("urgency_signals", "urgency"),
-            ("traction_signals", "traction"), ("cofounder_signals", "cofounder"),
+            ("stealth_signals", "stealth"),
+            ("founder_signals", "founder"),
+            ("transition_signals", "transition"),
+            ("urgency_signals", "urgency"),
+            ("traction_signals", "traction"),
+            ("cofounder_signals", "cofounder"),
             ("high_value_background", "background"),
         ]:
             val = getattr(profile, attr, None)
@@ -1007,14 +1083,21 @@ class SlowStealthScraper:
                 WHERE linkedin_url = ?
                 """,
                 (
-                    profile.name, profile.headline, profile.location,
-                    profile.summary, getattr(profile, "current_company", None),
-                    signals_json, profile.confidence_score,
+                    profile.name,
+                    profile.headline,
+                    profile.location,
+                    profile.summary,
+                    getattr(profile, "current_company", None),
+                    signals_json,
+                    profile.confidence_score,
                     getattr(profile, "primary_function", None),
                     getattr(profile, "company_tier", 0),
                     1 if getattr(profile, "is_repeat_founder", False) else 0,
                     1 if getattr(profile, "looking_for_cofounder", False) else 0,
-                    now, profile.headline, profile.confidence_score, profile.url,
+                    now,
+                    profile.headline,
+                    profile.confidence_score,
+                    profile.url,
                 ),
             )
         else:
@@ -1030,16 +1113,23 @@ class SlowStealthScraper:
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
-                    profile.url, profile.name, profile.headline,
-                    profile.location, profile.summary,
+                    profile.url,
+                    profile.name,
+                    profile.headline,
+                    profile.location,
+                    profile.summary,
                     getattr(profile, "current_company", None),
-                    "slow_scraper", search_query,
-                    signals_json, profile.confidence_score,
+                    "slow_scraper",
+                    search_query,
+                    signals_json,
+                    profile.confidence_score,
                     getattr(profile, "primary_function", None),
                     getattr(profile, "company_tier", 0),
                     1 if getattr(profile, "is_repeat_founder", False) else 0,
                     1 if getattr(profile, "looking_for_cofounder", False) else 0,
-                    now, now, now,
+                    now,
+                    now,
+                    now,
                 ),
             )
 
@@ -1048,8 +1138,7 @@ class SlowStealthScraper:
 
         # Auto-tag with structured metadata
         try:
-            tags = tag_founder(profile.name, profile.headline,
-                               getattr(profile, "location", None), signals_json)
+            tags = tag_founder(profile.name, profile.headline, getattr(profile, "location", None), signals_json)
             cursor.execute("SELECT id FROM stealth_founders WHERE linkedin_url = ?", (profile.url,))
             row = cursor.fetchone()
             if row and tags:

@@ -49,7 +49,9 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 VIEWS = [
-    ("v_idea_full", """
+    (
+        "v_idea_full",
+        """
         CREATE VIEW v_idea_full AS
         SELECT ci.id,
                ci.program,
@@ -87,12 +89,14 @@ VIEWS = [
      LEFT JOIN idea_clusters pc     ON pc.cluster_id = c.parent_cluster_id
      LEFT JOIN idea_extraction ie   ON ie.company_idea_id = ci.id
      LEFT JOIN website_enrichment we ON we.normalized_website = ci.normalized_website
-    """),
-
+    """,
+    ),
     # Exploded cells: one row per (company, mechanism, sector) — the raw
     # grain for every matrix question. Guard against NULL/non-JSON with
     # COALESCE + a defensive IS NOT NULL.
-    ("v_mechanism_sector_cells", """
+    (
+        "v_mechanism_sector_cells",
+        """
         CREATE VIEW v_mechanism_sector_cells AS
         SELECT ie.company_idea_id          AS company_id,
                ci.company                  AS company,
@@ -111,23 +115,29 @@ VIEWS = [
           JOIN json_each(COALESCE(ie.mechanism_tags, '[]')) m
           JOIN json_each(COALESCE(ie.sector_tags, '[]'))    s
          WHERE ie.error IS NULL
-    """),
-
-    ("v_mechanism_totals", """
+    """,
+    ),
+    (
+        "v_mechanism_totals",
+        """
         CREATE VIEW v_mechanism_totals AS
         SELECT mechanism, COUNT(DISTINCT company_id) AS n
           FROM v_mechanism_sector_cells
          GROUP BY mechanism
-    """),
-
-    ("v_sector_totals", """
+    """,
+    ),
+    (
+        "v_sector_totals",
+        """
         CREATE VIEW v_sector_totals AS
         SELECT sector, COUNT(DISTINCT company_id) AS n
           FROM v_mechanism_sector_cells
          GROUP BY sector
-    """),
-
-    ("v_matrix", """
+    """,
+    ),
+    (
+        "v_matrix",
+        """
         CREATE VIEW v_matrix AS
         SELECT mechanism,
                sector,
@@ -135,15 +145,17 @@ VIEWS = [
                GROUP_CONCAT(DISTINCT company) AS example_companies
           FROM v_mechanism_sector_cells
          GROUP BY mechanism, sector
-    """),
-
+    """,
+    ),
     # Strict: solo + ai-first + no structural moat at all.
     # Loose:  solo + ai-first, any moat except 'regulatory' or 'capital'
     #         (both disqualifying for a microbusiness launch).
     # v_launch_candidates aliases v_launch_candidates_loose since the strict
     # view was returning near-zero rows (LLM picks 'brand' / 'integration'
     # for most YC-ish companies).
-    ("v_launch_candidates_strict", """
+    (
+        "v_launch_candidates_strict",
+        """
         CREATE VIEW v_launch_candidates_strict AS
         SELECT ci.id, ci.program, ci.company, ci.year_founded,
                ci.company_website, ci.cluster_id,
@@ -160,9 +172,11 @@ VIEWS = [
            AND ie.solo_buildable = 1
            AND ie.ai_first_advantage = 1
            AND ie.moat_type = 'none'
-    """),
-
-    ("v_launch_candidates_loose", """
+    """,
+    ),
+    (
+        "v_launch_candidates_loose",
+        """
         CREATE VIEW v_launch_candidates_loose AS
         SELECT ci.id, ci.program, ci.company, ci.year_founded,
                ci.company_website, ci.cluster_id,
@@ -179,13 +193,16 @@ VIEWS = [
            AND ie.solo_buildable = 1
            AND ie.ai_first_advantage = 1
            AND ie.moat_type NOT IN ('regulatory', 'capital')
-    """),
-
+    """,
+    ),
     # default alias — the view users type most often
-    ("v_launch_candidates", """
+    (
+        "v_launch_candidates",
+        """
         CREATE VIEW v_launch_candidates AS
         SELECT * FROM v_launch_candidates_loose
-    """),
+    """,
+    ),
 ]
 
 
@@ -204,16 +221,17 @@ def setup_views(db: Database) -> None:
 # Reporting helpers
 # ---------------------------------------------------------------------------
 
+
 def stats(db: Database) -> None:
     cur = db.conn.cursor()
     for q, label in [
-        ("SELECT COUNT(*) FROM company_ideas",                      "company_ideas"),
-        ("SELECT COUNT(*) FROM idea_extraction WHERE error IS NULL","idea_extraction (ok)"),
-        ("SELECT COUNT(*) FROM idea_extraction WHERE error NOT NULL","idea_extraction (err)"),
-        ("SELECT COUNT(DISTINCT mechanism) FROM v_mechanism_sector_cells","distinct mechanisms"),
-        ("SELECT COUNT(DISTINCT sector)    FROM v_mechanism_sector_cells","distinct sectors"),
-        ("SELECT COUNT(*)                  FROM v_matrix",          "populated cells"),
-        ("SELECT COUNT(*)                  FROM v_launch_candidates","launch_candidates"),
+        ("SELECT COUNT(*) FROM company_ideas", "company_ideas"),
+        ("SELECT COUNT(*) FROM idea_extraction WHERE error IS NULL", "idea_extraction (ok)"),
+        ("SELECT COUNT(*) FROM idea_extraction WHERE error NOT NULL", "idea_extraction (err)"),
+        ("SELECT COUNT(DISTINCT mechanism) FROM v_mechanism_sector_cells", "distinct mechanisms"),
+        ("SELECT COUNT(DISTINCT sector)    FROM v_mechanism_sector_cells", "distinct sectors"),
+        ("SELECT COUNT(*)                  FROM v_matrix", "populated cells"),
+        ("SELECT COUNT(*)                  FROM v_launch_candidates", "launch_candidates"),
     ]:
         try:
             n = cur.execute(q).fetchone()[0]
@@ -270,8 +288,7 @@ def empty_cells(db: Database, min_mech: int, min_sector: int) -> None:
     w.writerow(["mechanism", "sector", "mech_total", "sector_total"])
     for r in rows:
         w.writerow(r)
-    print(f"# {len(rows)} empty cells (min mechanism total={min_mech}, "
-          f"min sector total={min_sector})", file=sys.stderr)
+    print(f"# {len(rows)} empty cells (min mechanism total={min_mech}, min sector total={min_sector})", file=sys.stderr)
 
 
 def sparse_cells(db: Database, max_n: int) -> None:
@@ -314,16 +331,15 @@ def cell(db: Database, mechanism: str, sector: str) -> None:
         (mechanism, sector),
     ).fetchall()
     w = csv.writer(sys.stdout)
-    w.writerow(["company", "program", "year_founded", "customer_size",
-                "business_model", "moat_type"])
+    w.writerow(["company", "program", "year_founded", "customer_size", "business_model", "moat_type"])
     w.writerows(rows)
-    print(f"# {len(rows)} companies in cell ({mechanism} × {sector})",
-          file=sys.stderr)
+    print(f"# {len(rows)} companies in cell ({mechanism} × {sector})", file=sys.stderr)
 
 
 # ---------------------------------------------------------------------------
 # CLI
 # ---------------------------------------------------------------------------
+
 
 def main():
     p = argparse.ArgumentParser(description=__doc__)
@@ -335,15 +351,11 @@ def main():
     p.add_argument("--sparse-cells", type=int, metavar="N")
     p.add_argument("--launch-candidates", action="store_true")
     p.add_argument("--cell", nargs=2, metavar=("MECH", "SECTOR"))
-    p.add_argument("--min-mech", type=int, default=10,
-                   help="For --empty-cells: minimum mechanism total to consider")
-    p.add_argument("--min-sector", type=int, default=10,
-                   help="For --empty-cells: minimum sector total to consider")
+    p.add_argument("--min-mech", type=int, default=10, help="For --empty-cells: minimum mechanism total to consider")
+    p.add_argument("--min-sector", type=int, default=10, help="For --empty-cells: minimum sector total to consider")
     args = p.parse_args()
 
-    logging.basicConfig(level=logging.INFO,
-                        format="%(asctime)s %(levelname)s %(message)s",
-                        datefmt="%H:%M:%S")
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s", datefmt="%H:%M:%S")
 
     db = Database(args.db)
     try:
@@ -361,9 +373,16 @@ def main():
             launch_candidates(db)
         if args.cell:
             cell(db, args.cell[0], args.cell[1])
-        if not any([args.stats, args.matrix, args.empty_cells,
-                    args.sparse_cells is not None, args.launch_candidates,
-                    args.cell]):
+        if not any(
+            [
+                args.stats,
+                args.matrix,
+                args.empty_cells,
+                args.sparse_cells is not None,
+                args.launch_candidates,
+                args.cell,
+            ]
+        ):
             # default action: just set up views and print stats
             stats(db)
     finally:

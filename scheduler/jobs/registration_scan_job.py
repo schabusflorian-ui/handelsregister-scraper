@@ -407,9 +407,7 @@ class RegistrationScanJob:
         try:
             from processing.ad_capture import capture_ad_for_company
 
-            capture_ad_for_company(
-                self.db, self.source, company_id, result, self.rate_limiter
-            )
+            capture_ad_for_company(self.db, self.source, company_id, result, self.rate_limiter)
         except Exception as e:  # noqa: BLE001
             logger.debug("AD capture error for %s: %s", result.name, e)
 
@@ -419,9 +417,7 @@ class RegistrationScanJob:
         try:
             from processing.vo_capture import capture_neueintragung
 
-            capture_neueintragung(
-                self.db, self.source, company_id, result, self.rate_limiter
-            )
+            capture_neueintragung(self.db, self.source, company_id, result, self.rate_limiter)
         except Exception as e:  # noqa: BLE001
             logger.debug("VÖ capture error for %s: %s", result.name, e)
 

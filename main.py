@@ -157,8 +157,10 @@ def bulk_load(ctx, limit, min_score, force_download):
                 tech_categories=tech_cats,
             )
             classification = startup_scorer.classify(
-                startup_result, ai_relevance_score=ai_score,
-                climate_score=clim_score, tech_categories=tech_cats,
+                startup_result,
+                ai_relevance_score=ai_score,
+                climate_score=clim_score,
+                tech_categories=tech_cats,
             )
 
             if startup_result.total_score != company.get("startup_score", 0) or classification != company.get(
@@ -354,7 +356,9 @@ def stats(ctx):
     if startup_class:
         console.print("\n[bold]Startup Classification:[/bold]")
         for classification, count in startup_class.items():
-            emoji = "🚀" if classification == "startup" else "💼" if classification in ("scaleup", "tech_company") else "🏢"
+            emoji = (
+                "🚀" if classification == "startup" else "💼" if classification in ("scaleup", "tech_company") else "🏢"
+            )
             console.print(f"  {emoji} {classification}: {count:,}")
 
     # Startup score distribution

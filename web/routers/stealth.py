@@ -32,6 +32,7 @@ router = APIRouter()
 # Filter helpers
 # ---------------------------------------------------------------------------
 
+
 def _build_filters(
     *,
     q: Optional[str] = None,
@@ -76,6 +77,7 @@ def _build_filters(
 # HTML routes
 # ---------------------------------------------------------------------------
 
+
 def _clean_display_name(raw: Optional[str]) -> str:
     """LinkedIn snippets sometimes contain multiple people/roles concatenated
     with ' – ' or ' | '. For display, cut at the first such separator so the
@@ -99,27 +101,29 @@ async def signals_index(
     min_signals: Optional[int] = 2,
     starred: Optional[str] = None,
     geo: Optional[str] = None,
-    sort: str = "score",       # score | last | signals
+    sort: str = "score",  # score | last | signals
     page: int = 1,
     per_page: int = 50,
 ):
     db = get_db()
     try:
         where, params = _build_filters(
-            q=q, sector=sector, signal_type=signal_type,
-            min_score=min_score, min_signals=min_signals,
-            starred=starred, geo=geo,
+            q=q,
+            sector=sector,
+            signal_type=signal_type,
+            min_score=min_score,
+            min_signals=min_signals,
+            starred=starred,
+            geo=geo,
         )
 
         sort_sql = {
-            "score":    "composite_score DESC, signal_count DESC",
-            "last":     "last_signal_at DESC",
-            "signals":  "signal_count DESC, composite_score DESC",
+            "score": "composite_score DESC, signal_count DESC",
+            "last": "last_signal_at DESC",
+            "signals": "signal_count DESC, composite_score DESC",
         }.get(sort, "composite_score DESC")
 
-        total = db.conn.execute(
-            f"SELECT COUNT(*) FROM stealth_entities{where}", params
-        ).fetchone()[0]
+        total = db.conn.execute(f"SELECT COUNT(*) FROM stealth_entities{where}", params).fetchone()[0]
         offset = (page - 1) * per_page
         rows = db.conn.execute(
             f"""SELECT * FROM stealth_entities{where}
@@ -131,26 +135,24 @@ async def signals_index(
         for r in rows:
             d = dict(r)
             d["signal_types_list"] = json.loads(d.get("signal_types") or "[]")
-            d["sector_tags_list"]  = json.loads(d.get("sector_tags")  or "[]")
-            d["display_name"]      = _clean_display_name(d.get("primary_name"))
+            d["sector_tags_list"] = json.loads(d.get("sector_tags") or "[]")
+            d["display_name"] = _clean_display_name(d.get("primary_name"))
             entities.append(d)
 
         # Summary stats, for the sidebar/header
         stats = {}
         for key, sql in {
-            "total":       "SELECT COUNT(*) FROM stealth_entities",
-            "multi":       "SELECT COUNT(*) FROM stealth_entities WHERE signal_count >= 2",
-            "triple":      "SELECT COUNT(*) FROM stealth_entities WHERE signal_count >= 3",
-            "last_7d":     "SELECT COUNT(*) FROM stealth_entities WHERE last_signal_at >= date('now','-7 days')",
-            "last_30d":    "SELECT COUNT(*) FROM stealth_entities WHERE last_signal_at >= date('now','-30 days')",
+            "total": "SELECT COUNT(*) FROM stealth_entities",
+            "multi": "SELECT COUNT(*) FROM stealth_entities WHERE signal_count >= 2",
+            "triple": "SELECT COUNT(*) FROM stealth_entities WHERE signal_count >= 3",
+            "last_7d": "SELECT COUNT(*) FROM stealth_entities WHERE last_signal_at >= date('now','-7 days')",
+            "last_30d": "SELECT COUNT(*) FROM stealth_entities WHERE last_signal_at >= date('now','-30 days')",
         }.items():
             stats[key] = db.conn.execute(sql).fetchone()[0]
 
         # Available sector/signal filter options derived from the data
         sectors = []
-        for r in db.conn.execute(
-            "SELECT sector_tags FROM stealth_entities WHERE sector_tags IS NOT NULL"
-        ):
+        for r in db.conn.execute("SELECT sector_tags FROM stealth_entities WHERE sector_tags IS NOT NULL"):
             try:
                 for t in json.loads(r["sector_tags"] or "[]"):
                     if isinstance(t, str) and t not in sectors:
@@ -174,9 +176,14 @@ async def signals_index(
                 "per_page": per_page,
                 "total_pages": total_pages,
                 "filters": {
-                    "q": q, "sector": sector, "signal_type": signal_type,
-                    "min_score": min_score, "min_signals": min_signals,
-                    "starred": starred, "geo": geo, "sort": sort,
+                    "q": q,
+                    "sector": sector,
+                    "signal_type": signal_type,
+                    "min_score": min_score,
+                    "min_signals": min_signals,
+                    "starred": starred,
+                    "geo": geo,
+                    "sort": sort,
                 },
             },
         )
@@ -192,7 +199,7 @@ async def signals_people(
     min_founder_conf: Optional[int] = 40,
     min_signals: Optional[int] = 1,
     role_only: Optional[str] = None,  # 'yes' = require person_role not NULL
-    sort: str = "founder",            # founder | score | last
+    sort: str = "founder",  # founder | score | last
     page: int = 1,
     per_page: int = 50,
 ):
@@ -224,13 +231,11 @@ async def signals_people(
 
         sort_sql = {
             "founder": "founder_confidence DESC, composite_score DESC, signal_count DESC",
-            "score":   "composite_score DESC, founder_confidence DESC",
-            "last":    "last_signal_at DESC",
+            "score": "composite_score DESC, founder_confidence DESC",
+            "last": "last_signal_at DESC",
         }.get(sort, "founder_confidence DESC")
 
-        total = db.conn.execute(
-            f"SELECT COUNT(*) FROM stealth_entities{where}", params
-        ).fetchone()[0]
+        total = db.conn.execute(f"SELECT COUNT(*) FROM stealth_entities{where}", params).fetchone()[0]
         offset = (page - 1) * per_page
         rows = db.conn.execute(
             f"""SELECT * FROM stealth_entities{where}
@@ -242,15 +247,14 @@ async def signals_people(
         for r in rows:
             d = dict(r)
             d["signal_types_list"] = json.loads(d.get("signal_types") or "[]")
-            d["sector_tags_list"]  = json.loads(d.get("sector_tags")  or "[]")
-            d["display_name"]      = _clean_display_name(d.get("primary_name"))
+            d["sector_tags_list"] = json.loads(d.get("sector_tags") or "[]")
+            d["display_name"] = _clean_display_name(d.get("primary_name"))
             people.append(d)
 
         # Available sectors derived from the data
         sectors = []
         for r in db.conn.execute(
-            "SELECT sector_tags FROM stealth_entities "
-            "WHERE sector_tags IS NOT NULL AND is_person = 1"
+            "SELECT sector_tags FROM stealth_entities WHERE sector_tags IS NOT NULL AND is_person = 1"
         ):
             try:
                 for t in json.loads(r["sector_tags"] or "[]"):
@@ -261,24 +265,37 @@ async def signals_people(
         sectors.sort()
 
         stats = {
-            "total_people":    db.conn.execute("SELECT COUNT(*) FROM stealth_entities WHERE is_person = 1").fetchone()[0],
-            "high_conf":       db.conn.execute("SELECT COUNT(*) FROM stealth_entities WHERE is_person = 1 AND founder_confidence >= 60").fetchone()[0],
-            "has_role":        db.conn.execute("SELECT COUNT(*) FROM stealth_entities WHERE is_person = 1 AND person_role IS NOT NULL").fetchone()[0],
-            "has_company":     db.conn.execute("SELECT COUNT(*) FROM stealth_entities WHERE is_person = 1 AND signal_types LIKE '%handelsregister_new%'").fetchone()[0],
+            "total_people": db.conn.execute("SELECT COUNT(*) FROM stealth_entities WHERE is_person = 1").fetchone()[0],
+            "high_conf": db.conn.execute(
+                "SELECT COUNT(*) FROM stealth_entities WHERE is_person = 1 AND founder_confidence >= 60"
+            ).fetchone()[0],
+            "has_role": db.conn.execute(
+                "SELECT COUNT(*) FROM stealth_entities WHERE is_person = 1 AND person_role IS NOT NULL"
+            ).fetchone()[0],
+            "has_company": db.conn.execute(
+                "SELECT COUNT(*) FROM stealth_entities WHERE is_person = 1 AND signal_types LIKE '%handelsregister_new%'"
+            ).fetchone()[0],
         }
         total_pages = max(1, math.ceil(total / per_page))
 
         return templates.TemplateResponse(
             "stealth/people.html",
             {
-                "request": request, "people": people, "total": total,
-                "stats": stats, "sectors": sectors,
-                "page": page, "per_page": per_page, "total_pages": total_pages,
+                "request": request,
+                "people": people,
+                "total": total,
+                "stats": stats,
+                "sectors": sectors,
+                "page": page,
+                "per_page": per_page,
+                "total_pages": total_pages,
                 "filters": {
-                    "q": q, "sector": sector,
+                    "q": q,
+                    "sector": sector,
                     "min_founder_conf": min_founder_conf,
                     "min_signals": min_signals,
-                    "role_only": role_only, "sort": sort,
+                    "role_only": role_only,
+                    "sort": sort,
                 },
             },
         )
@@ -290,14 +307,12 @@ async def signals_people(
 async def signals_entity_detail(request: Request, entity_id: int):
     db = get_db()
     try:
-        entity = db.conn.execute(
-            "SELECT * FROM stealth_entities WHERE id = ?", (entity_id,)
-        ).fetchone()
+        entity = db.conn.execute("SELECT * FROM stealth_entities WHERE id = ?", (entity_id,)).fetchone()
         if not entity:
             raise HTTPException(status_code=404, detail="Entity not found")
         ent = dict(entity)
         ent["signal_types_list"] = json.loads(ent.get("signal_types") or "[]")
-        ent["sector_tags_list"]  = json.loads(ent.get("sector_tags")  or "[]")
+        ent["sector_tags_list"] = json.loads(ent.get("sector_tags") or "[]")
 
         signals = []
         for r in db.conn.execute(
@@ -310,17 +325,16 @@ async def signals_entity_detail(request: Request, entity_id: int):
             except (TypeError, ValueError, json.JSONDecodeError):
                 d["sector_tags_list"] = []
             try:
-                d["raw_payload_pretty"] = json.dumps(
-                    json.loads(d["raw_payload"]), indent=2
-                ) if d.get("raw_payload") else None
+                d["raw_payload_pretty"] = (
+                    json.dumps(json.loads(d["raw_payload"]), indent=2) if d.get("raw_payload") else None
+                )
             except (TypeError, ValueError, json.JSONDecodeError):
                 d["raw_payload_pretty"] = d.get("raw_payload")
             signals.append(d)
 
         return templates.TemplateResponse(
             "stealth/detail.html",
-            {"request": request, "entity": ent, "signals": signals,
-             "signal_weights": SIGNAL_WEIGHTS},
+            {"request": request, "entity": ent, "signals": signals, "signal_weights": SIGNAL_WEIGHTS},
         )
     finally:
         db.close()
@@ -329,6 +343,7 @@ async def signals_entity_detail(request: Request, entity_id: int):
 # ---------------------------------------------------------------------------
 # JSON API (agent-friendly)
 # ---------------------------------------------------------------------------
+
 
 @router.get("/signals/api/schema.json")
 async def signals_api_schema():
@@ -345,15 +360,15 @@ async def signals_api_schema():
                 "method": "GET",
                 "description": "Ranked list of stealth entities.",
                 "params": {
-                    "q":            "Substring search over name/domain/github",
-                    "sector":       "Filter by sector tag (robotics|ai|climate|hardware|…)",
-                    "signal_type":  f"Filter by signal type ({'|'.join(SIGNAL_TYPES)})",
-                    "min_score":    "Minimum composite_score (0-100). Default 30.",
-                    "min_signals":  "Minimum distinct signal count. Default 2.",
-                    "geo":          "Geo region filter",
-                    "sort":         "score|last|signals (default: score)",
-                    "page":         "1-indexed",
-                    "per_page":     "Default 50, max 500",
+                    "q": "Substring search over name/domain/github",
+                    "sector": "Filter by sector tag (robotics|ai|climate|hardware|…)",
+                    "signal_type": f"Filter by signal type ({'|'.join(SIGNAL_TYPES)})",
+                    "min_score": "Minimum composite_score (0-100). Default 30.",
+                    "min_signals": "Minimum distinct signal count. Default 2.",
+                    "geo": "Geo region filter",
+                    "sort": "score|last|signals (default: score)",
+                    "page": "1-indexed",
+                    "per_page": "Default 50, max 500",
                 },
             },
             "/signals/api/entity/{id}.json": {
@@ -361,13 +376,12 @@ async def signals_api_schema():
                 "description": "Full signal history for one entity.",
             },
         },
-        "signal_types":   list(SIGNAL_TYPES),
+        "signal_types": list(SIGNAL_TYPES),
         "signal_weights": SIGNAL_WEIGHTS,
         "scoring": {
             "formula": "sum(weight for each type) + multi-signal bonus * recency decay",
             "multi_bonus": {"2+types": 15, "3+types": 15, "4+types": 10},
-            "recency_decay": {"<=30d": 1.0, "<=90d": 0.85, "<=180d": 0.65,
-                              "<=365d": 0.45, ">365d": 0.25},
+            "recency_decay": {"<=30d": 1.0, "<=90d": 0.85, "<=180d": 0.65, "<=365d": 0.45, ">365d": 0.25},
         },
     }
 
@@ -389,19 +403,21 @@ async def signals_api_entities(
     db = get_db()
     try:
         where, params = _build_filters(
-            q=q, sector=sector, signal_type=signal_type,
-            min_score=min_score, min_signals=min_signals,
-            starred=starred, geo=geo,
+            q=q,
+            sector=sector,
+            signal_type=signal_type,
+            min_score=min_score,
+            min_signals=min_signals,
+            starred=starred,
+            geo=geo,
         )
         sort_sql = {
-            "score":   "composite_score DESC, signal_count DESC",
-            "last":    "last_signal_at DESC",
+            "score": "composite_score DESC, signal_count DESC",
+            "last": "last_signal_at DESC",
             "signals": "signal_count DESC, composite_score DESC",
         }.get(sort, "composite_score DESC")
 
-        total = db.conn.execute(
-            f"SELECT COUNT(*) FROM stealth_entities{where}", params
-        ).fetchone()[0]
+        total = db.conn.execute(f"SELECT COUNT(*) FROM stealth_entities{where}", params).fetchone()[0]
         offset = (page - 1) * per_page
         rows = db.conn.execute(
             f"""SELECT id, primary_name, primary_domain, primary_github, primary_linkedin,
@@ -416,15 +432,17 @@ async def signals_api_entities(
         for r in rows:
             d = dict(r)
             d["signal_types"] = json.loads(d.get("signal_types") or "[]")
-            d["sector_tags"]  = json.loads(d.get("sector_tags")  or "[]")
+            d["sector_tags"] = json.loads(d.get("sector_tags") or "[]")
             entities.append(d)
-        return JSONResponse({
-            "total": total,
-            "page": page,
-            "per_page": per_page,
-            "total_pages": max(1, math.ceil(total / per_page)),
-            "entities": entities,
-        })
+        return JSONResponse(
+            {
+                "total": total,
+                "page": page,
+                "per_page": per_page,
+                "total_pages": max(1, math.ceil(total / per_page)),
+                "entities": entities,
+            }
+        )
     finally:
         db.close()
 
@@ -464,8 +482,8 @@ async def signals_api_people(
         where = " WHERE " + " AND ".join(conds)
         sort_sql = {
             "founder": "founder_confidence DESC, composite_score DESC, signal_count DESC",
-            "score":   "composite_score DESC, founder_confidence DESC",
-            "last":    "last_signal_at DESC",
+            "score": "composite_score DESC, founder_confidence DESC",
+            "last": "last_signal_at DESC",
         }.get(sort, "founder_confidence DESC")
 
         total = db.conn.execute(f"SELECT COUNT(*) FROM stealth_entities{where}", params).fetchone()[0]
@@ -483,14 +501,18 @@ async def signals_api_people(
         for r in rows:
             d = dict(r)
             d["signal_types"] = json.loads(d.get("signal_types") or "[]")
-            d["sector_tags"]  = json.loads(d.get("sector_tags")  or "[]")
+            d["sector_tags"] = json.loads(d.get("sector_tags") or "[]")
             d["display_name"] = _clean_display_name(d.get("primary_name"))
             people.append(d)
-        return JSONResponse({
-            "total": total, "page": page, "per_page": per_page,
-            "total_pages": max(1, math.ceil(total / per_page)),
-            "people": people,
-        })
+        return JSONResponse(
+            {
+                "total": total,
+                "page": page,
+                "per_page": per_page,
+                "total_pages": max(1, math.ceil(total / per_page)),
+                "people": people,
+            }
+        )
     finally:
         db.close()
 
@@ -499,14 +521,12 @@ async def signals_api_people(
 async def signals_api_entity(entity_id: int):
     db = get_db()
     try:
-        row = db.conn.execute(
-            "SELECT * FROM stealth_entities WHERE id = ?", (entity_id,)
-        ).fetchone()
+        row = db.conn.execute("SELECT * FROM stealth_entities WHERE id = ?", (entity_id,)).fetchone()
         if not row:
             raise HTTPException(status_code=404, detail="Entity not found")
         ent = dict(row)
         ent["signal_types"] = json.loads(ent.get("signal_types") or "[]")
-        ent["sector_tags"]  = json.loads(ent.get("sector_tags")  or "[]")
+        ent["sector_tags"] = json.loads(ent.get("sector_tags") or "[]")
 
         signals = []
         for s in db.conn.execute(

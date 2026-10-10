@@ -45,43 +45,64 @@ logger = logging.getLogger(__name__)
 # Keep this list short — each entry burns ~2–3 seconds of latency. We
 # can expand later once we see which patterns yield best.
 CRT_QUERIES = [
-    ("robotics",  "%robot%"),
-    ("robotics",  "%cobot%"),
-    ("robotics",  "%robotik%"),
-    ("ai",        "%genai%"),
-    ("ai",        "%llm%"),
-    ("ai",        "%.ai"),             # all .ai domains (noisy, filtered post-hoc)
-    ("climate",   "%climate%"),
-    ("climate",   "%carbon%"),
-    ("climate",   "%cleantech%"),
-    ("climate",   "%klimatech%"),
-    ("hardware",  "%hardware%"),
-    ("hardware",  "%semiconductor%"),
-    ("battery",   "%battery%"),
-    ("battery",   "%batterie%"),
-    ("hydrogen",  "%hydrogen%"),
-    ("hydrogen",  "%wasserstoff%"),
-    ("solar",     "%solar%"),
-    ("space",     "%aerospace%"),
-    ("biotech",   "%biotech%"),
-    ("mobility",  "%emobility%"),
+    ("robotics", "%robot%"),
+    ("robotics", "%cobot%"),
+    ("robotics", "%robotik%"),
+    ("ai", "%genai%"),
+    ("ai", "%llm%"),
+    ("ai", "%.ai"),  # all .ai domains (noisy, filtered post-hoc)
+    ("climate", "%climate%"),
+    ("climate", "%carbon%"),
+    ("climate", "%cleantech%"),
+    ("climate", "%klimatech%"),
+    ("hardware", "%hardware%"),
+    ("hardware", "%semiconductor%"),
+    ("battery", "%battery%"),
+    ("battery", "%batterie%"),
+    ("hydrogen", "%hydrogen%"),
+    ("hydrogen", "%wasserstoff%"),
+    ("solar", "%solar%"),
+    ("space", "%aerospace%"),
+    ("biotech", "%biotech%"),
+    ("mobility", "%emobility%"),
 ]
 
 
 # Hosts/suffixes we always discard — too generic to be meaningful signals.
 # These are typically used by CDNs, cloud providers, or domain parkers.
 _NOISY_SUFFIXES = (
-    ".wordpress.com", ".squarespace.com", ".wixsite.com", ".webflow.io",
-    ".github.io", ".netlify.app", ".vercel.app", ".herokuapp.com",
-    ".cloudfront.net", ".amazonaws.com", ".azurewebsites.net",
-    ".googleusercontent.com", ".cloudflarestorage.com",
-    ".shopify.com", ".myshopify.com", ".bigcartel.com",
-    ".pages.dev", ".workers.dev", ".fly.dev",
+    ".wordpress.com",
+    ".squarespace.com",
+    ".wixsite.com",
+    ".webflow.io",
+    ".github.io",
+    ".netlify.app",
+    ".vercel.app",
+    ".herokuapp.com",
+    ".cloudfront.net",
+    ".amazonaws.com",
+    ".azurewebsites.net",
+    ".googleusercontent.com",
+    ".cloudflarestorage.com",
+    ".shopify.com",
+    ".myshopify.com",
+    ".bigcartel.com",
+    ".pages.dev",
+    ".workers.dev",
+    ".fly.dev",
 )
 
 _NOISY_SUBSTRINGS = (
-    "letsencrypt", "test-", "staging", "dev-", "preview", "sandbox",
-    "example.", "localhost", "internal.", "demo.",
+    "letsencrypt",
+    "test-",
+    "staging",
+    "dev-",
+    "preview",
+    "sandbox",
+    "example.",
+    "localhost",
+    "internal.",
+    "demo.",
 )
 
 # A good candidate domain must look brand-y: a short-ish SLD, not a CDN
@@ -92,6 +113,7 @@ _PLAUSIBLE_DOMAIN = re.compile(r"^[a-z][a-z0-9-]{1,30}\.[a-z]{2,10}(\.[a-z]{2})?
 # ---------------------------------------------------------------------------
 # Fetch + parse
 # ---------------------------------------------------------------------------
+
 
 def _crt_url(pattern: str) -> str:
     """Build the crt.sh URL for one Identity-wildcard query."""
@@ -167,7 +189,7 @@ def _parse_cert_time(s: Optional[str]) -> Optional[str]:
     s = s.strip()
     for fmt in ("%Y-%m-%dT%H:%M:%S.%f", "%Y-%m-%dT%H:%M:%S", "%Y-%m-%d"):
         try:
-            dt = datetime.strptime(s[:len(datetime.now().strftime(fmt)) if False else len(s)], fmt)
+            dt = datetime.strptime(s[: len(datetime.now().strftime(fmt)) if False else len(s)], fmt)
             return dt.replace(tzinfo=timezone.utc).isoformat()
         except ValueError:
             continue
@@ -198,13 +220,14 @@ def collect_new_domains(max_days_old: int = 90) -> List[dict]:
             if not ts:
                 continue
             try:
-                ts_epoch = datetime.fromisoformat(
-                    ts.replace("Z", "+00:00") if "Z" in ts else ts
-                ).replace(tzinfo=timezone.utc).timestamp()
+                ts_epoch = (
+                    datetime.fromisoformat(ts.replace("Z", "+00:00") if "Z" in ts else ts)
+                    .replace(tzinfo=timezone.utc)
+                    .timestamp()
+                )
             except (ValueError, TypeError):
                 try:
-                    ts_epoch = datetime.strptime(ts[:19], "%Y-%m-%dT%H:%M:%S")\
-                                       .replace(tzinfo=timezone.utc).timestamp()
+                    ts_epoch = datetime.strptime(ts[:19], "%Y-%m-%dT%H:%M:%S").replace(tzinfo=timezone.utc).timestamp()
                 except (ValueError, TypeError):
                     continue
             if ts_epoch < cutoff:
@@ -219,31 +242,35 @@ def collect_new_domains(max_days_old: int = 90) -> List[dict]:
                 if dom in seen:
                     continue
                 seen.add(dom)
-                out.append({
-                    "signal_type":   "crt_domain_new",
-                    "observed_at":   _parse_cert_time(ts) or iso_now(),
-                    "source_url":    f"https://crt.sh/?id={cert_id}" if cert_id else f"crt://{dom}",
-                    "entity_name":   dom.split(".")[0],   # SLD as brand guess
-                    "entity_domain": dom,
-                    "sector_tags":   [tag],
-                    "confidence":    60.0,
-                    "raw_payload":   {"issuer_ca_id": entry.get("issuer_ca_id"),
-                                      "query_tag": tag,
-                                      "query_pattern": pattern,
-                                      "cert_id": cert_id},
-                })
+                out.append(
+                    {
+                        "signal_type": "crt_domain_new",
+                        "observed_at": _parse_cert_time(ts) or iso_now(),
+                        "source_url": f"https://crt.sh/?id={cert_id}" if cert_id else f"crt://{dom}",
+                        "entity_name": dom.split(".")[0],  # SLD as brand guess
+                        "entity_domain": dom,
+                        "sector_tags": [tag],
+                        "confidence": 60.0,
+                        "raw_payload": {
+                            "issuer_ca_id": entry.get("issuer_ca_id"),
+                            "query_tag": tag,
+                            "query_pattern": pattern,
+                            "cert_id": cert_id,
+                        },
+                    }
+                )
 
         # Be polite — crt.sh is slow and lightly-loaded
         time.sleep(2.5)
 
-    logger.info("crt.sh: %d candidate domains across %d queries",
-                len(out), len(CRT_QUERIES))
+    logger.info("crt.sh: %d candidate domains across %d queries", len(out), len(CRT_QUERIES))
     return out
 
 
 # ---------------------------------------------------------------------------
 # DB write
 # ---------------------------------------------------------------------------
+
 
 def write_signals(conn, candidates: Iterable[dict]) -> dict:
     """Insert candidates into signals via INSERT OR IGNORE."""
@@ -257,8 +284,11 @@ def write_signals(conn, candidates: Iterable[dict]) -> dict:
                  sector_tags, confidence, raw_payload
                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
             (
-                c["signal_type"], c["observed_at"], c["source_url"],
-                c.get("entity_name"), c.get("entity_domain"),
+                c["signal_type"],
+                c["observed_at"],
+                c["source_url"],
+                c.get("entity_name"),
+                c.get("entity_domain"),
                 ensure_json(c.get("sector_tags")),
                 c.get("confidence", 50.0),
                 ensure_json(c.get("raw_payload")),
@@ -276,6 +306,7 @@ def write_signals(conn, candidates: Iterable[dict]) -> dict:
 # CLI / scheduler entry
 # ---------------------------------------------------------------------------
 
+
 def run(conn, max_days_old: int = 90) -> dict:
     """One pass — fetch + write + return stats."""
     cands = collect_new_domains(max_days_old=max_days_old)
@@ -286,6 +317,7 @@ def run(conn, max_days_old: int = 90) -> dict:
 
 def main():
     import argparse
+
     p = argparse.ArgumentParser()
     p.add_argument("--db", default="handelsregister.db")
     p.add_argument("--days", type=int, default=90)

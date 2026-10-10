@@ -121,9 +121,7 @@ def _save_state(path: str, state: dict) -> None:
         json.dump(state, f, indent=2)
 
 
-def _select_candidates(
-    db: Database, source_filter: str | None, limit: int, id_ceiling: int
-) -> list[dict]:
+def _select_candidates(db: Database, source_filter: str | None, limit: int, id_ceiling: int) -> list[dict]:
     """
     Select companies missing capital_amount, newest-first.
 
@@ -202,12 +200,14 @@ def backfill_one(
         return False
 
     try:
-        results = list(source.search(
-            register_number=hrb,
-            register_court=court,
-            registry_types=["HRB"],
-            max_results=1,
-        ))
+        results = list(
+            source.search(
+                register_number=hrb,
+                register_court=court,
+                registry_types=["HRB"],
+                max_results=1,
+            )
+        )
     except Exception as e:  # noqa: BLE001
         logger.debug("search failed for %s: %s", company["name"], e)
         return False
@@ -219,7 +219,11 @@ def backfill_one(
     # AD PDF (1 request, gated by source's own rate limiter)
     try:
         captured = capture_ad_for_company(
-            db, source, company["id"], results[0], rate_limiter=None,
+            db,
+            source,
+            company["id"],
+            results[0],
+            rate_limiter=None,
         )
         return captured
     except Exception as e:  # noqa: BLE001
@@ -230,16 +234,17 @@ def backfill_one(
 def main() -> None:
     parser = argparse.ArgumentParser(description="Backfill AD PDF data (capital, purpose, address)")
     parser.add_argument("--db", default="handelsregister.db", help="SQLite path")
-    parser.add_argument("--state-file", default="data/ad_backfill_state.json",
-                        help="Resume checkpoint (default: data/ad_backfill_state.json)")
-    parser.add_argument("--source", choices=["registration_scan", "bundesapi", "offeneregister", "news"],
-                        help="Filter by source column")
-    parser.add_argument("--max-companies", type=int, default=None,
-                        help="Stop after N companies (default: no limit)")
-    parser.add_argument("--max-hours", type=float, default=None,
-                        help="Stop after N hours (default: no limit)")
-    parser.add_argument("--batch-size", type=int, default=30,
-                        help="Candidates to fetch per DB query (default: 30)")
+    parser.add_argument(
+        "--state-file",
+        default="data/ad_backfill_state.json",
+        help="Resume checkpoint (default: data/ad_backfill_state.json)",
+    )
+    parser.add_argument(
+        "--source", choices=["registration_scan", "bundesapi", "offeneregister", "news"], help="Filter by source column"
+    )
+    parser.add_argument("--max-companies", type=int, default=None, help="Stop after N companies (default: no limit)")
+    parser.add_argument("--max-hours", type=float, default=None, help="Stop after N hours (default: no limit)")
+    parser.add_argument("--batch-size", type=int, default=30, help="Candidates to fetch per DB query (default: 30)")
     parser.add_argument("--verbose", "-v", action="store_true")
     args = parser.parse_args()
 
@@ -261,8 +266,7 @@ def main() -> None:
         max_id = cursor.fetchone()[0] or 0
         state["next_id_ceiling"] = max_id + 1
 
-    logger.info("AD backfill starting. Source filter: %s | ceiling: %d",
-                args.source or "any", state["next_id_ceiling"])
+    logger.info("AD backfill starting. Source filter: %s | ceiling: %d", args.source or "any", state["next_id_ceiling"])
 
     deadline = time.time() + args.max_hours * 3600 if args.max_hours else None
 
@@ -275,9 +279,7 @@ def main() -> None:
                 logger.info("Reached --max-hours limit")
                 break
 
-            candidates = _select_candidates(
-                db, args.source, args.batch_size, state["next_id_ceiling"]
-            )
+            candidates = _select_candidates(db, args.source, args.batch_size, state["next_id_ceiling"])
             if not candidates:
                 logger.info("No more candidates below ceiling=%d", state["next_id_ceiling"])
                 break
@@ -288,12 +290,14 @@ def main() -> None:
                 if deadline and time.time() > deadline:
                     break
 
-                logger.info("[%d] %s (%s, %s) id=%d",
-                            state["processed"] + 1,
-                            co["name"][:50],
-                            co["native_company_number"],
-                            co.get("source"),
-                            co["id"])
+                logger.info(
+                    "[%d] %s (%s, %s) id=%d",
+                    state["processed"] + 1,
+                    co["name"][:50],
+                    co["native_company_number"],
+                    co.get("source"),
+                    co["id"],
+                )
 
                 ok = backfill_one(db, source, rate_limiter, co)
                 state["processed"] += 1
@@ -323,8 +327,7 @@ def main() -> None:
         logger.info("  Processed: %d", state["processed"])
         logger.info("  Succeeded: %d (capital/purpose captured)", state["succeeded"])
         logger.info("  Failed:    %d", state["failed"])
-        logger.info("  Checkpoint: %s (next_id_ceiling=%d)",
-                    args.state_file, state["next_id_ceiling"])
+        logger.info("  Checkpoint: %s (next_id_ceiling=%d)", args.state_file, state["next_id_ceiling"])
 
 
 if __name__ == "__main__":

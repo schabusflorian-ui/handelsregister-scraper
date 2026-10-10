@@ -43,6 +43,7 @@ NAME_SIM_THRESHOLD = 0.75
 # Entity resolution
 # ---------------------------------------------------------------------------
 
+
 def _find_entity_id(cur, signal: dict) -> Optional[int]:
     """Return existing stealth_entity id matching this signal, or None.
 
@@ -54,8 +55,8 @@ def _find_entity_id(cur, signal: dict) -> Optional[int]:
          loose when the entity already has this type (dedup within source)
     """
     dom = normalize_domain(signal.get("entity_domain"))
-    gh  = normalize_github(signal.get("entity_github"))
-    li  = (signal.get("person_linkedin") or "").strip().lower() or None
+    gh = normalize_github(signal.get("entity_github"))
+    li = (signal.get("person_linkedin") or "").strip().lower() or None
     incoming_type = signal.get("signal_type")
 
     if dom:
@@ -88,8 +89,7 @@ def _find_entity_id(cur, signal: dict) -> Optional[int]:
         # Keeps the fuzzy pass bounded.
         first_token = name_norm.split()[0]
         candidates = cur.execute(
-            "SELECT id, primary_name, signal_types FROM stealth_entities "
-            "WHERE lower(primary_name) LIKE ? LIMIT 500",
+            "SELECT id, primary_name, signal_types FROM stealth_entities WHERE lower(primary_name) LIKE ? LIMIT 500",
             (f"%{first_token}%",),
         ).fetchall()
         best_id, best_sim, best_strict = None, 0.0, False
@@ -101,13 +101,9 @@ def _find_entity_id(cur, signal: dict) -> Optional[int]:
             # Cross-type merges use strict (require 2+ shared tokens).
             # Same-type merges stay loose (within-source dedup).
             is_cross_type = (
-                incoming_type is not None
-                and incoming_type not in existing_types
-                and len(existing_types) > 0
+                incoming_type is not None and incoming_type not in existing_types and len(existing_types) > 0
             )
-            sim = name_similarity(signal.get("entity_name"),
-                                  c["primary_name"],
-                                  strict=is_cross_type)
+            sim = name_similarity(signal.get("entity_name"), c["primary_name"], strict=is_cross_type)
             if sim > best_sim:
                 best_sim, best_id, best_strict = sim, c["id"], is_cross_type
         # Threshold is the same (0.75) but strict rules kick in during
@@ -148,7 +144,8 @@ def _create_entity(cur, signal: dict) -> int:
             (signal.get("person_linkedin") or "").strip().lower() or None,
             initial_types,
             signal.get("geo_region"),
-            now, now,
+            now,
+            now,
         ),
     )
     return cur.lastrowid
@@ -158,11 +155,11 @@ def _create_entity(cur, signal: dict) -> int:
 # Aggregate recompute
 # ---------------------------------------------------------------------------
 
+
 def _merge_sector_tags(cur, entity_id: int) -> Optional[str]:
     """Union sector_tags across all signals for this entity."""
     rows = cur.execute(
-        "SELECT sector_tags FROM signals "
-        "WHERE stealth_entity_id = ? AND sector_tags IS NOT NULL",
+        "SELECT sector_tags FROM signals WHERE stealth_entity_id = ? AND sector_tags IS NOT NULL",
         (entity_id,),
     ).fetchall()
     tags: Set[str] = set()
@@ -189,9 +186,7 @@ def _pick_primary(cur, entity_id: int, field: str, signal_col: str) -> Optional[
 
 
 # Signal types that pin a specific human
-_PERSON_SIGNAL_TYPES = frozenset(
-    {"linkedin_stealth", "linkedin_transition", "founder_match"}
-)
+_PERSON_SIGNAL_TYPES = frozenset({"linkedin_stealth", "linkedin_transition", "founder_match"})
 
 # Role keywords that qualify a person as a founder (vs. plain employee)
 _FOUNDER_ROLE_RX = re.compile(
@@ -205,8 +200,7 @@ def _founder_role_from_signals(cur, entity_id: int) -> Optional[str]:
     """Scan signal payloads for a founder-ish role string. Returns the
     first match verbatim (so UI can display 'Co-Founder & CEO' etc.)."""
     rows = cur.execute(
-        "SELECT raw_payload FROM signals "
-        "WHERE stealth_entity_id = ? AND raw_payload IS NOT NULL",
+        "SELECT raw_payload FROM signals WHERE stealth_entity_id = ? AND raw_payload IS NOT NULL",
         (entity_id,),
     ).fetchall()
     for r in rows:
@@ -222,8 +216,7 @@ def _founder_role_from_signals(cur, entity_id: int) -> Optional[str]:
     return None
 
 
-def _compute_founder_confidence(types_set: set, role: Optional[str],
-                                cur, entity_id: int) -> float:
+def _compute_founder_confidence(types_set: set, role: Optional[str], cur, entity_id: int) -> float:
     """0-100 founder confidence.
 
     Blends four axes:
@@ -265,10 +258,16 @@ def _compute_founder_confidence(types_set: set, role: Optional[str],
         if c:
             try:
                 seen = str(c["first_seen_date"] or "")[:10]
-                if seen >= (datetime.now(timezone.utc).date().replace(
+                if seen >= (
+                    datetime.now(timezone.utc)
+                    .date()
+                    .replace(
                         year=datetime.now(timezone.utc).year - 2
-                        if datetime.now(timezone.utc).month > 1 else
-                        datetime.now(timezone.utc).year - 2).isoformat()):
+                        if datetime.now(timezone.utc).month > 1
+                        else datetime.now(timezone.utc).year - 2
+                    )
+                    .isoformat()
+                ):
                     fc += 10
             except (ValueError, TypeError):
                 pass
@@ -304,13 +303,12 @@ def _recompute_entity(cur, entity_id: int) -> None:
     sector_tags = _merge_sector_tags(cur, entity_id)
     best_domain = _pick_primary(cur, entity_id, "primary_domain", "entity_domain")
     best_github = _pick_primary(cur, entity_id, "primary_github", "entity_github")
-    best_name   = _pick_primary(cur, entity_id, "primary_name",   "entity_name")
-    best_li     = _pick_primary(cur, entity_id, "primary_linkedin","person_linkedin")
+    best_name = _pick_primary(cur, entity_id, "primary_name", "entity_name")
+    best_li = _pick_primary(cur, entity_id, "primary_linkedin", "person_linkedin")
 
     is_person = int(bool(types_set & _PERSON_SIGNAL_TYPES))
     role = _founder_role_from_signals(cur, entity_id) if is_person else None
-    founder_conf = (_compute_founder_confidence(types_set, role, cur, entity_id)
-                    if is_person else 0.0)
+    founder_conf = _compute_founder_confidence(types_set, role, cur, entity_id) if is_person else 0.0
 
     now = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
     cur.execute(
@@ -334,16 +332,21 @@ def _recompute_entity(cur, entity_id: int) -> None:
         (
             agg["cnt"],
             ensure_json(sorted(set(types))),
-            agg["first_at"], agg["last_at"],
+            agg["first_at"],
+            agg["last_at"],
             sector_tags,
             agg["geo"],
             score,
             is_person,
             founder_conf,
             role,
-            best_domain, best_github, best_li,
-            best_name, best_name,
-            now, entity_id,
+            best_domain,
+            best_github,
+            best_li,
+            best_name,
+            best_name,
+            now,
+            entity_id,
         ),
     )
 
@@ -351,6 +354,7 @@ def _recompute_entity(cur, entity_id: int) -> None:
 # ---------------------------------------------------------------------------
 # Driver
 # ---------------------------------------------------------------------------
+
 
 def run_joiner(conn, *, limit: Optional[int] = None, rebuild_all: bool = False) -> dict:
     """Resolve unresolved signals + recompute their aggregates.
@@ -407,14 +411,16 @@ def run_joiner(conn, *, limit: Optional[int] = None, rebuild_all: bool = False) 
 # CLI entry point
 # ---------------------------------------------------------------------------
 
+
 def main():
     import argparse
     import sqlite3
 
     p = argparse.ArgumentParser()
     p.add_argument("--db", default="handelsregister.db")
-    p.add_argument("--rebuild-all", action="store_true",
-                   help="Drop all signal→entity links and re-resolve from scratch")
+    p.add_argument(
+        "--rebuild-all", action="store_true", help="Drop all signal→entity links and re-resolve from scratch"
+    )
     p.add_argument("--limit", type=int, default=None)
     args = p.parse_args()
 

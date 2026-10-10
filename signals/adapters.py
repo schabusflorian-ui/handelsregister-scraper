@@ -31,6 +31,7 @@ logger = logging.getLogger(__name__)
 # Sector-tag derivation
 # ---------------------------------------------------------------------------
 
+
 def _company_sector_tags(row: sqlite3.Row) -> List[str]:
     """Derive sector_tags from the companies columns we have."""
     tags: List[str] = []
@@ -57,18 +58,20 @@ def _company_sector_tags(row: sqlite3.Row) -> List[str]:
 # Keyword vocabularies, used across adapters to extract sector hints from
 # free-form text (news titles, LinkedIn headlines)
 _SECTOR_KEYWORDS = {
-    "robotics":   re.compile(r"\b(robot|robotic|robotik|cobot|roboter)\w*", re.I),
-    "ai":         re.compile(r"\b(a\.?i\.?|artificial intelligence|machine learning|llm|generative|künstliche intelligenz)\b", re.I),
-    "climate":    re.compile(r"\b(climate|klima|decarbon|dekarbon|emission|co2|carbon capture|cleantech)\w*", re.I),
-    "hardware":   re.compile(r"\b(hardware|chip|semiconductor|wafer|silicon)\w*", re.I),
-    "battery":    re.compile(r"\b(battery|batterie|accu|lithium|solid[- ]state)\w*", re.I),
-    "solar":      re.compile(r"\b(solar|photovolt|pv anlage)\w*", re.I),
-    "wind":       re.compile(r"\b(wind energy|wind power|windkraft|offshore wind)\b", re.I),
-    "hydrogen":   re.compile(r"\b(hydrogen|wasserstoff|h2 \w+)\b", re.I),
-    "mobility":   re.compile(r"\b(mobility|mobilität|ev charg|autonom\w*|elektromob)\w*", re.I),
-    "biotech":    re.compile(r"\b(biotech|synbio|crispr|mrna|life sciences)\w*", re.I),
-    "fintech":    re.compile(r"\b(fintech|neobank|paytech|insurtech)\w*", re.I),
-    "space":      re.compile(r"\b(aerospace|satellite|new ?space|rocket|orbital)\w*", re.I),
+    "robotics": re.compile(r"\b(robot|robotic|robotik|cobot|roboter)\w*", re.I),
+    "ai": re.compile(
+        r"\b(a\.?i\.?|artificial intelligence|machine learning|llm|generative|künstliche intelligenz)\b", re.I
+    ),
+    "climate": re.compile(r"\b(climate|klima|decarbon|dekarbon|emission|co2|carbon capture|cleantech)\w*", re.I),
+    "hardware": re.compile(r"\b(hardware|chip|semiconductor|wafer|silicon)\w*", re.I),
+    "battery": re.compile(r"\b(battery|batterie|accu|lithium|solid[- ]state)\w*", re.I),
+    "solar": re.compile(r"\b(solar|photovolt|pv anlage)\w*", re.I),
+    "wind": re.compile(r"\b(wind energy|wind power|windkraft|offshore wind)\b", re.I),
+    "hydrogen": re.compile(r"\b(hydrogen|wasserstoff|h2 \w+)\b", re.I),
+    "mobility": re.compile(r"\b(mobility|mobilität|ev charg|autonom\w*|elektromob)\w*", re.I),
+    "biotech": re.compile(r"\b(biotech|synbio|crispr|mrna|life sciences)\w*", re.I),
+    "fintech": re.compile(r"\b(fintech|neobank|paytech|insurtech)\w*", re.I),
+    "space": re.compile(r"\b(aerospace|satellite|new ?space|rocket|orbital)\w*", re.I),
 }
 
 
@@ -83,8 +86,8 @@ def _sectors_from_text(*texts: Optional[str]) -> List[str]:
 # 1. companies → handelsregister_new
 # ---------------------------------------------------------------------------
 
-def adapt_companies(conn, *, min_seen_date: Optional[str] = None,
-                    require_startup_flag: bool = True) -> dict:
+
+def adapt_companies(conn, *, min_seen_date: Optional[str] = None, require_startup_flag: bool = True) -> dict:
     """Emit a `handelsregister_new` signal per sector-relevant company.
 
     `source_url` key is `handelsregister://company/{id}` so re-runs stay idempotent.
@@ -98,8 +101,9 @@ def adapt_companies(conn, *, min_seen_date: Optional[str] = None,
         where.append("substr(first_seen_date,1,10) >= ?")
         params.append(min_seen_date)
     if require_startup_flag:
-        where.append("(ai_robotics_score >= 2 OR climate_score >= 2 "
-                     "OR startup_score >= 3 OR startup_classification IS NOT NULL)")
+        where.append(
+            "(ai_robotics_score >= 2 OR climate_score >= 2 OR startup_score >= 3 OR startup_classification IS NOT NULL)"
+        )
     where_sql = (" WHERE " + " AND ".join(where)) if where else ""
     sql = (
         "SELECT id, name, city, state, website, first_seen_date, "
@@ -151,36 +155,158 @@ def adapt_companies(conn, *, min_seen_date: Optional[str] = None,
 # fuzzy-matches, so near-misses still land on the right entity when LinkedIn
 # or Handelsregister adds a sharper key later.
 _TITLE_STOPWORDS = {
-    "the", "and", "with", "for", "that", "this", "from", "into", "about",
-    "startup", "startups", "founder", "founders", "ai", "robotics",
-    "climate", "millionen", "million", "mio", "euro", "funding", "runde",
-    "raised", "secures", "launches", "neue", "new", "nach", "mit", "bei",
-    "in", "von", "zu", "zum", "zur", "wie", "warum", "wird", "ist", "hat",
-    "says", "report", "news", "latest", "berlin", "münchen", "hamburg",
-    "muenchen", "köln", "koeln", "frankfurt", "stuttgart", "paris", "london",
-    "wien", "zürich", "zurich", "amsterdam",
+    "the",
+    "and",
+    "with",
+    "for",
+    "that",
+    "this",
+    "from",
+    "into",
+    "about",
+    "startup",
+    "startups",
+    "founder",
+    "founders",
+    "ai",
+    "robotics",
+    "climate",
+    "millionen",
+    "million",
+    "mio",
+    "euro",
+    "funding",
+    "runde",
+    "raised",
+    "secures",
+    "launches",
+    "neue",
+    "new",
+    "nach",
+    "mit",
+    "bei",
+    "in",
+    "von",
+    "zu",
+    "zum",
+    "zur",
+    "wie",
+    "warum",
+    "wird",
+    "ist",
+    "hat",
+    "says",
+    "report",
+    "news",
+    "latest",
+    "berlin",
+    "münchen",
+    "hamburg",
+    "muenchen",
+    "köln",
+    "koeln",
+    "frankfurt",
+    "stuttgart",
+    "paris",
+    "london",
+    "wien",
+    "zürich",
+    "zurich",
+    "amsterdam",
     # German weekdays, months — title-case gets them a lot
-    "montag", "dienstag", "mittwoch", "donnerstag", "freitag",
-    "samstag", "sonntag", "januar", "februar", "märz", "maerz", "april",
-    "juni", "juli", "august", "september", "oktober", "november", "dezember",
+    "montag",
+    "dienstag",
+    "mittwoch",
+    "donnerstag",
+    "freitag",
+    "samstag",
+    "sonntag",
+    "januar",
+    "februar",
+    "märz",
+    "maerz",
+    "april",
+    "juni",
+    "juli",
+    "august",
+    "september",
+    "oktober",
+    "november",
+    "dezember",
     # Topic/category words frequently title-cased in German press
-    "elektroauto", "elektroautos", "verkehrswende", "lithiumabbau",
-    "wasserstoff", "klimawandel", "energiewende", "künstliche", "kuenstliche",
-    "intelligence", "intelligenz", "artificial",
-    "wirtschaft", "politik", "regierung", "bundestag", "europa",
-    "deutschland", "österreich", "oesterreich", "schweiz",
-    "tech", "startup-szene", "venture", "unicorn",
+    "elektroauto",
+    "elektroautos",
+    "verkehrswende",
+    "lithiumabbau",
+    "wasserstoff",
+    "klimawandel",
+    "energiewende",
+    "künstliche",
+    "kuenstliche",
+    "intelligence",
+    "intelligenz",
+    "artificial",
+    "wirtschaft",
+    "politik",
+    "regierung",
+    "bundestag",
+    "europa",
+    "deutschland",
+    "österreich",
+    "oesterreich",
+    "schweiz",
+    "tech",
+    "startup-szene",
+    "venture",
+    "unicorn",
     # Generic news/finance nouns that cap in German headlines
-    "studie", "exklusiv", "meinung", "kommentar", "interview", "podcast",
-    "chef", "chefin", "ceo", "cfo", "cto", "boss",
-    "deal", "deals", "megadeal", "trend", "trends",
-    "jahr", "jahre", "woche", "monat", "quartal",
-    "umsatz", "gewinn", "verlust", "aktien", "börse",
-    "geld", "preis", "preise", "kosten",
-    "mobility", "lifescience", "fintech", "biotech", "cleantech", "deeptech",
-    "insurtech", "proptech", "edtech", "medtech",
+    "studie",
+    "exklusiv",
+    "meinung",
+    "kommentar",
+    "interview",
+    "podcast",
+    "chef",
+    "chefin",
+    "ceo",
+    "cfo",
+    "cto",
+    "boss",
+    "deal",
+    "deals",
+    "megadeal",
+    "trend",
+    "trends",
+    "jahr",
+    "jahre",
+    "woche",
+    "monat",
+    "quartal",
+    "umsatz",
+    "gewinn",
+    "verlust",
+    "aktien",
+    "börse",
+    "geld",
+    "preis",
+    "preise",
+    "kosten",
+    "mobility",
+    "lifescience",
+    "fintech",
+    "biotech",
+    "cleantech",
+    "deeptech",
+    "insurtech",
+    "proptech",
+    "edtech",
+    "medtech",
     # Very common company suffixes if they slip through legal-form stripping
-    "corp", "inc", "ltd", "llc", "ag",
+    "corp",
+    "inc",
+    "ltd",
+    "llc",
+    "ag",
 }
 
 # Funding / launch / stealth-ish verbs that must appear in a title for
@@ -202,9 +328,7 @@ _NEWS_FUNDING_PATTERNS = re.compile(
 # Regex is permissive on token length (1+ after capital) so "AI", "ML", "VC"
 # token second words are captured. Combined with the stopword list + the
 # single-token CamelCase guard in _guess_entity, this stays conservative.
-_TITLE_ENTITY = re.compile(
-    r"\b([A-Z][\w&\.\-]{1,}(?:\s+[A-Z][\w&\.\-]{1,}){0,3})\b"
-)
+_TITLE_ENTITY = re.compile(r"\b([A-Z][\w&\.\-]{1,}(?:\s+[A-Z][\w&\.\-]{1,}){0,3})\b")
 
 
 def _guess_entity(title: str) -> Optional[str]:
@@ -245,8 +369,7 @@ def _guess_entity(title: str) -> Optional[str]:
     return None
 
 
-def adapt_news(conn, *, min_date: Optional[str] = None,
-               early_stage_only: bool = True) -> dict:
+def adapt_news(conn, *, min_date: Optional[str] = None, early_stage_only: bool = True) -> dict:
     cur = conn.cursor()
     where = []
     params: List = []
@@ -256,9 +379,11 @@ def adapt_news(conn, *, min_date: Optional[str] = None,
         where.append("substr(published_date,1,10) >= ?")
         params.append(min_date)
     where_sql = (" WHERE " + " AND ".join(where)) if where else ""
-    sql = (f"SELECT id, url, title, source, published_date, fetched_at, "
-           f"       is_ai_related, is_funding_related, is_early_stage_related "
-           f"  FROM news_articles{where_sql}")
+    sql = (
+        f"SELECT id, url, title, source, published_date, fetched_at, "
+        f"       is_ai_related, is_funding_related, is_early_stage_related "
+        f"  FROM news_articles{where_sql}"
+    )
 
     rows = cur.execute(sql, params).fetchall()
     inserted = skipped = no_entity = no_funding_verb = 0
@@ -301,17 +426,23 @@ def adapt_news(conn, *, min_date: Optional[str] = None,
     conn.commit()
     logger.info(
         "news adapter: inserted=%d skipped=%d no_entity=%d no_funding_verb=%d",
-        inserted, skipped, no_entity, no_funding_verb,
+        inserted,
+        skipped,
+        no_entity,
+        no_funding_verb,
     )
     return {
-        "inserted": inserted, "skipped": skipped,
-        "no_entity": no_entity, "no_funding_verb": no_funding_verb,
+        "inserted": inserted,
+        "skipped": skipped,
+        "no_entity": no_entity,
+        "no_funding_verb": no_funding_verb,
     }
 
 
 # ---------------------------------------------------------------------------
 # 3. stealth_founders → linkedin_stealth  (+ linkedin_transition from history)
 # ---------------------------------------------------------------------------
+
 
 def adapt_stealth_founders(conn, *, min_confidence: float = 0.3) -> dict:
     """Base LinkedIn-stealth signal per founder, plus the stronger
@@ -321,8 +452,10 @@ def adapt_stealth_founders(conn, *, min_confidence: float = 0.3) -> dict:
     """
     cur = conn.cursor()
     stats = {
-        "stealth_inserted": 0, "stealth_skipped": 0,
-        "transitions_inserted": 0, "transitions_skipped": 0,
+        "stealth_inserted": 0,
+        "stealth_skipped": 0,
+        "transitions_inserted": 0,
+        "transitions_skipped": 0,
     }
 
     # ---- base LinkedIn stealth ----
@@ -359,12 +492,14 @@ def adapt_stealth_founders(conn, *, min_confidence: float = 0.3) -> dict:
                 r["linkedin_url"],
                 ensure_json(tags),
                 r["geo_region"] or "DE",
-                ensure_json({
-                    "founder_id": r["id"],
-                    "headline": r["headline"],
-                    "location": r["location"],
-                    "detection_source": r["detection_source"],
-                }),
+                ensure_json(
+                    {
+                        "founder_id": r["id"],
+                        "headline": r["headline"],
+                        "location": r["location"],
+                        "detection_source": r["detection_source"],
+                    }
+                ),
                 min(100.0, float(r["confidence_score"] or 0.5) * 100.0),
             ),
         )
@@ -410,12 +545,14 @@ def adapt_stealth_founders(conn, *, min_confidence: float = 0.3) -> dict:
                 r["linkedin_url"],
                 ensure_json(tags),
                 r["geo_region"] or "DE",
-                ensure_json({
-                    "founder_id": r["founder_id"],
-                    "field": r["field_name"],
-                    "old": r["old_value"],
-                    "new": r["new_value"],
-                }),
+                ensure_json(
+                    {
+                        "founder_id": r["founder_id"],
+                        "field": r["field_name"],
+                        "old": r["old_value"],
+                        "new": r["new_value"],
+                    }
+                ),
             ),
         )
         if res.rowcount:
@@ -432,25 +569,25 @@ def adapt_stealth_founders(conn, *, min_confidence: float = 0.3) -> dict:
 # Driver
 # ---------------------------------------------------------------------------
 
+
 def run_all(conn) -> dict:
     """Convenience: run the adapters in dependency-free order."""
     from .officer_adapter import adapt_officers
+
     return {
-        "companies":        adapt_companies(conn),
-        "news":             adapt_news(conn),
+        "companies": adapt_companies(conn),
+        "news": adapt_news(conn),
         "stealth_founders": adapt_stealth_founders(conn),
-        "officers":         adapt_officers(conn),
+        "officers": adapt_officers(conn),
     }
 
 
 def main():
     import argparse
+
     p = argparse.ArgumentParser()
     p.add_argument("--db", default="handelsregister.db")
-    p.add_argument("--only",
-                   choices=["companies", "news", "stealth_founders",
-                            "officers", "all"],
-                   default="all")
+    p.add_argument("--only", choices=["companies", "news", "stealth_founders", "officers", "all"], default="all")
     args = p.parse_args()
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -461,6 +598,7 @@ def main():
             out = run_all(conn)
         elif args.only == "officers":
             from .officer_adapter import adapt_officers
+
             out = {"officers": adapt_officers(conn)}
         else:
             out = {args.only: globals()[f"adapt_{args.only}"](conn)}

@@ -28,14 +28,14 @@ from urllib.parse import urlparse
 # multi-signal bonus below is what makes a 2+ signal entity score far above
 # a single-signal one, which is the whole point.
 SIGNAL_WEIGHTS = {
-    "handelsregister_new":   30.0,  # legal entity exists — strongest fact
-    "founder_match":         35.0,  # LinkedIn ↔ officer exact match — strongest person link
-    "linkedin_stealth":      22.0,  # person claims stealth right now
-    "linkedin_transition":   28.0,  # person RECENTLY went stealth (delta)
-    "crt_domain_new":        18.0,  # product has a website
-    "github_org_new":        18.0,  # code is being written
-    "news_mention":          15.0,  # press picked them up
-    "job_posting_stealth":   12.0,  # 1-5p stealth company hiring
+    "handelsregister_new": 30.0,  # legal entity exists — strongest fact
+    "founder_match": 35.0,  # LinkedIn ↔ officer exact match — strongest person link
+    "linkedin_stealth": 22.0,  # person claims stealth right now
+    "linkedin_transition": 28.0,  # person RECENTLY went stealth (delta)
+    "crt_domain_new": 18.0,  # product has a website
+    "github_org_new": 18.0,  # code is being written
+    "news_mention": 15.0,  # press picked them up
+    "job_posting_stealth": 12.0,  # 1-5p stealth company hiring
 }
 
 # Everything the joiner should iterate over
@@ -46,22 +46,40 @@ SIGNAL_TYPES = tuple(SIGNAL_WEIGHTS.keys())
 # Normalization
 # ---------------------------------------------------------------------------
 
-_GENERIC_HOSTS = frozenset({
-    "linkedin.com", "www.linkedin.com",
-    "github.com", "www.github.com",
-    "twitter.com", "x.com", "www.twitter.com",
-    "crunchbase.com", "www.crunchbase.com",
-    "news.ycombinator.com", "ycombinator.com",
-    "reddit.com", "www.reddit.com", "old.reddit.com",
-    "medium.com", "www.medium.com",
-    "handelsregister.de", "www.handelsregister.de",
-    "unternehmensregister.de", "www.unternehmensregister.de",
-    "northdata.de", "www.northdata.de",
-    "producthunt.com", "www.producthunt.com",
-    "google.com", "www.google.com",
-    "facebook.com", "www.facebook.com",
-    "youtube.com", "www.youtube.com",
-})
+_GENERIC_HOSTS = frozenset(
+    {
+        "linkedin.com",
+        "www.linkedin.com",
+        "github.com",
+        "www.github.com",
+        "twitter.com",
+        "x.com",
+        "www.twitter.com",
+        "crunchbase.com",
+        "www.crunchbase.com",
+        "news.ycombinator.com",
+        "ycombinator.com",
+        "reddit.com",
+        "www.reddit.com",
+        "old.reddit.com",
+        "medium.com",
+        "www.medium.com",
+        "handelsregister.de",
+        "www.handelsregister.de",
+        "unternehmensregister.de",
+        "www.unternehmensregister.de",
+        "northdata.de",
+        "www.northdata.de",
+        "producthunt.com",
+        "www.producthunt.com",
+        "google.com",
+        "www.google.com",
+        "facebook.com",
+        "www.facebook.com",
+        "youtube.com",
+        "www.youtube.com",
+    }
+)
 
 # Legal-form noise that must come OFF entity_name before fuzzy match
 _LEGAL_FORMS = re.compile(
@@ -149,26 +167,60 @@ _MIN_TOKEN_LEN = 3
 # Common tokens that don't carry identity info even after legal_forms are stripped.
 # Includes cities, generic business words, and category labels that will match
 # across many unrelated entities.
-_NAME_STOPWORDS = frozenset({
-    "and", "the", "for", "with", "a", "an",
-    "ai", "ml", "io", "app", "web",
-    "und", "der", "die", "das",
-    # cities (false-match magnets in the news corpus)
-    "berlin", "münchen", "muenchen", "hamburg", "köln", "koeln",
-    "frankfurt", "stuttgart", "düsseldorf", "duesseldorf", "leipzig",
-    "wien", "zürich", "zurich", "london", "paris", "amsterdam",
-    # generic business-word nouns that routinely appear in names
-    "startup", "startups", "company", "firm",
-    "project", "team", "studio", "studios", "works",
-})
+_NAME_STOPWORDS = frozenset(
+    {
+        "and",
+        "the",
+        "for",
+        "with",
+        "a",
+        "an",
+        "ai",
+        "ml",
+        "io",
+        "app",
+        "web",
+        "und",
+        "der",
+        "die",
+        "das",
+        # cities (false-match magnets in the news corpus)
+        "berlin",
+        "münchen",
+        "muenchen",
+        "hamburg",
+        "köln",
+        "koeln",
+        "frankfurt",
+        "stuttgart",
+        "düsseldorf",
+        "duesseldorf",
+        "leipzig",
+        "wien",
+        "zürich",
+        "zurich",
+        "london",
+        "paris",
+        "amsterdam",
+        # generic business-word nouns that routinely appear in names
+        "startup",
+        "startups",
+        "company",
+        "firm",
+        "project",
+        "team",
+        "studio",
+        "studios",
+        "works",
+    }
+)
 
 
 def _tokens(s: str) -> set:
     return {t for t in s.split() if len(t) >= _MIN_TOKEN_LEN and t not in _NAME_STOPWORDS}
 
 
-def name_similarity(a: Optional[str], b: Optional[str],
-                    *, strict: bool = False) -> float:
+def name_similarity(a: Optional[str], b: Optional[str], *, strict: bool = False) -> float:
     """Hybrid name similarity (0.0 … 1.0).
 
     Combines two measures and takes the max:
@@ -203,11 +255,7 @@ def name_similarity(a: Optional[str], b: Optional[str],
     # tokens, OR a single shared token that is distinctive (≥ 6 chars).
     # City/business noise is already filtered via stopwords. In strict
     # mode the single-token path is disabled.
-    distinctive_single = (
-        not strict
-        and len(inter) == 1
-        and max(len(t) for t in inter) >= 6
-    )
+    distinctive_single = not strict and len(inter) == 1 and max(len(t) for t in inter) >= 6
     if len(inter) >= 2 or distinctive_single:
         overlap = len(inter) / min(len(ta), len(tb))
     return max(jaccard, overlap)
@@ -216,6 +264,7 @@ def name_similarity(a: Optional[str], b: Optional[str],
 # ---------------------------------------------------------------------------
 # Scoring
 # ---------------------------------------------------------------------------
+
 
 def _parse_dt(s: Optional[str]) -> Optional[datetime]:
     if not s:
@@ -252,9 +301,9 @@ def recency_multiplier(last_signal_at: Optional[str], now: Optional[datetime] = 
     return 0.25
 
 
-def composite_score(signal_types: Iterable[str],
-                    last_signal_at: Optional[str],
-                    now: Optional[datetime] = None) -> float:
+def composite_score(
+    signal_types: Iterable[str], last_signal_at: Optional[str], now: Optional[datetime] = None
+) -> float:
     """0 – 100 composite. The multi-signal bonus is the key insight: a single
     signal in isolation scores low, two signals cross-confirming each other
     score high, three near max.
@@ -280,6 +329,7 @@ def composite_score(signal_types: Iterable[str],
 # ---------------------------------------------------------------------------
 # Signal row helpers
 # ---------------------------------------------------------------------------
+
 
 def ensure_json(x) -> Optional[str]:
     """Serialize a list/dict for storage; None stays None."""

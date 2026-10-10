@@ -55,11 +55,13 @@ def _load_alias_map(db: Database, axis: str) -> dict:
     return {r["raw_tag"]: r["canonical"] for r in rows}
 
 
-def _load_pairs(db: Database, use_aliases: bool = True) -> Tuple[
-    List[Tuple[str, str]],   # mechanism × sector pairs (one per row per combo)
-    Counter,                 # mechanism counts across all rows
-    Counter,                 # sector counts across all rows
-    int,                     # total extracted rows
+def _load_pairs(
+    db: Database, use_aliases: bool = True
+) -> Tuple[
+    List[Tuple[str, str]],  # mechanism × sector pairs (one per row per combo)
+    Counter,  # mechanism counts across all rows
+    Counter,  # sector counts across all rows
+    int,  # total extracted rows
 ]:
     """Unpack (mechanism, sector) pairs from every successful extraction.
 
@@ -97,7 +99,7 @@ def _load_pairs(db: Database, use_aliases: bool = True) -> Tuple[
     for r in rows:
         try:
             raw_mechs = json.loads(r["mechanism_tags"] or "[]")
-            raw_sects = json.loads(r["sector_tags"]    or "[]")
+            raw_sects = json.loads(r["sector_tags"] or "[]")
         except Exception:  # noqa: BLE001
             continue
         mechs = {m for m in (resolve(t, mech_alias) for t in raw_mechs) if m}
@@ -180,9 +182,7 @@ def _print_gaps(
         if n > 0:
             applied_in[m].add(s)
 
-    active_sectors = {
-        s for s, n in sect_counts.items() if n >= min_sector_activity
-    }
+    active_sectors = {s for s, n in sect_counts.items() if n >= min_sector_activity}
 
     rows: List[Tuple[str, int, str, int]] = []
     for m, sectors in applied_in.items():
@@ -199,15 +199,11 @@ def _print_gaps(
     rows.sort(key=lambda r: r[1] * r[3], reverse=True)
 
     if not rows:
-        print(
-            "  (no gaps at current thresholds — dataset too small or "
-            "thresholds too strict)"
-        )
+        print("  (no gaps at current thresholds — dataset too small or thresholds too strict)")
         return
 
-    print(f"  {'MECHANISM':<34} {'uses':>5}   "
-          f"{'ABSENT FROM SECTOR':<28} {'sect-uses':>10}")
-    for (m, mu, s, su) in rows[:max_rows]:
+    print(f"  {'MECHANISM':<34} {'uses':>5}   {'ABSENT FROM SECTOR':<28} {'sect-uses':>10}")
+    for m, mu, s, su in rows[:max_rows]:
         print(f"  {m[:34]:<34} {mu:>5}   {s[:28]:<28} {su:>10}")
     if len(rows) > max_rows:
         print(f"  ... ({len(rows) - max_rows} more; raise --top-gaps to see)")
@@ -217,9 +213,7 @@ def _dump_csv(path: Path, matrix: Counter) -> None:
     with path.open("w", newline="") as f:
         w = csv.writer(f)
         w.writerow(["mechanism", "sector", "count"])
-        for (m, s), n in sorted(
-            matrix.items(), key=lambda kv: (-kv[1], kv[0][0], kv[0][1])
-        ):
+        for (m, s), n in sorted(matrix.items(), key=lambda kv: (-kv[1], kv[0][0], kv[0][1])):
             w.writerow([m, s, n])
 
 
@@ -236,8 +230,7 @@ def main():
         "--min-proven",
         type=int,
         default=2,
-        help="Min distinct sectors a mechanism must appear in "
-        "to count as 'proven' (default: 2)",
+        help="Min distinct sectors a mechanism must appear in to count as 'proven' (default: 2)",
     )
     p.add_argument(
         "--min-sector-activity",
@@ -245,12 +238,8 @@ def main():
         default=2,
         help="Min total uses for a sector to be in the gap candidate pool",
     )
-    p.add_argument(
-        "--top-gaps", type=int, default=25, help="Max gap rows to print"
-    )
-    p.add_argument(
-        "--csv", type=str, default=None, help="Also dump raw pairs to CSV"
-    )
+    p.add_argument("--top-gaps", type=int, default=25, help="Max gap rows to print")
+    p.add_argument("--csv", type=str, default=None, help="Also dump raw pairs to CSV")
     p.add_argument(
         "--no-aliases",
         action="store_true",
@@ -260,11 +249,8 @@ def main():
 
     db = Database(args.db)
     try:
-        pairs, mech_counts, sect_counts, n_rows = _load_pairs(
-            db, use_aliases=not args.no_aliases
-        )
-        print(f"loaded {n_rows} extracted rows → "
-              f"{len(pairs)} (mech × sector) pair-instances")
+        pairs, mech_counts, sect_counts, n_rows = _load_pairs(db, use_aliases=not args.no_aliases)
+        print(f"loaded {n_rows} extracted rows → {len(pairs)} (mech × sector) pair-instances")
         print(f"  distinct mechanisms: {len(mech_counts)}")
         print(f"  distinct sectors:    {len(sect_counts)}")
         if n_rows == 0:

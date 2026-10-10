@@ -1008,10 +1008,21 @@ class AIRoboticsFilter:
         if tech_categories and score == 0 and climate_score == 0:
             # Each non-AI/climate tech category adds +1 relevance
             non_domain_cats = [
-                c for c in tech_categories
-                if c not in ("general_ai", "climate_tech", "robotics", "computer_vision",
-                             "nlp", "ml_analytics", "generative_ai", "autonomous_systems",
-                             "industry_40", "deeptech")
+                c
+                for c in tech_categories
+                if c
+                not in (
+                    "general_ai",
+                    "climate_tech",
+                    "robotics",
+                    "computer_vision",
+                    "nlp",
+                    "ml_analytics",
+                    "generative_ai",
+                    "autonomous_systems",
+                    "industry_40",
+                    "deeptech",
+                )
             ]
             if non_domain_cats:
                 score = len(non_domain_cats)

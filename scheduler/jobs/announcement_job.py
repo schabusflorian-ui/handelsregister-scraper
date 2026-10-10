@@ -215,9 +215,7 @@ class AnnouncementMonitoringJob:
             postal_code=ann.postal_code,
             street=ann.street,
             registration_date=ann.announcement_date,
-            first_registered_date=(
-                ann.announcement_date if ann.announcement_type == "neueintragung" else None
-            ),
+            first_registered_date=(ann.announcement_date if ann.announcement_type == "neueintragung" else None),
             representation_rules=getattr(ann, "representation_rules", None),
             ai_robotics_score=filter_result.relevance_score,
             climate_score=filter_result.climate_score,
@@ -234,10 +232,7 @@ class AnnouncementMonitoringJob:
         # Optional inline website lookup for high-signal companies. The full
         # scrape stays on WebsiteScrapeJob; we only try cheap domain guesses
         # here so the announcement run stays fast.
-        if (
-            self.inline_website_lookup
-            and filter_result.relevance_score >= self.inline_website_min_score
-        ):
+        if self.inline_website_lookup and filter_result.relevance_score >= self.inline_website_min_score:
             self._try_inline_website_lookup(company_id, ann)
 
         stats["new_companies"] += 1

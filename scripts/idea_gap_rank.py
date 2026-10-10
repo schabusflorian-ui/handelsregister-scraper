@@ -112,7 +112,7 @@ def _load_extractions(db: Database) -> List[dict]:
     for r in rows:
         try:
             raw_m = json.loads(r["mechanism_tags"] or "[]")
-            raw_s = json.loads(r["sector_tags"]    or "[]")
+            raw_s = json.loads(r["sector_tags"] or "[]")
         except Exception:  # noqa: BLE001
             continue
         mechs = {m for m in (_resolve(t, mech_alias) for t in raw_m) if m}
@@ -124,7 +124,7 @@ def _load_extractions(db: Database) -> List[dict]:
                 "mechs": mechs,
                 "sects": sects,
                 "solo": 1 if r["solo_buildable"] == 1 else 0,
-                "ai":   1 if r["ai_first_advantage"] == 1 else 0,
+                "ai": 1 if r["ai_first_advantage"] == 1 else 0,
             }
         )
     return out
@@ -147,9 +147,9 @@ def _compute_scores(
 
     # Per-mechanism and per-sector solo/ai fractions across their cohorts.
     mech_solo: Dict[str, List[int]] = defaultdict(list)
-    mech_ai:   Dict[str, List[int]] = defaultdict(list)
+    mech_ai: Dict[str, List[int]] = defaultdict(list)
     sect_solo: Dict[str, List[int]] = defaultdict(list)
-    sect_ai:   Dict[str, List[int]] = defaultdict(list)
+    sect_ai: Dict[str, List[int]] = defaultdict(list)
 
     total_pair_instances = 0
     for r in rows:
@@ -174,7 +174,7 @@ def _compute_scores(
         if mu < min_proof:
             continue
         m_solo = sum(mech_solo[m]) / len(mech_solo[m]) if mech_solo[m] else 0
-        m_ai   = sum(mech_ai[m])   / len(mech_ai[m])   if mech_ai[m]   else 0
+        m_ai = sum(mech_ai[m]) / len(mech_ai[m]) if mech_ai[m] else 0
         for s, su in sect_counts.items():
             if su < min_demand:
                 continue
@@ -185,26 +185,28 @@ def _compute_scores(
                 # Pair is at or above independence — not a gap.
                 continue
             s_solo = sum(sect_solo[s]) / len(sect_solo[s]) if sect_solo[s] else 0
-            s_ai   = sum(sect_ai[s])   / len(sect_ai[s])   if sect_ai[s]   else 0
+            s_ai = sum(sect_ai[s]) / len(sect_ai[s]) if sect_ai[s] else 0
             avg_solo = (m_solo + s_solo) / 2
-            avg_ai   = (m_ai   + s_ai)   / 2
+            avg_ai = (m_ai + s_ai) / 2
 
-            proof  = math.log1p(mu)
+            proof = math.log1p(mu)
             demand = math.log1p(su)
-            score  = gap_size * proof * demand * (1.0 + avg_solo)
+            score = gap_size * proof * demand * (1.0 + avg_solo)
 
-            rankings.append({
-                "mechanism": m,
-                "sector": s,
-                "actual_count": actual,
-                "mech_uses": mu,
-                "sector_uses": su,
-                "expected_count": round(expected, 2),
-                "gap_size": round(gap_size, 2),
-                "solo_fraction": round(avg_solo, 3),
-                "ai_fraction": round(avg_ai, 3),
-                "score": round(score, 3),
-            })
+            rankings.append(
+                {
+                    "mechanism": m,
+                    "sector": s,
+                    "actual_count": actual,
+                    "mech_uses": mu,
+                    "sector_uses": su,
+                    "expected_count": round(expected, 2),
+                    "gap_size": round(gap_size, 2),
+                    "solo_fraction": round(avg_solo, 3),
+                    "ai_fraction": round(avg_ai, 3),
+                    "score": round(score, 3),
+                }
+            )
 
     rankings.sort(key=lambda r: r["score"], reverse=True)
     for i, r in enumerate(rankings, 1):
@@ -243,7 +245,7 @@ def _print_top(rankings: List[dict], top: int) -> None:
             f"{r['actual_count']:>6} "
             f"{r['expected_count']:>6.1f} "
             f"{r['gap_size']:>6.1f} "
-            f"{int(r['solo_fraction']*100):>4}% "
+            f"{int(r['solo_fraction'] * 100):>4}% "
             f"{r['score']:>8.1f}"
         )
 
@@ -284,10 +286,7 @@ def main():
         rows = _load_extractions(db)
         print(f"loaded {len(rows)} extracted rows")
         rankings = _compute_scores(rows, args.min_proof, args.min_demand)
-        print(
-            f"scored {len(rankings)} gap pairs "
-            f"(proof>={args.min_proof}, demand>={args.min_demand})"
-        )
+        print(f"scored {len(rankings)} gap pairs (proof>={args.min_proof}, demand>={args.min_demand})")
         _persist(db, rankings)
         _print_top(rankings, args.top)
         if args.csv:

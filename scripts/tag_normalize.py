@@ -117,9 +117,7 @@ def build_alias_map(
             continue
         # Fuzzy — token_sort_ratio handles word-order flips like
         # "saas-subscription" vs "subscription-saas".
-        match = process.extractOne(
-            canon, vocab, scorer=fuzz.token_sort_ratio
-        )
+        match = process.extractOne(canon, vocab, scorer=fuzz.token_sort_ratio)
         if match is not None and match[1] >= threshold:
             out.append((raw, match[0], float(match[1]), "fuzzy", n))
         else:
@@ -134,10 +132,7 @@ def _load_raw_counts(db: Database, axis: str) -> Counter:
     column = "mechanism_tags" if axis == "mechanism" else "sector_tags"
     cur = db.conn.cursor()
     c: Counter = Counter()
-    rows = cur.execute(
-        f"SELECT {column} FROM idea_extraction WHERE error IS NULL "
-        f"AND {column} IS NOT NULL"
-    ).fetchall()
+    rows = cur.execute(f"SELECT {column} FROM idea_extraction WHERE error IS NULL AND {column} IS NOT NULL").fetchall()
     for r in rows:
         try:
             tags = json.loads(r[column] or "[]")
@@ -158,8 +153,7 @@ def _persist(
     cur = db.conn.cursor()
     cur.execute("DELETE FROM tag_alias WHERE axis = ?", (axis,))
     cur.executemany(
-        "INSERT INTO tag_alias (raw_tag, axis, canonical, score, method, occurrences) "
-        "VALUES (?, ?, ?, ?, ?, ?)",
+        "INSERT INTO tag_alias (raw_tag, axis, canonical, score, method, occurrences) VALUES (?, ?, ?, ?, ?, ?)",
         [(r[0], axis, r[1], r[2], r[3], r[4]) for r in rows],
     )
     db.conn.commit()
@@ -186,18 +180,12 @@ def _summary(
         o = occ_by_method.get(m, 0)
         d_pct = 100 * d / total_distinct if total_distinct else 0
         o_pct = 100 * o / total_occ if total_occ else 0
-        print(
-            f"    {m:<10} {d:>5} tags  ({d_pct:>4.1f}%)   "
-            f"{o:>7} occ  ({o_pct:>4.1f}%)"
-        )
+        print(f"    {m:<10} {d:>5} tags  ({d_pct:>4.1f}%)   {o:>7} occ  ({o_pct:>4.1f}%)")
 
     invented = [r for r in rows if r[3] == "invented"]
     invented.sort(key=lambda r: r[4], reverse=True)
     if invented:
-        print(
-            f"\n  top {min(top_invented, len(invented))} invented tags "
-            f"(candidates for seed promotion):"
-        )
+        print(f"\n  top {min(top_invented, len(invented))} invented tags (candidates for seed promotion):")
         for raw, canon, _, _, n in invented[:top_invented]:
             print(f"    {n:>4}  {canon}   (raw: {raw!r})")
 
@@ -209,8 +197,7 @@ def main():
         "--threshold",
         type=int,
         default=85,
-        help="Fuzzy match threshold on token_sort_ratio (0-100). "
-        "85 is conservative; 75 folds more aggressively.",
+        help="Fuzzy match threshold on token_sort_ratio (0-100). 85 is conservative; 75 folds more aggressively.",
     )
     p.add_argument(
         "--top-invented",
@@ -234,12 +221,9 @@ def main():
     db.conn.commit()
 
     try:
-        for axis, vocab in (("mechanism", MECHANISM_VOCAB),
-                            ("sector",    SECTOR_VOCAB)):
+        for axis, vocab in (("mechanism", MECHANISM_VOCAB), ("sector", SECTOR_VOCAB)):
             raw_counter = _load_raw_counts(db, axis)
-            rows = build_alias_map(
-                raw_counter, vocab, args.threshold, args.verbose
-            )
+            rows = build_alias_map(raw_counter, vocab, args.threshold, args.verbose)
             if not args.dry_run:
                 _persist(db, axis, rows)
             _summary(axis, rows, args.top_invented)
@@ -247,9 +231,7 @@ def main():
         if args.dry_run:
             print("\n(dry-run: no changes written)")
         else:
-            total = cur.execute(
-                "SELECT COUNT(*) FROM tag_alias"
-            ).fetchone()[0]
+            total = cur.execute("SELECT COUNT(*) FROM tag_alias").fetchone()[0]
             print(f"\n=> wrote {total} alias rows into tag_alias")
     finally:
         db.conn.close()

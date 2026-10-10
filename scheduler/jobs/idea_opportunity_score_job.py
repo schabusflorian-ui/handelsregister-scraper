@@ -62,25 +62,35 @@ ERA = {
     None: 3,
 }
 MOAT = {
-    "none": 25, "brand": 18, "integration": 15,
-    "domain_expertise": 12, "data": 8, "network": 5,
-    "regulatory": 0, "capital": 0,  # disqualifying
+    "none": 25,
+    "brand": 18,
+    "integration": 15,
+    "domain_expertise": 12,
+    "data": 8,
+    "network": 5,
+    "regulatory": 0,
+    "capital": 0,  # disqualifying
     None: 8,
 }
 
 
 def _launch_shape_score(solo: int, ai_first: int) -> int:
-    if solo == 1 and ai_first == 1: return 25
-    if solo == 1 and ai_first == 0: return 12
-    if solo == 0 and ai_first == 1: return 8
+    if solo == 1 and ai_first == 1:
+        return 25
+    if solo == 1 and ai_first == 0:
+        return 12
+    if solo == 0 and ai_first == 1:
+        return 8
     return 0
 
 
 def _recency_bonus(year: int, solo: int, ai_first: int) -> int:
     if not year or solo != 1 or ai_first != 1:
         return 0
-    if year >= 2025: return 10
-    if year >= 2022: return 5
+    if year >= 2025:
+        return 10
+    if year >= 2022:
+        return 5
     return 0
 
 
@@ -88,19 +98,18 @@ def compute_score(row: Dict) -> Dict:
     niche = NICHE.get(row.get("niche_specificity"), 3)
     era = ERA.get(row.get("era_class"), 3)
     moat = MOAT.get(row.get("moat_type"), 8)
-    shape = _launch_shape_score(row.get("solo_buildable") or 0,
-                                row.get("ai_first_advantage") or 0)
-    bonus = _recency_bonus(row.get("year_founded") or 0,
-                           row.get("solo_buildable") or 0,
-                           row.get("ai_first_advantage") or 0)
+    shape = _launch_shape_score(row.get("solo_buildable") or 0, row.get("ai_first_advantage") or 0)
+    bonus = _recency_bonus(
+        row.get("year_founded") or 0, row.get("solo_buildable") or 0, row.get("ai_first_advantage") or 0
+    )
     total = niche + era + moat + shape + bonus
     return {
         "score": min(total, 100),
         "breakdown": {
-            "niche":   niche,
-            "era":     era,
-            "moat":    moat,
-            "shape":   shape,
+            "niche": niche,
+            "era": era,
+            "moat": moat,
+            "shape": shape,
             "recency": bonus,
         },
     }
@@ -113,10 +122,7 @@ def _ensure_columns(db: Database) -> None:
         cur.execute("ALTER TABLE company_ideas ADD COLUMN opportunity_score INTEGER")
     if "opportunity_breakdown" not in cols:
         cur.execute("ALTER TABLE company_ideas ADD COLUMN opportunity_breakdown TEXT")
-    cur.execute(
-        "CREATE INDEX IF NOT EXISTS idx_ideas_opp_score "
-        "ON company_ideas(opportunity_score DESC)"
-    )
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_ideas_opp_score ON company_ideas(opportunity_score DESC)")
     db.conn.commit()
 
 
@@ -144,8 +150,7 @@ def run(db_path: str) -> None:
         for r in rows:
             result = compute_score(dict(r))
             cur.execute(
-                "UPDATE company_ideas SET opportunity_score = ?, "
-                "opportunity_breakdown = ? WHERE id = ?",
+                "UPDATE company_ideas SET opportunity_score = ?, opportunity_breakdown = ? WHERE id = ?",
                 (result["score"], json.dumps(result["breakdown"]), r["id"]),
             )
 
@@ -189,11 +194,13 @@ def report(db_path: str) -> None:
          LIMIT 10
         """
     ):
-        print(f"  {r['opportunity_score']:>3}  {r['company'][:45]:<47} "
-              f"{(r['year_founded'] or '-'):4}  "
-              f"{(r['niche_specificity'] or '-'):<8}  "
-              f"moat={r['moat_type'] or '-':<18}  "
-              f"era={r['era_class'] or '-'}")
+        print(
+            f"  {r['opportunity_score']:>3}  {r['company'][:45]:<47} "
+            f"{(r['year_founded'] or '-'):4}  "
+            f"{(r['niche_specificity'] or '-'):<8}  "
+            f"moat={r['moat_type'] or '-':<18}  "
+            f"era={r['era_class'] or '-'}"
+        )
     db.conn.close()
 
 
@@ -202,9 +209,7 @@ def main():
     p.add_argument("--db", default="handelsregister.db")
     p.add_argument("--report-only", action="store_true")
     args = p.parse_args()
-    logging.basicConfig(level=logging.INFO,
-                        format="%(asctime)s %(levelname)s %(message)s",
-                        datefmt="%H:%M:%S")
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s", datefmt="%H:%M:%S")
     if args.report_only:
         report(args.db)
     else:

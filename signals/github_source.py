@@ -41,21 +41,22 @@ logger = logging.getLogger(__name__)
 ORG_QUERIES = [
     ("robotics", "robotics"),
     ("robotics", "cobot"),
-    ("ai",       "genai"),
-    ("ai",       "llm agent"),
-    ("climate",  "climate tech"),
-    ("climate",  "carbon capture"),
+    ("ai", "genai"),
+    ("ai", "llm agent"),
+    ("climate", "climate tech"),
+    ("climate", "carbon capture"),
     ("hardware", "semiconductor"),
-    ("battery",  "battery"),
+    ("battery", "battery"),
     ("hydrogen", "hydrogen"),
-    ("space",    "aerospace"),
-    ("biotech",  "biotech"),
+    ("space", "aerospace"),
+    ("biotech", "biotech"),
 ]
 
 
 # ---------------------------------------------------------------------------
 # Fetch
 # ---------------------------------------------------------------------------
+
 
 def _gh_headers() -> dict:
     headers = {
@@ -89,22 +90,21 @@ def _get_json(url: str, timeout: int = 20) -> Optional[dict]:
 # Query runners
 # ---------------------------------------------------------------------------
 
+
 def _since_date(days: int) -> str:
     return (datetime.now(timezone.utc) - timedelta(days=days)).strftime("%Y-%m-%d")
 
 
-def search_new_orgs(sector_tag: str, keyword: str, *, days: int = 90,
-                    per_page: int = 20) -> List[dict]:
+def search_new_orgs(sector_tag: str, keyword: str, *, days: int = 90, per_page: int = 20) -> List[dict]:
     """Return list of org dicts matching `keyword` created in the last `days`."""
     q = f"{keyword} type:org created:>{_since_date(days)}"
-    url = (
-        "https://api.github.com/search/users?"
-        + urllib.parse.urlencode({
+    url = "https://api.github.com/search/users?" + urllib.parse.urlencode(
+        {
             "q": q,
             "per_page": per_page,
             "sort": "joined",
             "order": "desc",
-        })
+        }
     )
     data = _get_json(url)
     if not data or not isinstance(data, dict):
@@ -125,15 +125,17 @@ def search_new_orgs(sector_tag: str, keyword: str, *, days: int = 90,
             break
         if details.get("type") != "Organization":
             continue
-        out.append({
-            "login":       login,
-            "name":        details.get("name") or login,
-            "blog":        details.get("blog") or None,
-            "created_at":  details.get("created_at"),
-            "sector_tag":  sector_tag,
-            "keyword":     keyword,
-            "html_url":    details.get("html_url"),
-        })
+        out.append(
+            {
+                "login": login,
+                "name": details.get("name") or login,
+                "blog": details.get("blog") or None,
+                "created_at": details.get("created_at"),
+                "sector_tag": sector_tag,
+                "keyword": keyword,
+                "html_url": details.get("html_url"),
+            }
+        )
     return out
 
 
@@ -141,27 +143,31 @@ def search_new_orgs(sector_tag: str, keyword: str, *, days: int = 90,
 # Signal conversion
 # ---------------------------------------------------------------------------
 
+
 def orgs_to_signals(orgs: Iterable[dict]) -> List[dict]:
     out = []
     for o in orgs:
         dom = normalize_domain(o.get("blog")) if o.get("blog") else None
-        out.append({
-            "signal_type":   "github_org_new",
-            "observed_at":   o.get("created_at") or iso_now(),
-            "source_url":    o["html_url"],
-            "entity_name":   o.get("name") or o["login"],
-            "entity_domain": dom,
-            "entity_github": o["login"],
-            "sector_tags":   [o["sector_tag"]],
-            "confidence":    60.0,
-            "raw_payload":   {"keyword": o["keyword"]},
-        })
+        out.append(
+            {
+                "signal_type": "github_org_new",
+                "observed_at": o.get("created_at") or iso_now(),
+                "source_url": o["html_url"],
+                "entity_name": o.get("name") or o["login"],
+                "entity_domain": dom,
+                "entity_github": o["login"],
+                "sector_tags": [o["sector_tag"]],
+                "confidence": 60.0,
+                "raw_payload": {"keyword": o["keyword"]},
+            }
+        )
     return out
 
 
 # ---------------------------------------------------------------------------
 # Write
 # ---------------------------------------------------------------------------
+
 
 def write_signals(conn, candidates: Iterable[dict]) -> dict:
     cur = conn.cursor()
@@ -174,8 +180,12 @@ def write_signals(conn, candidates: Iterable[dict]) -> dict:
                  sector_tags, confidence, raw_payload
                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
-                c["signal_type"], c["observed_at"], c["source_url"],
-                c.get("entity_name"), c.get("entity_domain"), c.get("entity_github"),
+                c["signal_type"],
+                c["observed_at"],
+                c["source_url"],
+                c.get("entity_name"),
+                c.get("entity_domain"),
+                c.get("entity_github"),
                 ensure_json(c.get("sector_tags")),
                 c.get("confidence", 50.0),
                 ensure_json(c.get("raw_payload")),
@@ -193,6 +203,7 @@ def write_signals(conn, candidates: Iterable[dict]) -> dict:
 # Entry points
 # ---------------------------------------------------------------------------
 
+
 def run(conn, *, days: int = 90, per_query: int = 10) -> dict:
     all_orgs: List[dict] = []
     seen: set = set()
@@ -203,7 +214,7 @@ def run(conn, *, days: int = 90, per_query: int = 10) -> dict:
             if o["login"] not in seen:
                 all_orgs.append(o)
                 seen.add(o["login"])
-        time.sleep(2.0)   # polite spacing even inside rate limit
+        time.sleep(2.0)  # polite spacing even inside rate limit
     sigs = orgs_to_signals(all_orgs)
     stats = write_signals(conn, sigs)
     stats["orgs_found"] = len(all_orgs)
@@ -212,6 +223,7 @@ def run(conn, *, days: int = 90, per_query: int = 10) -> dict:
 
 def main():
     import argparse
+
     p = argparse.ArgumentParser()
     p.add_argument("--db", default="handelsregister.db")
     p.add_argument("--days", type=int, default=90)
