@@ -3,7 +3,6 @@ Regression tests for the enrichment pass — academic detection, website
 join, and the new filter paths in the joiner's _compute_founder_confidence.
 """
 
-
 import pytest
 
 from persistence.database import Database
