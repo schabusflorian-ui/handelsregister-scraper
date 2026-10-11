@@ -92,6 +92,24 @@
         </select>
       </div>
       <div>
+        <label for="dach_only" class="block text-xs font-medium text-gray-700">Geo</label>
+        <select name="dach_only" id="dach_only"
+                class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+          <option value="yes" {% if filters.dach_only == 'yes' %}selected{% endif %}>DACH only</option>
+          <option value="no"  {% if filters.dach_only == 'no'  %}selected{% endif %}>Global</option>
+        </select>
+      </div>
+      <div>
+        <label for="watchlist_min_tier" class="block text-xs font-medium text-gray-700">Ex-employer</label>
+        <select name="watchlist_min_tier" id="watchlist_min_tier"
+                class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+          <option value="">any</option>
+          <option value="1" {% if filters.watchlist_min_tier == 1 %}selected{% endif %}>Tier 1 only (OpenAI/DeepMind/…)</option>
+          <option value="2" {% if filters.watchlist_min_tier == 2 %}selected{% endif %}>Tier 1-2 (+ DACH scaleups)</option>
+          <option value="3" {% if filters.watchlist_min_tier == 3 %}selected{% endif %}>Any watchlist tier</option>
+        </select>
+      </div>
+      <div>
         <label for="sort" class="block text-xs font-medium text-gray-700">Sort</label>
         <select name="sort" id="sort"
                 class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
@@ -144,6 +162,14 @@
               <a href="/signals/entity/{{ p.id }}" class="font-medium text-indigo-700 hover:underline">
                 {{ p.display_name }}
               </a>
+              {% if p.watchlist_tier %}
+                <span class="ml-1 inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-semibold
+                  {% if p.watchlist_tier == 1 %}bg-emerald-100 text-emerald-800
+                  {% elif p.watchlist_tier == 2 %}bg-indigo-100 text-indigo-800
+                  {% else %}bg-gray-100 text-gray-700{% endif %}" title="Ex-employer tier">
+                  ex-{{ p.watchlist_employer|default('—')|truncate(22) }}
+                </span>
+              {% endif %}
               {% if p.primary_linkedin %}
                 <div class="text-xs text-gray-500">
                   <a href="{{ p.primary_linkedin }}" target="_blank" rel="noopener" class="hover:underline">

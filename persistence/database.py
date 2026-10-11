@@ -577,6 +577,12 @@ class Database:
             ("is_person", "INTEGER DEFAULT 0"),
             ("founder_confidence", "REAL DEFAULT 0.0"),
             ("person_role", "TEXT"),
+            # Ex-employer watchlist tier (1 = elite global AI/infra lab,
+            # 2 = DACH scaleup or global peer, 3 = baseline watchlist, NULL = unknown).
+            # Set by the joiner using signals/watchlist.py catalog; feeds a
+            # founder_confidence boost + is a surfacing filter in /signals/people.
+            ("watchlist_tier", "INTEGER"),
+            ("watchlist_employer", "TEXT"),
         ]:
             if col not in existing_cols:
                 cursor.execute(f"ALTER TABLE stealth_entities ADD COLUMN {col} {col_type}")
@@ -586,6 +592,9 @@ class Database:
         )
         cursor.execute(
             "CREATE INDEX IF NOT EXISTS idx_stealth_entities_founder ON stealth_entities(founder_confidence DESC)"
+        )
+        cursor.execute(
+            "CREATE INDEX IF NOT EXISTS idx_stealth_entities_watchlist ON stealth_entities(watchlist_tier, founder_confidence DESC)"
         )
 
         self.conn.commit()

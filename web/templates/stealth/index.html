@@ -42,6 +42,24 @@
         </div>
       </div>
     </div>
+    <!-- Scraper freshness — a glance tells you whether the stealth
+         scraper is actually producing new finds or is idle. -->
+    {% if stats.latest_stealth_find %}
+    <div class="mt-3 text-xs text-gray-500 flex items-center gap-4 flex-wrap">
+      <span>
+        <span class="inline-block w-2 h-2 rounded-full
+          {% if stats.latest_stealth_find[:10] >= request.state.today_minus_3d|default('') %}bg-emerald-500
+          {% else %}bg-amber-500{% endif %}"></span>
+        Stealth scraper — latest find: <b>{{ stats.latest_stealth_find[:19] }}</b>
+      </span>
+      <span>{{ "{:,}".format(stats.stealth_founders_total) }} founders in DB</span>
+    </div>
+    {% else %}
+    <div class="mt-3 text-xs text-amber-700">
+      <span class="inline-block w-2 h-2 rounded-full bg-red-500"></span>
+      Stealth scraper has never produced a signal — needs starting.
+    </div>
+    {% endif %}
   </div>
 </header>
 {% endblock %}

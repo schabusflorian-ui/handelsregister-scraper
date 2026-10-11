@@ -56,22 +56,67 @@ def _company_sector_tags(row: sqlite3.Row) -> List[str]:
 
 
 # Keyword vocabularies, used across adapters to extract sector hints from
-# free-form text (news titles, LinkedIn headlines)
+# free-form text (news titles, LinkedIn headlines).
+#
+# Catalog is DACH-aware: German/Austrian/Swiss patterns are first-class, not
+# afterthoughts. English catches global coverage. Sub-sector tags (humanoid,
+# dac, agentic, …) let the UI filter at narrower granularity than the top
+# categories alone — needed because "robotics" or "climate" alone covers too
+# wide a surface area for scouting.
 _SECTOR_KEYWORDS = {
-    "robotics": re.compile(r"\b(robot|robotic|robotik|cobot|roboter)\w*", re.I),
+    # ---- AI ------------------------------------------------------------
     "ai": re.compile(
-        r"\b(a\.?i\.?|artificial intelligence|machine learning|llm|generative|künstliche intelligenz)\b", re.I
+        r"\b(a\.?i\.?|artificial intelligence|machine learning|llm|generative|"
+        r"künstliche intelligenz|ki\b|deep learning|neural)\b",
+        re.I,
     ),
-    "climate": re.compile(r"\b(climate|klima|decarbon|dekarbon|emission|co2|carbon capture|cleantech)\w*", re.I),
-    "hardware": re.compile(r"\b(hardware|chip|semiconductor|wafer|silicon)\w*", re.I),
-    "battery": re.compile(r"\b(battery|batterie|accu|lithium|solid[- ]state)\w*", re.I),
-    "solar": re.compile(r"\b(solar|photovolt|pv anlage)\w*", re.I),
-    "wind": re.compile(r"\b(wind energy|wind power|windkraft|offshore wind)\b", re.I),
-    "hydrogen": re.compile(r"\b(hydrogen|wasserstoff|h2 \w+)\b", re.I),
-    "mobility": re.compile(r"\b(mobility|mobilität|ev charg|autonom\w*|elektromob)\w*", re.I),
-    "biotech": re.compile(r"\b(biotech|synbio|crispr|mrna|life sciences)\w*", re.I),
-    "fintech": re.compile(r"\b(fintech|neobank|paytech|insurtech)\w*", re.I),
-    "space": re.compile(r"\b(aerospace|satellite|new ?space|rocket|orbital)\w*", re.I),
+    "agentic": re.compile(r"\b(agent|agentic|agentisch|autonomous agent|multi[- ]agent)\w*", re.I),
+    "rag": re.compile(r"\b(rag\b|retrieval[- ]augmented|vector db|embedding)\w*", re.I),
+    "llmops": re.compile(r"\b(llmops|mlops|model ops|eval\w* platform|prompt ops)\b", re.I),
+    "voice_ai": re.compile(r"\b(voice ai|speech recognition|tts|text[- ]to[- ]speech|conversational ai)\b", re.I),
+    "computer_vision": re.compile(r"\b(computer vision|image recognition|visual ai|bildverarbeitung)\b", re.I),
+    # ---- Robotics (sub-tagged) -----------------------------------------
+    "robotics": re.compile(r"\b(robot|robotic|robotik|cobot|roboter)\w*", re.I),
+    "humanoid_robot": re.compile(r"\b(humanoid|bipedal robot|android\b)\w*", re.I),
+    "surgical_robot": re.compile(r"\b(surgical robot|chirurgi\w* robot|medical robot)\w*", re.I),
+    "agritech_robot": re.compile(r"\b(agritech|agribot|farm robot|landwirt\w* robot)\w*", re.I),
+    "logistics_robot": re.compile(r"\b(warehouse robot|logistik robot|amr\b|autonomous mobile)\w*", re.I),
+    # ---- Climate / energy (sub-tagged) --------------------------------
+    "climate": re.compile(
+        r"\b(climate|klima|decarbon|dekarbon|emission|co2|carbon capture|cleantech|net[- ]zero)\w*", re.I
+    ),
+    "carbon_removal": re.compile(r"\b(carbon removal|cdr\b|dac\b|direct air capture|co2 removal)\w*", re.I),
+    "grid": re.compile(r"\b(grid tech|grid optim|stromnetz|smart grid|energy management)\w*", re.I),
+    "ev_charging": re.compile(r"\b(ev charg|ladesäul|charging infra|elektromob\w* lad)\w*", re.I),
+    "geothermal": re.compile(r"\b(geothermal|geothermie|erdwärme)\w*", re.I),
+    "fusion": re.compile(r"\b(fusion energy|kernfusion|nuclear fusion)\b", re.I),
+    "hydrogen": re.compile(r"\b(hydrogen|wasserstoff|h2 \w+|electrolyzer|elektrolys)\w*", re.I),
+    "solar": re.compile(r"\b(solar|photovolt|pv anlage|solarzelle)\w*", re.I),
+    "wind": re.compile(r"\b(wind energy|wind power|windkraft|offshore wind|windenergie)\b", re.I),
+    "battery": re.compile(r"\b(battery|batterie|accu|lithium|solid[- ]state|ess\b)\w*", re.I),
+    # ---- Hardware / deeptech -------------------------------------------
+    "hardware": re.compile(r"\b(hardware|chip|semiconductor|wafer|silicon|halbleiter)\w*", re.I),
+    "quantum": re.compile(r"\b(quantum|quanten|qubit|quantum computing)\w*", re.I),
+    "photonics": re.compile(r"\b(photonic|photonik|optical computing|silicon photonic)\w*", re.I),
+    # ---- Software verticals ---------------------------------------------
+    "devtools": re.compile(r"\b(devtools|developer tools|dev experience|dx\b|ide for)\b", re.I),
+    "devops": re.compile(r"\b(devops|platform engineering|k8s|kubernetes|infra as code)\b", re.I),
+    "security": re.compile(r"\b(cybersecurity|cyber security|infosec|appsec|security startup|siem\b|soc\b)\b", re.I),
+    "nocode": re.compile(r"\b(no[- ]code|low[- ]code|visual programming)\b", re.I),
+    "vertical_saas": re.compile(r"\b(vertical saas|industry saas)\b", re.I),
+    # ---- Life sciences / health ----------------------------------------
+    "biotech": re.compile(r"\b(biotech|synbio|crispr|mrna|life sciences|lifesci)\w*", re.I),
+    "medtech": re.compile(r"\b(medtech|medical device|digital health|healthtech|telemedizin)\w*", re.I),
+    # ---- Mobility --------------------------------------------------------
+    "mobility": re.compile(r"\b(mobility|mobilität|ev charg|autonom\w*|elektromob|micromobil)\w*", re.I),
+    "aviation": re.compile(r"\b(aviation|aerospace|evtol|air taxi|drone\b|drohne|urban air)\w*", re.I),
+    "space": re.compile(r"\b(aerospace|satellite|new ?space|rocket|orbital|raumfahrt)\w*", re.I),
+    # ---- Fintech ---------------------------------------------------------
+    "fintech": re.compile(r"\b(fintech|neobank|paytech|insurtech|wealthtech|regtech)\w*", re.I),
+    "crypto": re.compile(r"\b(crypto|blockchain|web3|defi|zero[- ]knowledge|zk[- ]rollup)\w*", re.I),
+    # ---- Industrial / enterprise ----------------------------------------
+    "industry_40": re.compile(r"\b(industrie 4\.0|industry 4\.0|iiot|smart factory|industrial iot)\b", re.I),
+    "logistics": re.compile(r"\b(logistics tech|supply chain tech|freight tech|logistik tech)\b", re.I),
 }
 
 
@@ -80,6 +125,82 @@ def _sectors_from_text(*texts: Optional[str]) -> List[str]:
     if not joined:
         return []
     return [tag for tag, pat in _SECTOR_KEYWORDS.items() if pat.search(joined)]
+
+
+# ---------------------------------------------------------------------------
+# Stealth-pattern + exclusion-pattern catalogs
+# ---------------------------------------------------------------------------
+# Shared between adapt_stealth_founders (static bios) and the transition
+# loop. Compile once at module load; both patterns are read-only.
+#
+# Catalog combines three source types:
+#   - English stealth phrases (industry-standard "building something new")
+#   - German/DACH phrases (DACH focus — "baue gerade", "arbeite an etwas Neuem")
+#   - Emoji indicators (ninja = stealth is a widespread convention)
+#
+# Harmonic / Evertrace both emphasize that these phrases alone are weak
+# (sabbaticals also trigger "something new") — the composite_score +
+# cross-source corroboration is what carries actual precision. Here we
+# need high recall; the EXCLUSION patterns below carve away the known
+# false-positive classes (sabbatical, advisor, parental leave, retired).
+STEALTH_PATTERNS = re.compile(
+    r"stealth|"
+    # English stealth / early-stage phrases
+    r"building (something|an?|new|the next)|"
+    r"working on (something|a new|an? \w+ (startup|company|venture))|"
+    r"up to something|cooking (something|up)|brewing|"
+    r"something (exciting|new|interesting|ambitious|big|cool)|"
+    r"new (venture|chapter|journey|adventure|project)|"
+    r"founder.{0,20}(mode|new|in stealth|at stealth)|"
+    r"\b(co[- ]?)?founder (@|at) stealth\b|"
+    r"solo[- ]?founder\b|"
+    r"indie (hacker|maker|founder)|"
+    r"0\s*(?:to|→|->)\s*1|zero to one|day one\b|day 1\b|"
+    r"pre[- ](seed|launch|product)|early[- ]stage founder|"
+    r"undisclosed|confidential|secret project|"
+    r"in beta|coming soon|next chapter|"
+    r"on to the next|next thing|next startup|"
+    # German / DACH stealth phrases
+    r"baue (gerade|etwas|an etwas)|"
+    r"baue meine (eigene |nächste )?(firma|startup|company)|"
+    r"arbeite an etwas (neuem|neues|spannendem|aufregendem)|"
+    r"neues (projekt|startup|unternehmen|abenteuer)|"
+    r"starte (etwas neues|ein startup|gerade)|"
+    r"gründe gerade|im aufbau|in vorbereitung|"
+    r"nächstes (kapitel|projekt|ding)|"
+    r"neue reise|neuer weg|"
+    r"etwas großes|etwas spannendes|"
+    r"in stealth mode|stealth modus|"
+    r"pre[- ]launch|vor dem launch|"
+    r"stealth[- ]startup|stealth[- ]gründer|"
+    # Emoji conventions — ninja = stealth, construction + rocket at start
+    r"🥷|🤫|🔭🧪|🚀\s*(baue|building|working)|🏗️\s*(startup|building)",
+    re.I,
+)
+
+# Harmonic explicit: "sabbaticals and ordinary lateral moves should not be
+# read as startup signals". Any match here VETOES the stealth signal.
+EXCLUSION_PATTERNS = re.compile(
+    r"\b("
+    # Time off / breaks
+    r"sabbatical|gap year|parental leave|elternzeit|mutterschutz|"
+    r"vaterschaftsurlaub|time off|career break|burnout|"
+    r"garden leave|freistellung|urlaub\b|"
+    # Advisory / passive roles
+    r"advisor only|advisor at|angel investor|angel invest|investor only|"
+    r"board member|boardmember|non[- ]executive|aufsichtsrat|beirat|"
+    # Service work (not building a company)
+    r"freelance consultant|freelancer|consultant at|interim\b|"
+    r"interim (ceo|cto|coo|cfo|manager)|contract role|"
+    r"coaching|mentor at|"
+    # Retirement / exit
+    r"retired|pensioniert|im ruhestand|exited and|"
+    # Education / academia
+    r"phd student|mba candidate|researcher at|professor at|dozent|lehrbeauftragt|"
+    r"studying at|studium an|teaching at"
+    r")\b",
+    re.I,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -454,8 +575,10 @@ def adapt_stealth_founders(conn, *, min_confidence: float = 0.3) -> dict:
     stats = {
         "stealth_inserted": 0,
         "stealth_skipped": 0,
+        "stealth_excluded": 0,  # new: killed by sabbatical/advisor filter
         "transitions_inserted": 0,
         "transitions_skipped": 0,
+        "transitions_excluded": 0,  # new: killed by sabbatical/advisor filter
     }
 
     # ---- base LinkedIn stealth ----
@@ -468,6 +591,14 @@ def adapt_stealth_founders(conn, *, min_confidence: float = 0.3) -> dict:
         (min_confidence,),
     ).fetchall()
     for r in rows:
+        # Exclusion guard before anything else: if headline/current_company
+        # looks like a sabbatical/advisor/consulting bio, skip even if an
+        # earlier scraper tagged confidence_score high enough to pass the
+        # min_confidence filter above. Keeps the stream person-level clean.
+        bio_text = " ".join(filter(None, [r["headline"], r["current_company"]]))
+        if EXCLUSION_PATTERNS.search(bio_text):
+            stats["stealth_excluded"] += 1
+            continue
         tags = _sectors_from_text(r["headline"], r["name"])
         try:
             existing = json.loads(r["sector_tags"] or "[]")
@@ -509,14 +640,10 @@ def adapt_stealth_founders(conn, *, min_confidence: float = 0.3) -> dict:
             stats["stealth_skipped"] += 1
 
     # ---- transitions from founder_history ----
-    # A "transition" = headline/current_company changed to something containing
-    # stealth-indicative text in the last 365 days. Much stronger signal than
-    # a static stealth bio because it tells us this is NEWLY stealth.
-    stealth_patterns = re.compile(
-        r"stealth|building something|new venture|founder.{0,20}(mode|new)|"
-        r"undisclosed|in beta|coming soon|something new",
-        re.I,
-    )
+    # A "transition" = headline/current_company changed to something matching
+    # STEALTH_PATTERNS in the last 365 days. Much stronger signal than a
+    # static stealth bio because it tells us this is NEWLY stealth. See
+    # module-level STEALTH_PATTERNS + EXCLUSION_PATTERNS for the catalog.
     transition_rows = cur.execute(
         """SELECT fh.id, fh.founder_id, fh.field_name, fh.old_value, fh.new_value,
                   fh.changed_at,
@@ -528,9 +655,16 @@ def adapt_stealth_founders(conn, *, min_confidence: float = 0.3) -> dict:
               AND fh.new_value IS NOT NULL"""
     ).fetchall()
     for r in transition_rows:
-        if not stealth_patterns.search(r["new_value"] or ""):
+        new_val = r["new_value"] or ""
+        if not STEALTH_PATTERNS.search(new_val):
             continue
-        tags = _sectors_from_text(r["new_value"])
+        # Negative-filter guard: sabbatical / advisor / parental leave
+        # should not fire as stealth transitions even if the text happens to
+        # match an "exciting new chapter" phrase.
+        if EXCLUSION_PATTERNS.search(new_val):
+            stats["transitions_excluded"] += 1
+            continue
+        tags = _sectors_from_text(new_val)
         res = cur.execute(
             """INSERT OR IGNORE INTO signals (
                  signal_type, observed_at, source_url,
@@ -570,12 +704,126 @@ def adapt_stealth_founders(conn, *, min_confidence: float = 0.3) -> dict:
 # ---------------------------------------------------------------------------
 
 
+# ---------------------------------------------------------------------------
+# Handelsregister holding/Verwaltungs/i.G. — DACH pre-launch signal
+# ---------------------------------------------------------------------------
+#
+# In DE/AT/CH, founders routinely register a holding or "Verwaltungs"
+# shell entity BEFORE the operating company. These are leading indicators:
+# someone is preparing to build something, the papers are in motion.
+#
+# Patterns (case-insensitive):
+#   - "Beteiligungs(gesellschaft)?" + legal form (UG, GmbH, AG)
+#   - "Verwaltungs(gesellschaft)?" + legal form
+#   - "Holding" as a standalone word in the name
+#   - "i.G." / "i. G." / "i.Gr." (in Gründung = in formation, pre-op)
+#   - "Vermögens(gesellschaft|verwaltung)" (asset-holding structures)
+#
+# Weighted lower than handelsregister_new because many of these are
+# genuine passive holding vehicles (family office, inheritance structure)
+# — only the composite_score with 2+ sources elevates these.
+
+# Note: trailing \b is incompatible with patterns that end in `.` (like
+# "i.G.") because period isn't a word char — the match would need the
+# post-period position to boundary against a word char. Terminal period
+# is left OPTIONAL so the \b can anchor on the preceding 'g'.
+_HOLDING_PATTERNS = re.compile(
+    r"\b("
+    r"beteiligungs(gesellschaft|-ug|-gmbh|-ag)?|"
+    r"verwaltungs(gesellschaft|-ug|-gmbh|-ag)?|"
+    r"holding|"
+    r"vermögens(gesellschaft|verwaltung)?|"
+    r"vermoegens(gesellschaft|verwaltung)?|"
+    r"i\.\s?g\b|i\.\s?gr\b|in gründung|in gruendung"
+    r")\b",
+    re.I,
+)
+
+
+def adapt_holdings(conn, *, min_seen_date: Optional[str] = None) -> dict:
+    """Emit `handelsregister_holding_formed` signals for DACH shell entities.
+
+    Reuses the companies table (no new scraping). Scans every row whose
+    name matches a holding/Verwaltungs/i.G. pattern. Idempotent via
+    UNIQUE(signal_type, source_url) with the same company_id-based URL
+    scheme as adapt_companies, differentiated by prefix.
+    """
+    cur = conn.cursor()
+    where = []
+    params: List = []
+    if min_seen_date:
+        where.append("substr(first_seen_date,1,10) >= ?")
+        params.append(min_seen_date)
+    where_sql = (" WHERE " + " AND ".join(where)) if where else ""
+    sql = (
+        "SELECT id, name, city, state, website, first_seen_date, "
+        "       ai_robotics_score, climate_score, tech_categories, "
+        "       startup_classification "
+        f"  FROM companies{where_sql}"
+    )
+    rows = cur.execute(sql, params).fetchall()
+
+    inserted = skipped = non_matching = 0
+    for row in rows:
+        if not _HOLDING_PATTERNS.search(row["name"] or ""):
+            non_matching += 1
+            continue
+        tags = _company_sector_tags(row)
+        res = cur.execute(
+            """INSERT OR IGNORE INTO signals (
+                 signal_type, observed_at, source_url,
+                 entity_name, entity_domain,
+                 sector_tags, geo_region, raw_payload, confidence
+               ) VALUES ('handelsregister_holding_formed', ?, ?, ?, ?, ?, 'DE', ?, 65)""",
+            (
+                row["first_seen_date"] or iso_now(),
+                f"handelsregister://holding/{row['id']}",
+                row["name"],
+                normalize_domain(row["website"]),
+                ensure_json(tags),
+                ensure_json(
+                    {
+                        "company_id": row["id"],
+                        "city": row["city"],
+                        "state": row["state"],
+                        "classification": row["startup_classification"],
+                        "shell_type": _classify_shell(row["name"]),
+                    }
+                ),
+            ),
+        )
+        if res.rowcount:
+            inserted += 1
+        else:
+            skipped += 1
+    conn.commit()
+    logger.info("holdings adapter: inserted=%d skipped=%d non_matching=%d", inserted, skipped, non_matching)
+    return {"inserted": inserted, "skipped": skipped, "non_matching": non_matching}
+
+
+def _classify_shell(name: str) -> str:
+    """Which shell-type is this? beteiligungs | verwaltungs | holding | i_g | vermoegens | other"""
+    n = (name or "").lower()
+    if "beteiligungs" in n:
+        return "beteiligungs"
+    if "verwaltungs" in n:
+        return "verwaltungs"
+    if "holding" in n:
+        return "holding"
+    if "vermögens" in n or "vermoegens" in n:
+        return "vermoegens"
+    if re.search(r"\bi\.\s?g\.?", n) or "in gründung" in n or "in gruendung" in n:
+        return "i_g"
+    return "other"
+
+
 def run_all(conn) -> dict:
     """Convenience: run the adapters in dependency-free order."""
     from .officer_adapter import adapt_officers
 
     return {
         "companies": adapt_companies(conn),
+        "holdings": adapt_holdings(conn),
         "news": adapt_news(conn),
         "stealth_founders": adapt_stealth_founders(conn),
         "officers": adapt_officers(conn),
@@ -587,7 +835,11 @@ def main():
 
     p = argparse.ArgumentParser()
     p.add_argument("--db", default="handelsregister.db")
-    p.add_argument("--only", choices=["companies", "news", "stealth_founders", "officers", "all"], default="all")
+    p.add_argument(
+        "--only",
+        choices=["companies", "holdings", "news", "stealth_founders", "officers", "all"],
+        default="all",
+    )
     args = p.parse_args()
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")

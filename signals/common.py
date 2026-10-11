@@ -29,12 +29,14 @@ from urllib.parse import urlparse
 # a single-signal one, which is the whole point.
 SIGNAL_WEIGHTS = {
     "handelsregister_new": 30.0,  # legal entity exists — strongest fact
+    "handelsregister_holding_formed": 25.0,  # DACH pre-launch: Beteiligungs/Verwaltungs/i.G. — leading indicator
     "founder_match": 35.0,  # LinkedIn ↔ officer exact match — strongest person link
     "linkedin_stealth": 22.0,  # person claims stealth right now
     "linkedin_transition": 28.0,  # person RECENTLY went stealth (delta)
     "crt_domain_new": 18.0,  # product has a website
     "github_org_new": 18.0,  # code is being written
     "news_mention": 15.0,  # press picked them up
+    "cohort_announcement": 30.0,  # accelerator vetted — strong signal (YC/Speedrun/EWOR/SPRIND/EF)
     "job_posting_stealth": 12.0,  # 1-5p stealth company hiring
 }
 

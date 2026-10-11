@@ -188,10 +188,42 @@ def _pick_primary(cur, entity_id: int, field: str, signal_col: str) -> Optional[
 # Signal types that pin a specific human
 _PERSON_SIGNAL_TYPES = frozenset({"linkedin_stealth", "linkedin_transition", "founder_match"})
 
-# Role keywords that qualify a person as a founder (vs. plain employee)
+# Role keywords that qualify a person as a founder (vs. plain employee).
+#
+# Catalog based on Harmonic's list ("senior individual contributors,
+# engineers, heads of product, repeat founders or operators") plus explicit
+# DACH titles. Includes the loose "chief of staff / principal / head of"
+# labels that fire at 1-5 person startups where the title inflation IS the
+# signal (chief anything at a 3-person shop = founder-adjacent).
+#
+# False-positive risk is low because this regex only runs against profiles
+# already flagged as person-type signals; the composite_score and
+# founder_confidence formula apply additional cross-source corroboration.
 _FOUNDER_ROLE_RX = re.compile(
-    r"\b(founder|co[-\s]?founder|ceo|cto|cfo|coo|gründer|gruender|"
-    r"geschäftsführ|founding|owner|inhaber)",
+    r"\b("
+    # Core founder titles
+    r"co[-\s]?founder|founder|founding (member|engineer|team|partner)|"
+    r"solo[-\s]?founder|solopreneur|indie (hacker|maker|founder)|"
+    r"serial (entrepreneur|founder)|repeat (founder|entrepreneur)|"
+    # Executive C-suite (at young/small company = founder-adjacent).
+    # "chief [of ]staff" / "chief product officer" / "chief ai officer" all count.
+    r"ceo|cto|cfo|coo|cmo|cro|cpo|cxo|chief (of )?[a-z]{2,}|"
+    # German founder titles
+    r"gründer|gruender|mitgründer|mitgruender|"
+    r"geschäftsführ|geschäftsleitung|geschaeftsfuehr|"
+    # Ownership / sole-prop language
+    r"owner|co[-\s]?owner|inhaber|inhaberin|eigentümer|"
+    # Studio / venture-builder adjacent
+    r"startup studio|venture builder|building (my own|a startup)|"
+    r"bootstrap(ping|per)|entrepreneur\b|"
+    # Early-stage title inflation (strong at 1-5 person companies).
+    # "a stealth" / "an early-stage" / "the next" all count — these are
+    # all "ambiguous Series-A-or-earlier" markers.
+    r"head of (product|engineering|growth|design|ai)\s+(at|@)\s+"
+    r"(a\s+)?(stealth|an?\s+early|an?\s+new|a\s+pre|the\s+next)|"
+    r"principal (engineer|scientist|researcher) (at|@)\s+"
+    r"(a\s+)?(stealth|an?\s+early|an?\s+new)"
+    r")",
     re.I,
 )
 
@@ -216,16 +248,78 @@ def _founder_role_from_signals(cur, entity_id: int) -> Optional[str]:
     return None
 
 
-def _compute_founder_confidence(types_set: set, role: Optional[str], cur, entity_id: int) -> float:
+def _watchlist_lookup(cur, entity_id: int) -> tuple:
+    """Scan the entity's signal payloads for an ex-employer match against
+    the DACH watchlist. Returns (tier, employer_name) or (None, None).
+
+    Looks at:
+      - linkedin_transition payloads' `old` field (previous employer)
+      - linkedin_stealth payloads' `headline` field (bios often mention
+        "ex-Google" / "previously at Stripe" / "former OpenAI research")
+    """
+    from .watchlist import watchlist_tier
+
+    rows = cur.execute(
+        "SELECT signal_type, raw_payload FROM signals WHERE stealth_entity_id = ? AND raw_payload IS NOT NULL",
+        (entity_id,),
+    ).fetchall()
+    best_tier: Optional[int] = None
+    best_employer: Optional[str] = None
+    for r in rows:
+        try:
+            payload = json.loads(r["raw_payload"])
+        except (TypeError, ValueError, json.JSONDecodeError):
+            continue
+        # Candidate text fields depending on signal type
+        candidates = []
+        if r["signal_type"] == "linkedin_transition":
+            candidates.append(payload.get("old"))
+        candidates.extend(payload.get(k) for k in ("headline", "role", "previous_companies", "ex_companies"))
+        for text in candidates:
+            if not isinstance(text, str) or not text:
+                continue
+            # Prefer regex-extracted "ex-X" / "previously at X" / "former X"
+            # matches first — they give us the CLEAN employer name for display.
+            matched_regex = False
+            for m in re.finditer(
+                r"(?:ex[- ]|previously (?:at|@)\s+|former\s+)([A-Z][\w&.\-]{2,}(?:\s+[A-Z][\w&.\-]{2,}){0,3})",
+                text,
+            ):
+                cand = m.group(1).strip()
+                t = watchlist_tier(cand)
+                if t is not None and (best_tier is None or t < best_tier):
+                    best_tier, best_employer = t, cand[:80]
+                    matched_regex = True
+            # Direct lookup of the whole text — only used when the regex
+            # didn't produce a cleaner candidate. Keeps display tidy.
+            if not matched_regex:
+                t = watchlist_tier(text)
+                if t is not None and (best_tier is None or t < best_tier):
+                    # For plain employer-field hits (linkedin_transition's
+                    # `old`), the text IS the employer name; otherwise
+                    # take only the first comma-chunk to avoid blobs.
+                    display = text.strip().split(",", 1)[0][:80]
+                    best_tier, best_employer = t, display
+    return best_tier, best_employer
+
+
+def _compute_founder_confidence(
+    types_set: set,
+    role: Optional[str],
+    cur,
+    entity_id: int,
+    watchlist_tier_val: Optional[int] = None,
+) -> float:
     """0-100 founder confidence.
 
-    Blends four axes:
-      - LinkedIn claim present               (+30)
-      - LinkedIn transition (RECENTLY stealth) (+15)
-      - Officer-match on Handelsregister     (+40)  ← strongest person link
-      - Founder/CEO/CTO role keywords in bio (+15)
-      - Product evidence (crt or github)     (+10)
-      - Young company registered             (+10)
+    Blends six axes:
+      - LinkedIn claim present                   (+30)
+      - LinkedIn transition (RECENTLY stealth)   (+15)
+      - Officer-match on Handelsregister         (+40)  ← strongest person link
+      - Founder/CEO/CTO role keywords in bio     (+15)
+      - Product evidence (crt or github)         (+10)
+      - Young company registered                 (+10)
+      - Ex-employer watchlist tier               (+6 / +12 / +20)
     """
     fc = 0.0
     if "linkedin_stealth" in types_set:
@@ -238,6 +332,11 @@ def _compute_founder_confidence(types_set: set, role: Optional[str], cur, entity
         fc += 15
     if "crt_domain_new" in types_set or "github_org_new" in types_set:
         fc += 10
+    # Watchlist boost — Harmonic's "priority organizations" pattern
+    if watchlist_tier_val is not None:
+        from .watchlist import tier_boost
+
+        fc += tier_boost(watchlist_tier_val)
 
     # Company young / startup-shaped?
     row = cur.execute(
@@ -291,7 +390,8 @@ def _recompute_entity(cur, entity_id: int) -> None:
         cur.execute(
             "UPDATE stealth_entities SET signal_count=0, signal_types='[]', "
             "composite_score=0, is_person=0, founder_confidence=0, "
-            "person_role=NULL, updated_at=? WHERE id=?",
+            "person_role=NULL, watchlist_tier=NULL, watchlist_employer=NULL, "
+            "updated_at=? WHERE id=?",
             (datetime.now(timezone.utc).replace(microsecond=0).isoformat(), entity_id),
         )
         return
@@ -308,7 +408,15 @@ def _recompute_entity(cur, entity_id: int) -> None:
 
     is_person = int(bool(types_set & _PERSON_SIGNAL_TYPES))
     role = _founder_role_from_signals(cur, entity_id) if is_person else None
-    founder_conf = _compute_founder_confidence(types_set, role, cur, entity_id) if is_person else 0.0
+    # Watchlist lookup only for person-type entities (ex-employer context
+    # only meaningful when we're tracking a person, not a company)
+    if is_person:
+        wl_tier, wl_employer = _watchlist_lookup(cur, entity_id)
+    else:
+        wl_tier, wl_employer = None, None
+    founder_conf = (
+        _compute_founder_confidence(types_set, role, cur, entity_id, watchlist_tier_val=wl_tier) if is_person else 0.0
+    )
 
     now = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
     cur.execute(
@@ -323,6 +431,8 @@ def _recompute_entity(cur, entity_id: int) -> None:
              is_person          = ?,
              founder_confidence = ?,
              person_role        = ?,
+             watchlist_tier     = ?,
+             watchlist_employer = ?,
              primary_domain     = COALESCE(primary_domain, ?),
              primary_github     = COALESCE(primary_github, ?),
              primary_linkedin   = COALESCE(primary_linkedin, ?),
@@ -340,6 +450,8 @@ def _recompute_entity(cur, entity_id: int) -> None:
             is_person,
             founder_conf,
             role,
+            wl_tier,
+            wl_employer,
             best_domain,
             best_github,
             best_li,
