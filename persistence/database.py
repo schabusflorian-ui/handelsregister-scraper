@@ -583,6 +583,25 @@ class Database:
             # founder_confidence boost + is a surfacing filter in /signals/people.
             ("watchlist_tier", "INTEGER"),
             ("watchlist_employer", "TEXT"),
+            # Website enrichment denorm. Populated by the joiner when
+            # primary_domain matches a row in website_enrichment. We
+            # keep title + meta_description on the entity for list-view
+            # efficiency; hero_text stays in website_enrichment and is
+            # joined at read time on the detail page.
+            ("website_title", "TEXT"),
+            ("website_description", "TEXT"),
+            # Academic founder flag: set by the joiner when the entity's
+            # bio/role fields match a DACH university/research-institute
+            # pattern (TUM, ETH, Fraunhofer, Max Planck, etc.). Adds a
+            # founder_confidence boost + surfaces as a filter.
+            ("academic_founder", "INTEGER DEFAULT 0"),
+            ("academic_institution", "TEXT"),
+            # On-demand LinkedIn deep-profile enrichment status.
+            # NULL = never enriched; ISO date = last successful enrichment.
+            ("last_enriched_at", "TEXT"),
+            ("enrichment_education", "TEXT"),  # JSON list of {institution, degree, year}
+            ("enrichment_past_employers", "TEXT"),  # JSON list of {company, title, years}
+            ("enrichment_skills", "TEXT"),  # JSON list of strings
         ]:
             if col not in existing_cols:
                 cursor.execute(f"ALTER TABLE stealth_entities ADD COLUMN {col} {col_type}")
