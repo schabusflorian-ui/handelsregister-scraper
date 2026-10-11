@@ -547,6 +547,16 @@ class HandelsregisterScheduler:
             "Mine HN Who's Hiring threads for stealth-startup job postings",
         ),
         ("joiner", ["signals.joiner"], "Resolve signals → stealth_entities + recompute aggregates"),
+        # Last step: push the fresh entity + people views to Google Sheets so
+        # the shared surfacing surface stays current without manual action.
+        # Requires GOOGLE_SHEETS_CREDENTIALS + GOOGLE_SHEETS_ID in env; the
+        # script no-ops cleanly if either is missing, so this step never
+        # blocks the pipeline on hosts without Sheets credentials.
+        (
+            "sync_sheets",
+            ["scripts.sync_to_sheets"],
+            "Push signals_people + signals_entities_multi tabs to Google Sheets",
+        ),
     ]
 
     def _run_ideas_pipeline_job(self):
