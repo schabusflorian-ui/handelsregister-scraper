@@ -242,11 +242,21 @@ class SlowStealthScraper:
         return default_state
 
     def _save_state(self):
-        """Save scraper state to file."""
+        """Save scraper state atomically.
+
+        Writes to a sibling .tmp file first and os.replace into place —
+        prevents a crash mid-write from leaving a truncated JSON that
+        the next startup can't parse. Earlier runs sometimes left a
+        .tmp file behind; the explicit .tmp suffix makes recovery clear.
+        """
         try:
             os.makedirs(os.path.dirname(self.state_file), exist_ok=True)
-            with open(self.state_file, "w") as f:
+            tmp_path = self.state_file + ".tmp"
+            with open(tmp_path, "w") as f:
                 json.dump(self.state, f, indent=2)
+                f.flush()
+                os.fsync(f.fileno())
+            os.replace(tmp_path, self.state_file)
         except Exception as e:
             logger.warning(f"Could not save state: {e}")
 

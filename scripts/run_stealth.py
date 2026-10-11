@@ -1,17 +1,24 @@
 #!/usr/bin/env python3
 """
-Stealth founder discovery - runs 24/7 extracting founders from search snippets.
+Stealth founder discovery — runs 24/7 extracting founders from search snippets.
 
 Run with caffeinate to prevent sleep:
-    caffeinate -i python3 run_stealth.py
+    caffeinate -i python3 scripts/run_stealth.py
 
 Or in background:
-    caffeinate -i python3 run_stealth.py &> stealth.log &
+    caffeinate -i python3 scripts/run_stealth.py &> stealth.log &
 
-State is saved to data/stealth_scraper_state.json - survives restarts.
+State is saved to data/stealth_scraper_state.json — survives restarts.
+
+Single-instance via fcntl flock on data/stealth_scraper.lock — a second
+invocation exits immediately with a clear message rather than racing the
+first and getting both rate-limited. Default engine is `rotate` so one
+blocked engine doesn't halt the loop; set --engine ddgs explicitly to
+revert to the old behaviour.
 """
 
 import argparse
+import fcntl
 import logging
 import sys
 from pathlib import Path
@@ -19,6 +26,33 @@ from pathlib import Path
 # Add project root to path
 project_root = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(project_root))
+
+
+LOCK_FILE = project_root / "data" / "stealth_scraper.lock"
+
+
+def _acquire_single_instance_lock():
+    """Non-blocking exclusive lock on LOCK_FILE. Returns the file handle
+    so the OS keeps the lock until the process exits (don't close it).
+
+    If another process already holds the lock, logs a clear message and
+    exits with code 2 — the correct behaviour under launchd/cron where
+    the next tick would otherwise double up and get both runs rate-limited.
+    """
+    LOCK_FILE.parent.mkdir(exist_ok=True)
+    fh = open(LOCK_FILE, "w")
+    try:
+        fcntl.flock(fh.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except (OSError, BlockingIOError):
+        print(
+            f"stealth scraper already running (lock held on {LOCK_FILE}). "
+            "exiting cleanly — the running instance continues.",
+            file=sys.stderr,
+        )
+        sys.exit(2)
+    fh.write(f"{__import__('os').getpid()}\n")
+    fh.flush()
+    return fh
 
 
 def main():
@@ -30,9 +64,14 @@ def main():
         "--engine",
         "-e",
         type=str,
-        default="ddgs",
+        default="rotate",
         choices=["ddgs", "serper", "curl", "brave", "ddg", "rotate"],
-        help="Search engine: ddgs (default, Bing-backed), serper (Google API), curl, brave, ddg, or rotate",
+        help="Search engine: rotate (default — ddg/brave/serper fallback), ddgs, serper, curl, brave, ddg",
+    )
+    parser.add_argument(
+        "--no-lock",
+        action="store_true",
+        help="Skip the single-instance lock (dev/test only — never in production)",
     )
     parser.add_argument("--report", action="store_true", help="Print query yield report and exit (no scraping)")
     parser.add_argument(
@@ -64,6 +103,12 @@ def main():
     # Silence noisy third-party loggers (rustls, h2, hyper from primp)
     for noisy_logger in ("rustls", "h2", "hyper_util", "cookie_store", "primp"):
         logging.getLogger(noisy_logger).setLevel(logging.WARNING)
+
+    # Single-instance lock BEFORE any state file / DB touch. Lock handle
+    # is intentionally not closed — the OS releases it on process exit.
+    if not args.no_lock:
+        _lock_handle = _acquire_single_instance_lock()
+        logging.info("acquired exclusive lock on %s", LOCK_FILE)
 
     db_path = project_root / "handelsregister.db"
     state_file = project_root / "data" / "stealth_scraper_state.json"

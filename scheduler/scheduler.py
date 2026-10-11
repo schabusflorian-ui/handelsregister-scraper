@@ -515,11 +515,20 @@ class HandelsregisterScheduler:
             "Reshape companies into handelsregister_new signals",
         ),
         (
+            "adapt_holdings",
+            ["signals.adapters", "--only", "holdings"],
+            "DACH pre-launch: Beteiligungs/Verwaltungs/i.G. → handelsregister_holding_formed",
+        ),
+        (
             "adapt_news",
             ["signals.adapters", "--only", "news"],
             "Reshape news_articles into news_mention signals (funding verbs only)",
         ),
-        ("adapt_stealth", ["signals.adapters", "--only", "stealth_founders"], "Reshape LinkedIn stealth + transitions"),
+        (
+            "adapt_stealth",
+            ["signals.adapters", "--only", "stealth_founders"],
+            "Reshape LinkedIn stealth + transitions (expanded EN+DE patterns)",
+        ),
         (
             "adapt_officers",
             ["signals.adapters", "--only", "officers"],
@@ -527,6 +536,16 @@ class HandelsregisterScheduler:
         ),
         ("source_crt_sh", ["signals.crt_sh"], "Poll crt.sh for newly-issued certs on sector keywords"),
         ("source_github", ["signals.github_source"], "Poll GitHub for newly-created orgs on sector keywords"),
+        (
+            "source_cohorts",
+            ["signals.cohort_source"],
+            "Poll accelerator cohort pages (SPRIND, EWOR, +EF when enabled)",
+        ),
+        (
+            "source_hn_jobs",
+            ["signals.job_posting_source"],
+            "Mine HN Who's Hiring threads for stealth-startup job postings",
+        ),
         ("joiner", ["signals.joiner"], "Resolve signals → stealth_entities + recompute aggregates"),
     ]
 

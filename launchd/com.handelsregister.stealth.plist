@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTD/PropertyList-1.0.dtd">
+<!--
+  Stealth founder scraper — macOS launchd configuration.
+
+  Keeps the scraper running across reboots and crashes. The scraper's
+  own fcntl flock in run_stealth.py prevents the second instance from
+  stepping on the first, so KeepAlive is safe.
+
+  INSTALL (as the user, not root):
+    cp launchd/com.handelsregister.stealth.plist ~/Library/LaunchAgents/
+    launchctl load ~/Library/LaunchAgents/com.handelsregister.stealth.plist
+    launchctl start com.handelsregister.stealth
+
+  UNINSTALL:
+    launchctl unload ~/Library/LaunchAgents/com.handelsregister.stealth.plist
+    rm ~/Library/LaunchAgents/com.handelsregister.stealth.plist
+
+  LOG tail:
+    tail -f ~/handelsregister-scraper/data/stealth.out.log
+-->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.handelsregister.stealth</string>
+
+    <!-- Command. caffeinate -i keeps the Mac awake so the loop runs
+         through nights. --no-lock would be dangerous under KeepAlive;
+         always let the fcntl lock in run_stealth.py do its job. -->
+    <key>ProgramArguments</key>
+    <array>
+        <string>/usr/bin/caffeinate</string>
+        <string>-i</string>
+        <string>/usr/local/bin/python3</string>
+        <string>/Users/florianschabus/handelsregister-scraper/scripts/run_stealth.py</string>
+        <string>--engine</string>
+        <string>rotate</string>
+        <string>--delay</string>
+        <string>180</string>
+        <string>--fresh</string>
+    </array>
+
+    <!-- Autorestart on crash / exit. 30-second throttle prevents
+         crash loops from hammering search engines. -->
+    <key>KeepAlive</key>
+    <dict>
+        <key>SuccessfulExit</key>
+        <false/>
+        <key>Crashed</key>
+        <true/>
+    </dict>
+    <key>ThrottleInterval</key>
+    <integer>30</integer>
+
+    <!-- Start on login (also kicks in after reboot). -->
+    <key>RunAtLoad</key>
+    <true/>
+
+    <!-- Logs. Rotated manually; keep them bounded by log level in-code. -->
+    <key>StandardOutPath</key>
+    <string>/Users/florianschabus/handelsregister-scraper/data/stealth.out.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/florianschabus/handelsregister-scraper/data/stealth.err.log</string>
+
+    <!-- Working directory + env. -->
+    <key>WorkingDirectory</key>
+    <string>/Users/florianschabus/handelsregister-scraper</string>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PYTHONPATH</key>
+        <string>/Users/florianschabus/handelsregister-scraper</string>
+        <key>PATH</key>
+        <string>/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin</string>
+    </dict>
+
+    <!-- Resource caps — the scraper is network-bound, not compute. -->
+    <key>SoftResourceLimits</key>
+    <dict>
+        <key>NumberOfFiles</key>
+        <integer>512</integer>
+    </dict>
+</dict>
+</plist>

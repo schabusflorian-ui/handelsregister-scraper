@@ -149,6 +149,11 @@ async def signals_index(
             "last_30d": "SELECT COUNT(*) FROM stealth_entities WHERE last_signal_at >= date('now','-30 days')",
         }.items():
             stats[key] = db.conn.execute(sql).fetchone()[0]
+        # Scraper freshness — surface at a glance whether slow_stealth_scraper
+        # is actively finding new founders. Reads stealth_founders directly
+        # so it reflects the source of truth, not just the signals adapter.
+        stats["latest_stealth_find"] = db.conn.execute("SELECT MAX(first_seen_at) FROM stealth_founders").fetchone()[0]
+        stats["stealth_founders_total"] = db.conn.execute("SELECT COUNT(*) FROM stealth_founders").fetchone()[0]
 
         # Available sector/signal filter options derived from the data
         sectors = []
@@ -199,6 +204,8 @@ async def signals_people(
     min_founder_conf: Optional[int] = 40,
     min_signals: Optional[int] = 1,
     role_only: Optional[str] = None,  # 'yes' = require person_role not NULL
+    dach_only: str = "yes",  # DACH focus is the project default — DE/AT/CH only
+    watchlist_min_tier: Optional[int] = None,  # 1/2/3 — show only ex-watchlist founders
     sort: str = "founder",  # founder | score | last
     page: int = 1,
     per_page: int = 50,
@@ -207,6 +214,7 @@ async def signals_people(
 
     Filtered to is_person=1. Default rank is founder_confidence × composite_score
     so people with the strongest 'actually a founder' signal float to the top.
+    DACH-first by default (user confirmed project geography scope).
     """
     db = get_db()
     try:
@@ -227,6 +235,16 @@ async def signals_people(
             params.append(min_signals)
         if role_only == "yes":
             conds.append("person_role IS NOT NULL")
+        if dach_only == "yes":
+            # DACH-first default. "germany_other" / "dach" are legacy LinkedIn-scraper
+            # geo tags we want to keep in-scope alongside DE/AT/CH.
+            conds.append(
+                "(geo_region IN ('DE','AT','CH','DACH','dach','germany','austria','switzerland') "
+                "OR geo_region LIKE 'germany%')"
+            )
+        if watchlist_min_tier is not None:
+            conds.append("watchlist_tier IS NOT NULL AND watchlist_tier <= ?")
+            params.append(watchlist_min_tier)
         where = " WHERE " + " AND ".join(conds)
 
         sort_sql = {
@@ -295,6 +313,8 @@ async def signals_people(
                     "min_founder_conf": min_founder_conf,
                     "min_signals": min_signals,
                     "role_only": role_only,
+                    "dach_only": dach_only,
+                    "watchlist_min_tier": watchlist_min_tier,
                     "sort": sort,
                 },
             },
