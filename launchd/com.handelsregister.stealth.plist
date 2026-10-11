@@ -31,7 +31,7 @@
     <array>
         <string>/usr/bin/caffeinate</string>
         <string>-i</string>
-        <string>/usr/local/bin/python3</string>
+        <string>/usr/bin/python3</string>
         <string>/Users/florianschabus/handelsregister-scraper/scripts/run_stealth.py</string>
         <string>--engine</string>
         <string>rotate</string>

@@ -201,11 +201,16 @@ async def signals_people(
     request: Request,
     q: Optional[str] = None,
     sector: Optional[str] = None,
-    min_founder_conf: Optional[int] = 40,
+    # Default raised 40 → 50 to match the 85%-precision threshold measured
+    # in the E2E audit. See docstring note on the shift.
+    min_founder_conf: Optional[int] = 50,
     min_signals: Optional[int] = 1,
     role_only: Optional[str] = None,  # 'yes' = require person_role not NULL
     dach_only: str = "yes",  # DACH focus is the project default — DE/AT/CH only
     watchlist_min_tier: Optional[int] = None,  # 1/2/3 — show only ex-watchlist founders
+    academic_only: Optional[str] = None,  # 'yes' = require academic_founder=1
+    has_product: Optional[str] = None,  # 'yes' = require crt/github/domain evidence
+    max_age_days: Optional[int] = None,  # last_signal_at within N days
     sort: str = "founder",  # founder | score | last
     page: int = 1,
     per_page: int = 50,
@@ -215,6 +220,11 @@ async def signals_people(
     Filtered to is_person=1. Default rank is founder_confidence × composite_score
     so people with the strongest 'actually a founder' signal float to the top.
     DACH-first by default (user confirmed project geography scope).
+
+    Default min_founder_conf is 50 — a precision-tuning raised from an
+    earlier default of 40 after an audit showed the 40-50 bucket contains
+    ~50% noise (name-pollution rows, VC/investor false positives) while
+    the 50+ bucket runs ~85% real-founder precision.
     """
     db = get_db()
     try:
@@ -245,6 +255,20 @@ async def signals_people(
         if watchlist_min_tier is not None:
             conds.append("watchlist_tier IS NOT NULL AND watchlist_tier <= ?")
             params.append(watchlist_min_tier)
+        if academic_only == "yes":
+            conds.append("academic_founder = 1")
+        if has_product == "yes":
+            # Entity must have real-world product evidence: a resolved domain
+            # (anything in website_enrichment / crt.sh) OR a GitHub org.
+            # Separates "person claims stealth" from "stealth with evidence".
+            conds.append(
+                "(primary_domain IS NOT NULL OR primary_github IS NOT NULL "
+                " OR signal_types LIKE '%crt_domain_new%' "
+                " OR signal_types LIKE '%github_org_new%')"
+            )
+        if max_age_days is not None and max_age_days > 0:
+            conds.append("last_signal_at >= date('now', ?)")
+            params.append(f"-{int(max_age_days)} days")
         where = " WHERE " + " AND ".join(conds)
 
         sort_sql = {
@@ -315,6 +339,9 @@ async def signals_people(
                     "role_only": role_only,
                     "dach_only": dach_only,
                     "watchlist_min_tier": watchlist_min_tier,
+                    "academic_only": academic_only,
+                    "has_product": has_product,
+                    "max_age_days": max_age_days,
                     "sort": sort,
                 },
             },
@@ -471,14 +498,21 @@ async def signals_api_entities(
 async def signals_api_people(
     q: Optional[str] = None,
     sector: Optional[str] = None,
-    min_founder_conf: Optional[int] = 40,
+    min_founder_conf: Optional[int] = 50,
     min_signals: Optional[int] = 1,
     role_only: Optional[str] = None,
+    dach_only: str = "yes",
+    watchlist_min_tier: Optional[int] = None,
+    academic_only: Optional[str] = None,
+    has_product: Optional[str] = None,
+    max_age_days: Optional[int] = None,
     sort: str = "founder",
     page: int = 1,
     per_page: int = 50,
 ):
-    """Person-centric JSON — mirrors the HTML /signals/people view."""
+    """Person-centric JSON — mirrors the HTML /signals/people view with
+    full filter parity (so agents can call the same URL space as users
+    would hit from the browser)."""
     per_page = max(1, min(per_page, 500))
     db = get_db()
     try:
@@ -499,6 +533,25 @@ async def signals_api_people(
             params.append(min_signals)
         if role_only == "yes":
             conds.append("person_role IS NOT NULL")
+        if dach_only == "yes":
+            conds.append(
+                "(geo_region IN ('DE','AT','CH','DACH','dach','germany','austria','switzerland') "
+                "OR geo_region LIKE 'germany%')"
+            )
+        if watchlist_min_tier is not None:
+            conds.append("watchlist_tier IS NOT NULL AND watchlist_tier <= ?")
+            params.append(watchlist_min_tier)
+        if academic_only == "yes":
+            conds.append("academic_founder = 1")
+        if has_product == "yes":
+            conds.append(
+                "(primary_domain IS NOT NULL OR primary_github IS NOT NULL "
+                " OR signal_types LIKE '%crt_domain_new%' "
+                " OR signal_types LIKE '%github_org_new%')"
+            )
+        if max_age_days is not None and max_age_days > 0:
+            conds.append("last_signal_at >= date('now', ?)")
+            params.append(f"-{int(max_age_days)} days")
         where = " WHERE " + " AND ".join(conds)
         sort_sql = {
             "founder": "founder_confidence DESC, composite_score DESC, signal_count DESC",
@@ -509,9 +562,14 @@ async def signals_api_people(
         total = db.conn.execute(f"SELECT COUNT(*) FROM stealth_entities{where}", params).fetchone()[0]
         offset = (page - 1) * per_page
         rows = db.conn.execute(
-            f"""SELECT id, primary_name, primary_linkedin, person_role,
-                       signal_count, signal_types, first_signal_at, last_signal_at,
-                       sector_tags, geo_region, composite_score, founder_confidence
+            f"""SELECT id, primary_name, primary_linkedin, primary_domain, primary_github,
+                       person_role, signal_count, signal_types,
+                       first_signal_at, last_signal_at,
+                       sector_tags, geo_region, composite_score, founder_confidence,
+                       watchlist_tier, watchlist_employer,
+                       academic_founder, academic_institution,
+                       website_title, website_description,
+                       last_enriched_at
                   FROM stealth_entities{where}
                  ORDER BY {sort_sql}
                  LIMIT ? OFFSET ?""",

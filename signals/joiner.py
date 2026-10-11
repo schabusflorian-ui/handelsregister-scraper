@@ -248,6 +248,110 @@ def _founder_role_from_signals(cur, entity_id: int) -> Optional[str]:
     return None
 
 
+# DACH academic institutions whose alumni/researchers are high-signal
+# deeptech founders. Matched substring-wise against bio text — "PhD ETH"
+# or "Fraunhofer researcher" or "ex-MPI" all count. Kept small + curated;
+# add more as we see them in real data.
+_ACADEMIC_INSTITUTIONS = {
+    # Germany
+    "tum",
+    "technische universität münchen",
+    "tu münchen",
+    "tu munich",
+    "unternehmertum",  # TUM's venture entity — counts as adjacency
+    "rwth",
+    "rwth aachen",
+    "kit",
+    "karlsruhe institute of technology",
+    "lmu",
+    "ludwig maximilian",
+    "humboldt university",
+    "humboldt-universität",
+    "tu berlin",
+    "tu dresden",
+    "tu darmstadt",
+    "fraunhofer",
+    "fraunhofer institute",
+    "fraunhofer-institut",
+    "max planck",
+    "max-planck",
+    "mpi ",
+    "charité",
+    "charite",
+    "hpi",
+    "hasso plattner",
+    # Switzerland
+    "eth zürich",
+    "eth zurich",
+    "eth",
+    "epfl",
+    "école polytechnique fédérale",
+    "university of zurich",
+    "uni zürich",
+    "idiap",
+    # Austria
+    "ist austria",
+    "institute of science and technology austria",
+    "tu wien",
+    "tu vienna",
+    "university of vienna",
+    "universität wien",
+    # UK/EU research of DACH relevance
+    "cern",
+}
+
+_ACADEMIC_RX = re.compile(
+    r"(?:^|[^a-z])(?:" + "|".join(re.escape(x) for x in _ACADEMIC_INSTITUTIONS) + r")(?=[^a-z]|$)",
+    re.I,
+)
+
+
+def _academic_lookup(cur, entity_id: int) -> tuple:
+    """Scan signal payloads for a DACH academic affiliation.
+    Returns (academic_flag, matched_institution)."""
+    rows = cur.execute(
+        "SELECT raw_payload FROM signals WHERE stealth_entity_id = ? AND raw_payload IS NOT NULL",
+        (entity_id,),
+    ).fetchall()
+    for r in rows:
+        try:
+            payload = json.loads(r["raw_payload"])
+        except (TypeError, ValueError, json.JSONDecodeError):
+            continue
+        for key in ("headline", "role", "summary", "description", "new", "old"):
+            v = payload.get(key)
+            if not isinstance(v, str) or not v:
+                continue
+            m = _ACADEMIC_RX.search(v)
+            if m:
+                return 1, m.group(0).strip()[:60]
+    return 0, None
+
+
+def _website_lookup(cur, domain: Optional[str]) -> tuple:
+    """Look up (title, meta_description) from website_enrichment by domain.
+    Returns (None, None) when no match. Zero-cost reuse of the 2,718
+    already-scraped homepages.
+
+    website_enrichment is created by website_enrichment_job (not by
+    persistence.database), so a brand-new DB (tests, fresh install) may
+    not have the table yet. Degrades silently rather than failing the
+    joiner — the enrichment is best-effort.
+    """
+    if not domain:
+        return None, None
+    try:
+        row = cur.execute(
+            "SELECT title, meta_description FROM website_enrichment WHERE normalized_website = ? AND error IS NULL LIMIT 1",
+            (domain,),
+        ).fetchone()
+    except Exception:  # noqa: BLE001 — includes OperationalError 'no such table'
+        return None, None
+    if not row:
+        return None, None
+    return row["title"], row["meta_description"]
+
+
 def _watchlist_lookup(cur, entity_id: int) -> tuple:
     """Scan the entity's signal payloads for an ex-employer match against
     the DACH watchlist. Returns (tier, employer_name) or (None, None).
@@ -257,7 +361,7 @@ def _watchlist_lookup(cur, entity_id: int) -> tuple:
       - linkedin_stealth payloads' `headline` field (bios often mention
         "ex-Google" / "previously at Stripe" / "former OpenAI research")
     """
-    from .watchlist import watchlist_tier
+    from .watchlist import watchlist_match
 
     rows = cur.execute(
         "SELECT signal_type, raw_payload FROM signals WHERE stealth_entity_id = ? AND raw_payload IS NOT NULL",
@@ -278,28 +382,12 @@ def _watchlist_lookup(cur, entity_id: int) -> tuple:
         for text in candidates:
             if not isinstance(text, str) or not text:
                 continue
-            # Prefer regex-extracted "ex-X" / "previously at X" / "former X"
-            # matches first — they give us the CLEAN employer name for display.
-            matched_regex = False
-            for m in re.finditer(
-                r"(?:ex[- ]|previously (?:at|@)\s+|former\s+)([A-Z][\w&.\-]{2,}(?:\s+[A-Z][\w&.\-]{2,}){0,3})",
-                text,
-            ):
-                cand = m.group(1).strip()
-                t = watchlist_tier(cand)
-                if t is not None and (best_tier is None or t < best_tier):
-                    best_tier, best_employer = t, cand[:80]
-                    matched_regex = True
-            # Direct lookup of the whole text — only used when the regex
-            # didn't produce a cleaner candidate. Keeps display tidy.
-            if not matched_regex:
-                t = watchlist_tier(text)
-                if t is not None and (best_tier is None or t < best_tier):
-                    # For plain employer-field hits (linkedin_transition's
-                    # `old`), the text IS the employer name; otherwise
-                    # take only the first comma-chunk to avoid blobs.
-                    display = text.strip().split(",", 1)[0][:80]
-                    best_tier, best_employer = t, display
+            # watchlist_match returns the CANONICAL catalog entry name
+            # ("Stripe"), not whatever surrounding noise the bio contains
+            # ("ex-Stripe Jay Gokhale"). Keeps the UI badge readable.
+            t, canonical = watchlist_match(text)
+            if t is not None and (best_tier is None or t < best_tier):
+                best_tier, best_employer = t, canonical
     return best_tier, best_employer
 
 
@@ -309,10 +397,11 @@ def _compute_founder_confidence(
     cur,
     entity_id: int,
     watchlist_tier_val: Optional[int] = None,
+    is_academic: bool = False,
 ) -> float:
     """0-100 founder confidence.
 
-    Blends six axes:
+    Blends seven axes:
       - LinkedIn claim present                   (+30)
       - LinkedIn transition (RECENTLY stealth)   (+15)
       - Officer-match on Handelsregister         (+40)  ← strongest person link
@@ -320,6 +409,8 @@ def _compute_founder_confidence(
       - Product evidence (crt or github)         (+10)
       - Young company registered                 (+10)
       - Ex-employer watchlist tier               (+6 / +12 / +20)
+      - DACH academic affiliation                (+10) — TUM/ETH/Fraunhofer/MPI alumni
+                                                        skew heavily toward deeptech founders
     """
     fc = 0.0
     if "linkedin_stealth" in types_set:
@@ -337,6 +428,8 @@ def _compute_founder_confidence(
         from .watchlist import tier_boost
 
         fc += tier_boost(watchlist_tier_val)
+    if is_academic:
+        fc += 10
 
     # Company young / startup-shaped?
     row = cur.execute(
@@ -391,6 +484,8 @@ def _recompute_entity(cur, entity_id: int) -> None:
             "UPDATE stealth_entities SET signal_count=0, signal_types='[]', "
             "composite_score=0, is_person=0, founder_confidence=0, "
             "person_role=NULL, watchlist_tier=NULL, watchlist_employer=NULL, "
+            "academic_founder=0, academic_institution=NULL, "
+            "website_title=NULL, website_description=NULL, "
             "updated_at=? WHERE id=?",
             (datetime.now(timezone.utc).replace(microsecond=0).isoformat(), entity_id),
         )
@@ -412,32 +507,52 @@ def _recompute_entity(cur, entity_id: int) -> None:
     # only meaningful when we're tracking a person, not a company)
     if is_person:
         wl_tier, wl_employer = _watchlist_lookup(cur, entity_id)
+        acad_flag, acad_inst = _academic_lookup(cur, entity_id)
     else:
         wl_tier, wl_employer = None, None
+        acad_flag, acad_inst = 0, None
     founder_conf = (
-        _compute_founder_confidence(types_set, role, cur, entity_id, watchlist_tier_val=wl_tier) if is_person else 0.0
+        _compute_founder_confidence(
+            types_set,
+            role,
+            cur,
+            entity_id,
+            watchlist_tier_val=wl_tier,
+            is_academic=bool(acad_flag),
+        )
+        if is_person
+        else 0.0
     )
+
+    # Website enrichment join — zero-cost reuse of the 2,718 scraped
+    # homepages already in website_enrichment. Only lookup when we have
+    # a primary_domain; non-matches leave the columns NULL.
+    web_title, web_desc = _website_lookup(cur, best_domain)
 
     now = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
     cur.execute(
         """UPDATE stealth_entities SET
-             signal_count       = ?,
-             signal_types       = ?,
-             first_signal_at    = ?,
-             last_signal_at     = ?,
-             sector_tags        = ?,
-             geo_region         = COALESCE(?, geo_region),
-             composite_score    = ?,
-             is_person          = ?,
-             founder_confidence = ?,
-             person_role        = ?,
-             watchlist_tier     = ?,
-             watchlist_employer = ?,
-             primary_domain     = COALESCE(primary_domain, ?),
-             primary_github     = COALESCE(primary_github, ?),
-             primary_linkedin   = COALESCE(primary_linkedin, ?),
-             primary_name       = CASE WHEN primary_name='(unknown)' AND ? IS NOT NULL THEN ? ELSE primary_name END,
-             updated_at         = ?
+             signal_count         = ?,
+             signal_types         = ?,
+             first_signal_at      = ?,
+             last_signal_at       = ?,
+             sector_tags          = ?,
+             geo_region           = COALESCE(?, geo_region),
+             composite_score      = ?,
+             is_person            = ?,
+             founder_confidence   = ?,
+             person_role          = ?,
+             watchlist_tier       = ?,
+             watchlist_employer   = ?,
+             academic_founder     = ?,
+             academic_institution = ?,
+             website_title        = ?,
+             website_description  = ?,
+             primary_domain       = COALESCE(primary_domain, ?),
+             primary_github       = COALESCE(primary_github, ?),
+             primary_linkedin     = COALESCE(primary_linkedin, ?),
+             primary_name         = CASE WHEN primary_name='(unknown)' AND ? IS NOT NULL THEN ? ELSE primary_name END,
+             updated_at           = ?
            WHERE id = ?""",
         (
             agg["cnt"],
@@ -452,6 +567,10 @@ def _recompute_entity(cur, entity_id: int) -> None:
             role,
             wl_tier,
             wl_employer,
+            acad_flag,
+            acad_inst,
+            web_title,
+            web_desc,
             best_domain,
             best_github,
             best_li,

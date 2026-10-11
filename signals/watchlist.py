@@ -231,24 +231,37 @@ def watchlist_tier(employer: Optional[str]) -> Optional[int]:
     returns Tier 2 because 'sap signavio' is listed). Preserves the
     highest tier found (lowest number).
     """
+    tier, _ = watchlist_match(employer)
+    return tier
+
+
+def watchlist_match(employer: Optional[str]) -> tuple:
+    """Return (tier, canonical_name) for display.
+
+    When the input contains surrounding noise ("ex-Stripe Jay Gokhale"),
+    `canonical_name` is the actual matched catalog entry ("Stripe"),
+    not the full raw string — so the UI badge stays readable.
+    Returns (None, None) when no match found.
+    """
     if not employer:
-        return None
+        return None, None
     n = _norm(employer)
     if not n:
-        return None
+        return None, None
     # Exact match first
     if n in _ALL_EMPLOYERS:
-        return _ALL_EMPLOYERS[n]
+        return _ALL_EMPLOYERS[n], n.title()
     # Substring fallback — needed because LinkedIn snippets often include
     # extra context: "Software Engineer @ Google DeepMind London" has
     # "deepmind" as a substring. Only match when candidate is a token
     # boundary, not a random substring.
-    best = None
+    best_tier = None
+    best_name = None
     for k, tier in _ALL_EMPLOYERS.items():
         if re.search(r"\b" + re.escape(k) + r"\b", n):
-            if best is None or tier < best:
-                best = tier
-    return best
+            if best_tier is None or tier < best_tier:
+                best_tier, best_name = tier, k.title()
+    return best_tier, best_name
 
 
 # Boost added to founder_confidence per tier (points, 0-100 scale)
