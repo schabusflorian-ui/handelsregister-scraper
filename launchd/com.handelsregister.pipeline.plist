@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTD/PropertyList-1.0.dtd">
+<!--
+  Daily signals pipeline — macOS launchd configuration.
+
+  Fires once per day at 13:00 UTC (same slot the APScheduler cron used
+  when Railway was the production host). Runs all 11 pipeline steps
+  via scripts/run_pipeline.py: adapters reshape existing tables, external
+  sources (crt.sh, GitHub, cohorts, HN) pull fresh data, joiner resolves,
+  final step syncs the Google Sheet.
+
+  Not KeepAlive — this is a scheduled run, not a daemon. If the laptop
+  is asleep at 13:00 UTC the job runs on next wake.
+
+  INSTALL (as the user, not root):
+    cp launchd/com.handelsregister.pipeline.plist ~/Library/LaunchAgents/
+    launchctl load ~/Library/LaunchAgents/com.handelsregister.pipeline.plist
+    # Trigger a run now to verify:
+    launchctl start com.handelsregister.pipeline
+    tail -f ~/handelsregister-scraper/data/pipeline.out.log
+
+  UNINSTALL:
+    launchctl unload ~/Library/LaunchAgents/com.handelsregister.pipeline.plist
+    rm ~/Library/LaunchAgents/com.handelsregister.pipeline.plist
+-->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.handelsregister.pipeline</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/usr/bin/python3</string>
+        <string>/Users/florianschabus/handelsregister-scraper/scripts/run_pipeline.py</string>
+    </array>
+
+    <!-- Daily at 13:00 UTC. launchd uses the system's local timezone,
+         so this is 13:00 local for the user running it. macOS runs the
+         job on next wake if the Mac was asleep at the trigger time. -->
+    <key>StartCalendarInterval</key>
+    <dict>
+        <key>Hour</key>
+        <integer>13</integer>
+        <key>Minute</key>
+        <integer>0</integer>
+    </dict>
+
+    <key>RunAtLoad</key>
+    <false/>
+
+    <key>StandardOutPath</key>
+    <string>/Users/florianschabus/handelsregister-scraper/data/pipeline.out.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/florianschabus/handelsregister-scraper/data/pipeline.err.log</string>
+
+    <key>WorkingDirectory</key>
+    <string>/Users/florianschabus/handelsregister-scraper</string>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PYTHONPATH</key>
+        <string>/Users/florianschabus/handelsregister-scraper</string>
+        <key>PATH</key>
+        <string>/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin</string>
+    </dict>
+
+    <!-- The .env file is read by python-dotenv inside sync_to_sheets.
+         GOOGLE_SHEETS_CREDENTIALS + GOOGLE_SHEETS_ID must be present there
+         or that step logs a warning + no-ops cleanly. -->
+</dict>
+</plist>
