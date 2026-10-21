@@ -438,8 +438,12 @@ TAB_BUILDERS: Dict[str, Callable[[sqlite3.Connection], List[list]]] = {
     "ideas_climate_hardware_robotics": _build_ideas,
     "companies_climate_hardware_robotics": _build_companies,
     "stealth_founders": _build_stealth,
-    # New signals-pipeline tabs (the actual deliverable)
-    "signals_people": _build_signals_people,
+    # Signals-pipeline tabs (the actual deliverable).
+    # NOTE: tab titles here must match the Google Sheet tab titles exactly —
+    # gspread's worksheet() looks up by exact title, so renames in the sheet
+    # must be mirrored here or the sync creates a stale sibling. The user
+    # labelled signals_people as the primary screen in the sheet UI.
+    "signals_people (main sheet)": _build_signals_people,
     "signals_entities_multi": _build_signals_entities,
 }
 
