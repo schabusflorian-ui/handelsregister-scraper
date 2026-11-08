@@ -575,10 +575,11 @@ def adapt_stealth_founders(conn, *, min_confidence: float = 0.3) -> dict:
     stats = {
         "stealth_inserted": 0,
         "stealth_skipped": 0,
-        "stealth_excluded": 0,  # new: killed by sabbatical/advisor filter
+        "stealth_excluded": 0,  # killed by sabbatical/advisor filter
+        "stealth_polluted": 0,  # killed by snippet-pollution filter (multi-person rows)
         "transitions_inserted": 0,
         "transitions_skipped": 0,
-        "transitions_excluded": 0,  # new: killed by sabbatical/advisor filter
+        "transitions_excluded": 0,  # killed by sabbatical/advisor filter
     }
 
     # ---- base LinkedIn stealth ----
@@ -591,6 +592,24 @@ def adapt_stealth_founders(conn, *, min_confidence: float = 0.3) -> dict:
         (min_confidence,),
     ).fetchall()
     for r in rows:
+        name = r["name"] or ""
+        # Pollution guard — the slow_stealth_scraper's snippet-extraction
+        # occasionally concatenates multiple SERP results into one row's
+        # name field. Symptoms: " – " / " ... " separators, >60 chars, or
+        # 3+ capital-letter words that each look like a surname. Dropping
+        # here keeps the derived watchlist_tier / academic_institution /
+        # person_role fields from being populated by somebody else's bio.
+        # Root fix is in the scraper; this is the pragmatic quarantine.
+        is_polluted = (
+            len(name) > 60
+            or " – " in name
+            or " ... " in name
+            or name.count(" | ") >= 2
+            or name.count(" - ") >= 2
+        )
+        if is_polluted:
+            stats["stealth_polluted"] += 1
+            continue
         # Exclusion guard before anything else: if headline/current_company
         # looks like a sabbatical/advisor/consulting bio, skip even if an
         # earlier scraper tagged confidence_score high enough to pass the
