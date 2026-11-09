@@ -575,10 +575,11 @@ def adapt_stealth_founders(conn, *, min_confidence: float = 0.3) -> dict:
     stats = {
         "stealth_inserted": 0,
         "stealth_skipped": 0,
-        "stealth_excluded": 0,  # new: killed by sabbatical/advisor filter
+        "stealth_excluded": 0,  # killed by sabbatical/advisor filter
+        "stealth_polluted": 0,  # killed by snippet-pollution filter (multi-person rows)
         "transitions_inserted": 0,
         "transitions_skipped": 0,
-        "transitions_excluded": 0,  # new: killed by sabbatical/advisor filter
+        "transitions_excluded": 0,  # killed by sabbatical/advisor filter
     }
 
     # ---- base LinkedIn stealth ----
@@ -591,6 +592,32 @@ def adapt_stealth_founders(conn, *, min_confidence: float = 0.3) -> dict:
         (min_confidence,),
     ).fetchall()
     for r in rows:
+        name = r["name"] or ""
+        headline = r["headline"] or ""
+        current_co = r["current_company"] or ""
+
+        # Pollution guard — the slow_stealth_scraper's snippet-extraction
+        # occasionally concatenates multiple SERP results into ONE row's
+        # text fields (name AND/OR headline AND/OR current_company).
+        # Symptoms: " – " / " ... " separators, length overflow, or
+        # multiple " | "/" - " separators.
+        #
+        # Checking ALL text fields matters because the joiner's
+        # _founder_role_from_signals + _watchlist_lookup + _academic_lookup
+        # scan the signal's raw_payload (headline/role/summary). If those
+        # are polluted we'd attribute ANOTHER person's ex-employer or
+        # academic affiliation to this LinkedIn URL — even though the
+        # name itself is clean.
+        def _looks_polluted(s: str, tight: bool = False) -> bool:
+            # `tight` for the name field (short names, any separator = reject)
+            # `tight=False` for headlines/companies which are naturally longer
+            if tight:
+                return len(s) > 60 or " – " in s or " ... " in s or s.count(" | ") >= 2 or s.count(" - ") >= 2
+            return len(s) > 180 or " – " in s or " ... " in s or s.count(" | ") >= 3 or s.count(" - ") >= 3
+
+        if _looks_polluted(name, tight=True) or _looks_polluted(headline) or _looks_polluted(current_co):
+            stats["stealth_polluted"] += 1
+            continue
         # Exclusion guard before anything else: if headline/current_company
         # looks like a sabbatical/advisor/consulting bio, skip even if an
         # earlier scraper tagged confidence_score high enough to pass the
